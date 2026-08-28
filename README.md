@@ -1,16 +1,32 @@
-# TayDau Force
+<p align="center">
+  <img src="TayDau-Force-Logo.png" alt="TayDau Force Logo" width="220" />
+</p>
+
+<h1 align="center">TayDau Force</h1>
+
+<p align="center">
+  <strong>Autonomous Software Delivery Organization</strong><br>
+  <em>Turn a product brief into planned, developed, independently verified and security-aware software through a governed AI workforce.</em>
+</p>
+
+<p align="center">
+  <a href="https://taydau-force.vercel.app" target="_blank">
+    <img src="https://img.shields.io/badge/Live%20Demo-taydau--force.vercel.app-blue?style=for-the-badge&logo=vercel" alt="Live Demo" />
+  </a>
+</p>
+
+---
 
 TayDau Force is an autonomous software delivery organization designed to coordinate specialized AI roles across the software development lifecycle.
 
-This repository currently contains the interactive concept prototype created for the Alibaba Cloud AI Hackathon Pakistan 2026.
+This repository currently contains the interactive concept prototype created for the **Alibaba Cloud AI Hackathon Pakistan 2026**.
 
 > **Status:** Interactive Concept Prototype  
 > The current version uses simulated project data and workflow states. Live AI agent orchestration, Docker-based execution, model calls, and DevSecOps automation are planned for the next implementation stage.
 
-## Live Demo
+## 🌐 Live Demo
 
-Deployable instantly on Vercel:
-`https://taydau-force.vercel.app` 
+🔗 **Official Deployment:** [https://taydau-force.vercel.app](https://taydau-force.vercel.app)
 
 ---
 
