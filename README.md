@@ -10,7 +10,7 @@ This repository currently contains the interactive concept prototype created for
 ## Live Demo
 
 Deployable instantly on Vercel:
-`https://taydau-force.vercel.app` *(or your custom deployment URL)*
+`https://taydau-force.vercel.app` 
 
 ---
 
