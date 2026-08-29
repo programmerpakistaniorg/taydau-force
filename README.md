@@ -349,3 +349,6 @@ src/
 TayDau Force is being developed for:
 
 **Alibaba Cloud AI Hackathon Pakistan 2026**
+
+Team: TayDau Force
+Team Members : Tayyab & Daud
