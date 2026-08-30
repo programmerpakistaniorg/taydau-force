@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const CodeReviewFindingSchema = z.object({
   code: z.string().describe('Unique finding identifier, e.g. CR-001'),
   severity: z.enum(['critical', 'high', 'medium', 'low']).describe('Finding severity level'),
+  isBlocking: z.boolean().describe('Whether this finding is release-blocking (true) or an advisory/maintainability recommendation (false)'),
   category: z.string().describe('Category such as Security, Architecture, Performance, Maintainability, Input Validation'),
   filePath: z.string().nullable().describe('Relevant file path or null if project-wide'),
   description: z.string().describe('Detailed description of the finding'),

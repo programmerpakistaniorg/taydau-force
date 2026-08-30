@@ -92,19 +92,22 @@ export async function evaluateReleaseReadiness(projectId: string): Promise<Relea
       : `${openDefects} unresolved open defect(s): ${defectRes.rows.map((d) => d.code).join(', ')}`,
   });
 
-  // Check 5: Code Review Critical Blockers
+  // Check 5: Code Review Clearance (Explicit Blocking Gate)
   const crRes = await query(
     'SELECT summary, findings, architecture_compliance FROM code_reviews WHERE project_id = $1 ORDER BY created_at DESC LIMIT 1',
     [projectId]
   );
   let crPassed = true;
-  let crDetails = 'Code review completed with no critical blockers';
+  let crDetails = 'Code review completed with no release-blocking findings';
   if (crRes.rows.length > 0) {
     const findings = Array.isArray(crRes.rows[0].findings) ? crRes.rows[0].findings : JSON.parse(crRes.rows[0].findings || '[]');
-    const criticalFindings = findings.filter((f: any) => f.severity === 'critical');
-    if (criticalFindings.length > 0) {
+    const blockingFindings = findings.filter((f: any) => f.isBlocking === true || f.severity === 'critical');
+    const advisoryFindings = findings.filter((f: any) => f.isBlocking !== true && f.severity !== 'critical');
+    if (blockingFindings.length > 0) {
       crPassed = false;
-      crDetails = `${criticalFindings.length} critical code review finding(s) detected`;
+      crDetails = `${blockingFindings.length} release-blocking code review finding(s) detected (${blockingFindings.map((f: any) => f.code).join(', ')})`;
+    } else {
+      crDetails = `Cleared for release (${advisoryFindings.length} advisory/non-blocking recommendation(s) logged)`;
     }
   } else {
     crPassed = false;

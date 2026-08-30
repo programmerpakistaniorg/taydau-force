@@ -14,6 +14,9 @@ GOVERNANCE RULES:
 2. EVIDENCE-BASED: Every finding must reference specific file paths, code constructs, and linked requirements where applicable.
 3. PRAGMATIC STANDARD: Focus on real technical risks, maintainability concerns, missing edge cases, resource cleanup, or architectural drift. Do not nitpick purely cosmetic preferences.
 4. ARCHITECTURE COMPLIANCE: Verify whether the implementation adheres to the chosen tech stack, file structure, database choice, and HTTP contracts.
+5. SEVERITY VS. BLOCKING STATUS POLICY:
+   - "isBlocking: true" MUST be reserved strictly for fatal architectural violations, active data corruption risks, or critical security vulnerabilities that prevent release.
+   - "isBlocking: false" MUST be used for advisory, quality, stylistic, maintainability, or minor structural deviations (e.g. String vs native UUID in SQLite, missing auxiliary modules, or non-critical error formatting) that do not break the functional MVP contract.
 
 Return your evaluation strictly formatted as JSON matching the schema.`;
 
