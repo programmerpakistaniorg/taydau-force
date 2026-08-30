@@ -548,10 +548,10 @@ async function runEngineerStep(
         const taskId = taskMap.get(primaryTaskCode) ?? defaultTaskId;
         const ext = file.path.endsWith('.py') ? 'python' : 'text';
 
-        await client.query(
+        const insertRes = await client.query(
           `INSERT INTO code_artifacts (
             task_id, file_path, content, language, generated_by, artifact_type, version
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
           [
             taskId,
             file.path,
@@ -562,6 +562,27 @@ async function runEngineerStep(
             1,
           ]
         );
+        const artifactId = insertRes.rows[0].id;
+
+        // Persist all linked task relationships into code_artifact_tasks junction table
+        const linkedTaskCodes = new Set([
+          ...(file.relatedTaskCodes || []),
+          ...(engineerOutput.taskCoverage
+            ?.filter((cov) => cov.filePaths.includes(file.path))
+            .map((cov) => cov.taskCode) || []),
+        ]);
+
+        for (const tCode of linkedTaskCodes) {
+          const linkedTaskId = taskMap.get(tCode);
+          if (linkedTaskId) {
+            await client.query(
+              `INSERT INTO code_artifact_tasks (code_artifact_id, task_id)
+               VALUES ($1, $2)
+               ON CONFLICT (code_artifact_id, task_id) DO NOTHING`,
+              [artifactId, linkedTaskId]
+            );
+          }
+        }
       }
 
       await client.query(
@@ -569,6 +590,7 @@ async function runEngineerStep(
         [projectId]
       );
     });
+
 
     await logActivity({
       projectId,

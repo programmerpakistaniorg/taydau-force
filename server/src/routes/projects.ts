@@ -99,7 +99,29 @@ router.get('/:id', async (req, res, next) => {
       query('SELECT * FROM requirements WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM architecture_specs WHERE project_id = $1', [id]),
-      query('SELECT ca.*, t.code AS task_code FROM code_artifacts ca JOIN tasks t ON ca.task_id = t.id WHERE t.project_id = $1 ORDER BY ca.file_path', [id]),
+      query(`
+        SELECT 
+          ca.id,
+          ca.task_id,
+          ca.file_path,
+          ca.content,
+          ca.language,
+          ca.generated_by,
+          ca.artifact_type,
+          ca.version,
+          ca.created_at,
+          COALESCE(
+            array_agg(t.code ORDER BY t.code) FILTER (WHERE t.code IS NOT NULL),
+            ARRAY[]::text[]
+          ) AS task_codes
+        FROM code_artifacts ca
+        LEFT JOIN code_artifact_tasks cat ON ca.id = cat.code_artifact_id
+        LEFT JOIN tasks t ON cat.task_id = t.id
+        WHERE ca.task_id IN (SELECT id FROM tasks WHERE project_id = $1)
+           OR cat.task_id IN (SELECT id FROM tasks WHERE project_id = $1)
+        GROUP BY ca.id
+        ORDER BY ca.file_path
+      `, [id]),
       query('SELECT * FROM defects WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50', [id]),
     ]);
@@ -150,7 +172,7 @@ router.get('/:id', async (req, res, next) => {
       codeArtifacts: artifactsResult.rows.map((a) => ({
         id: a.id,
         taskId: a.task_id,
-        taskCode: a.task_code,
+        taskCodes: a.task_codes,
         filePath: a.file_path,
         content: a.content,
         language: a.language,
