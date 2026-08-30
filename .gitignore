@@ -45,5 +45,9 @@ server/.env.*.local
 *.pem
 *.key
 
+# Temporary sandbox execution workspaces
+.taydau/
+
+
 
 

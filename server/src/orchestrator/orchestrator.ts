@@ -4,11 +4,20 @@ import { runBAAgent } from '../agents/ba-agent.js';
 import { runPMAgent, type RequirementContext } from '../agents/pm-agent.js';
 import { runArchitectAgent } from '../agents/architect-agent.js';
 import { runEngineerAgent } from '../agents/engineer-agent.js';
+import { runQAAgent } from '../agents/qa-agent.js';
 import { validateEngineerArtifacts } from '../services/artifact-validator.js';
+import { validateQAArtifacts } from '../services/qa-validator.js';
+import {
+  materializeWorkspace,
+  cleanupWorkspace,
+  executeSandboxTests,
+  type SandboxExecutionResult,
+} from '../services/docker-sandbox.js';
 import { logActivity } from '../services/activity-logger.js';
 import { getRemainingBudget } from '../services/cost-telemetry.js';
 import type { TaskOutput } from '../schemas/task.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
+import crypto from 'crypto';
 
 export async function runOrchestrator(projectId: string, gateway: ModelGateway): Promise<void> {
   // Loop through stages sequentially so a project advances through all eligible stages
@@ -39,6 +48,15 @@ export async function runOrchestrator(projectId: string, gateway: ModelGateway):
         break;
 
       case 'implemented':
+        await runQAStep(projectId, project.client_brief, gateway);
+        break;
+
+      case 'verifying':
+        await runSandboxStep(projectId);
+        break;
+
+      case 'tested_passed':
+      case 'defects_found':
       case 'analyzing':
       case 'planning':
       case 'architecting':
@@ -643,3 +661,307 @@ async function runEngineerStep(
     throw err;
   }
 }
+
+async function runQAStep(projectId: string, clientBrief: string, gateway: ModelGateway): Promise<void> {
+  const updated = await query(
+    `UPDATE projects SET status = 'verifying', updated_at = now()
+     WHERE id = $1 AND status = 'implemented' RETURNING id`,
+    [projectId]
+  );
+  if (updated.rows.length === 0) {
+    console.log(`[orchestrator] Project ${projectId} not in 'implemented' status, skipping QA`);
+    return;
+  }
+
+  const remaining = await getRemainingBudget(projectId);
+  if (remaining <= 0) {
+    await query(`UPDATE projects SET status = 'failed', updated_at = now() WHERE id = $1`, [projectId]);
+    throw new Error(`Budget exhausted for project ${projectId}`);
+  }
+
+  await logActivity({
+    projectId,
+    actor: 'QA Engineer',
+    actorRole: 'QA Agent',
+    action: 'started independent test derivation for',
+    target: 'validated requirements',
+    type: 'system',
+    tag: 'QA Planning Started',
+    details: 'QA context strictly excludes Engineer implementation code (independent test derivation)',
+  });
+
+  try {
+    const reqResult = await query(
+      'SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code',
+      [projectId]
+    );
+    const archResult = await query(
+      'SELECT tech_stack, file_structure, implementation_spec, decisions FROM architecture_specs WHERE project_id = $1',
+      [projectId]
+    );
+
+    if (reqResult.rows.length === 0 || archResult.rows.length === 0) {
+      throw new Error(`Missing requirements or architecture spec for project ${projectId}`);
+    }
+
+    const requirements: RequirementContext[] = reqResult.rows.map((r) => ({
+      id: r.id,
+      code: r.code,
+      title: r.title,
+      type: r.type,
+      priority: r.priority,
+      acceptanceCriteria: Array.isArray(r.acceptance_criteria)
+        ? r.acceptance_criteria
+        : JSON.parse(r.acceptance_criteria),
+    }));
+
+    const rawArch = archResult.rows[0];
+    const architecture: ArchitectureOutput = {
+      techStack: typeof rawArch.tech_stack === 'string' ? JSON.parse(rawArch.tech_stack) : rawArch.tech_stack,
+      fileStructure: typeof rawArch.file_structure === 'string' ? JSON.parse(rawArch.file_structure) : rawArch.file_structure,
+      implementationSpec: rawArch.implementation_spec,
+      decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
+    };
+
+    // Call QA Agent (CRITICAL: Engineer source code is NOT passed to QA)
+    const qaOutput = await runQAAgent(gateway, clientBrief, requirements, architecture, projectId);
+
+    // Deterministic security and requirement coverage validation
+    const valResult = validateQAArtifacts(
+      qaOutput,
+      requirements.map((r) => r.code)
+    );
+
+    if (!valResult.valid) {
+      throw new Error(`QA artifact validation failed: ${valResult.errors.join('; ')}`);
+    }
+
+    const reqMap = new Map(reqResult.rows.map((r) => [r.code, r.id]));
+
+    // Transactionally persist QA test artifacts & requirement links
+    await withTransaction(async (client) => {
+      // Idempotency: clear previous QA artifacts for this project
+      await client.query('DELETE FROM qa_test_artifacts WHERE project_id = $1', [projectId]);
+
+      for (const file of qaOutput.testFiles) {
+        const insertRes = await client.query(
+          `INSERT INTO qa_test_artifacts (
+            project_id, file_path, content, language, generated_by, version
+          ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [projectId, file.path, file.content, 'python', 'QA Engineer', 1]
+        );
+        const artifactId = insertRes.rows[0].id;
+
+        const linkedReqCodes = new Set([
+          ...(file.relatedRequirementCodes || []),
+          ...(qaOutput.requirementCoverage
+            ?.filter((cov) => cov.testNames.length > 0)
+            .map((cov) => cov.requirementCode) || []),
+        ]);
+
+        for (const rCode of linkedReqCodes) {
+          const reqId = reqMap.get(rCode);
+          if (reqId) {
+            await client.query(
+              `INSERT INTO qa_test_requirements (qa_test_artifact_id, requirement_id)
+               VALUES ($1, $2)
+               ON CONFLICT (qa_test_artifact_id, requirement_id) DO NOTHING`,
+              [artifactId, reqId]
+            );
+          }
+        }
+      }
+    });
+
+    await logActivity({
+      projectId,
+      actor: 'QA Engineer',
+      actorRole: 'QA Agent',
+      action: 'completed test suite derivation for',
+      target: `${qaOutput.testFiles.length} test files`,
+      type: 'task',
+      tag: 'QA Tests Generated',
+      details: `Generated ${qaOutput.testFiles.length} test files (${valResult.totalSizeBytes} bytes). ${qaOutput.testPlanSummary}`,
+    });
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'persisted QA test artifacts to',
+      target: 'database',
+      type: 'system',
+      tag: 'QA Tests Persisted',
+      details: `Saved ${qaOutput.testFiles.length} QA test suites (${qaOutput.testFiles.map((f) => f.path).join(', ')})`,
+    });
+  } catch (err) {
+    await query(
+      `UPDATE projects SET status = 'implemented', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'QA Engineer',
+      actorRole: 'QA Agent',
+      action: 'failed test derivation for',
+      target: 'project',
+      type: 'system',
+      tag: 'Error',
+      details: err instanceof Error ? err.message : String(err),
+    });
+
+    throw err;
+  }
+}
+
+async function runSandboxStep(projectId: string): Promise<void> {
+  // Fetch Engineer artifacts
+  const engArtifactsRes = await query(
+    `SELECT file_path, content FROM code_artifacts 
+     WHERE task_id IN (SELECT id FROM tasks WHERE project_id = $1)
+     ORDER BY file_path`,
+    [projectId]
+  );
+
+  // Fetch QA artifacts
+  const qaArtifactsRes = await query(
+    `SELECT file_path, content FROM qa_test_artifacts 
+     WHERE project_id = $1
+     ORDER BY file_path`,
+    [projectId]
+  );
+
+  if (engArtifactsRes.rows.length === 0 || qaArtifactsRes.rows.length === 0) {
+    throw new Error(`Missing Engineer code artifacts or QA test artifacts for sandbox run in project ${projectId}`);
+  }
+
+  const runId = crypto.randomUUID();
+
+  await logActivity({
+    projectId,
+    actor: 'System',
+    actorRole: 'Orchestrator',
+    action: 'started sandbox execution in',
+    target: 'Docker container',
+    type: 'system',
+    tag: 'Sandbox Started',
+    details: 'Isolated execution with --network none, non-root user, read-only rootfs, and tmpfs workspace',
+  });
+
+  const engineerFiles = engArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+  const qaFiles = qaArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+
+  let workspaceDir = '';
+  let execResult: SandboxExecutionResult;
+
+  try {
+    workspaceDir = await materializeWorkspace(projectId, runId, engineerFiles, qaFiles);
+    execResult = await executeSandboxTests(projectId, runId, workspaceDir);
+  } finally {
+    if (workspaceDir) {
+      await cleanupWorkspace(workspaceDir);
+    }
+  }
+
+  // Persist test run in PostgreSQL
+  await query(
+    `INSERT INTO test_runs (
+      project_id, exit_code, stdout, stderr, duration_ms, tests_passed, tests_failed, status, test_type
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      projectId,
+      execResult.exitCode ?? -1,
+      execResult.stdout,
+      execResult.stderr,
+      execResult.durationMs,
+      execResult.testsPassed,
+      execResult.testsFailed,
+      execResult.status,
+      'independent_acceptance',
+    ]
+  );
+
+  if (execResult.status === 'passed') {
+    await query(
+      `UPDATE projects SET status = 'tested_passed', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'completed sandbox verification with',
+      target: 'PASS',
+      type: 'system',
+      tag: 'Sandbox Complete',
+      details: `pytest passed (${execResult.testsPassed} passed, 0 failed in ${execResult.durationMs}ms)`,
+    });
+  } else {
+    // Tests failed, timed out, or error -> Record defects and set project status to 'defects_found'
+    await query(
+      `UPDATE projects SET status = 'defects_found', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    // Get project requirements to link defect
+    const reqRes = await query(
+      'SELECT id, code, title FROM requirements WHERE project_id = $1 ORDER BY code LIMIT 1',
+      [projectId]
+    );
+    const primaryReqId = reqRes.rows.length > 0 ? reqRes.rows[0].id : null;
+
+    // Idempotency: clear previous defects for this project before inserting
+    await query('DELETE FROM defects WHERE project_id = $1', [projectId]);
+
+    const defectEvidence = {
+      exitCode: execResult.exitCode,
+      testsPassed: execResult.testsPassed,
+      testsFailed: execResult.testsFailed,
+      stdout: execResult.stdout.slice(0, 4000),
+      stderr: execResult.stderr.slice(0, 4000),
+      timedOut: execResult.timedOut,
+      errorMessage: execResult.errorMessage,
+    };
+
+    await query(
+      `INSERT INTO defects (
+        project_id, requirement_id, code, title, severity, status, description, evidence
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        projectId,
+        primaryReqId,
+        'DEF-001',
+        'Independent Acceptance Test Failure',
+        'High',
+        'open',
+        `Deterministic pytest execution in sandbox failed (${execResult.testsFailed} failed, ${execResult.testsPassed} passed).`,
+        JSON.stringify(defectEvidence),
+      ]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'QA Engineer',
+      actorRole: 'QA Agent',
+      action: 'created defect from',
+      target: 'deterministic failure evidence',
+      type: 'task',
+      tag: 'Defect Created',
+      details: `Defect DEF-001 created: ${execResult.testsFailed} test(s) failed in sandbox execution`,
+    });
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'completed sandbox verification with',
+      target: `FAIL (exit code: ${execResult.exitCode})`,
+      type: 'system',
+      tag: 'Sandbox Complete',
+      details: `pytest failed with ${execResult.testsFailed} failure(s) in ${execResult.durationMs}ms`,
+    });
+  }
+}
+

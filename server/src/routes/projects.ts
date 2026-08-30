@@ -95,7 +95,16 @@ router.get('/:id', async (req, res, next) => {
     const project = projectResult.rows[0];
 
     // Fetch related data
-    const [requirementsResult, tasksResult, architectureResult, artifactsResult, defectsResult, activitiesResult] = await Promise.all([
+    const [
+      requirementsResult,
+      tasksResult,
+      architectureResult,
+      artifactsResult,
+      qaArtifactsResult,
+      testRunsResult,
+      defectsResult,
+      activitiesResult,
+    ] = await Promise.all([
       query('SELECT * FROM requirements WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM architecture_specs WHERE project_id = $1', [id]),
@@ -122,6 +131,27 @@ router.get('/:id', async (req, res, next) => {
         GROUP BY ca.id
         ORDER BY ca.file_path
       `, [id]),
+      query(`
+        SELECT
+          qa.id,
+          qa.file_path,
+          qa.content,
+          qa.language,
+          qa.generated_by,
+          qa.version,
+          qa.created_at,
+          COALESCE(
+            array_agg(r.code ORDER BY r.code) FILTER (WHERE r.code IS NOT NULL),
+            ARRAY[]::text[]
+          ) AS requirement_codes
+        FROM qa_test_artifacts qa
+        LEFT JOIN qa_test_requirements qtr ON qa.id = qtr.qa_test_artifact_id
+        LEFT JOIN requirements r ON qtr.requirement_id = r.id
+        WHERE qa.project_id = $1
+        GROUP BY qa.id
+        ORDER BY qa.file_path
+      `, [id]),
+      query('SELECT * FROM test_runs WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM defects WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50', [id]),
     ]);
@@ -181,6 +211,28 @@ router.get('/:id', async (req, res, next) => {
         version: a.version,
         createdAt: a.created_at,
       })),
+      qaTestArtifacts: qaArtifactsResult.rows.map((qa) => ({
+        id: qa.id,
+        filePath: qa.file_path,
+        content: qa.content,
+        language: qa.language,
+        generatedBy: qa.generated_by,
+        requirementCodes: qa.requirement_codes,
+        version: qa.version,
+        createdAt: qa.created_at,
+      })),
+      testRuns: testRunsResult.rows.map((tr) => ({
+        id: tr.id,
+        exitCode: tr.exit_code,
+        status: tr.status,
+        testType: tr.test_type,
+        durationMs: tr.duration_ms,
+        testsPassed: tr.tests_passed,
+        testsFailed: tr.tests_failed,
+        stdout: tr.stdout,
+        stderr: tr.stderr,
+        createdAt: tr.created_at,
+      })),
       defects: defectsResult.rows.map((d) => ({
         id: d.id,
         code: d.code,
@@ -188,6 +240,7 @@ router.get('/:id', async (req, res, next) => {
         severity: d.severity,
         status: d.status,
         description: d.description,
+        evidence: typeof d.evidence === 'string' ? JSON.parse(d.evidence) : d.evidence,
         reworkAttempt: d.rework_attempt,
         createdAt: d.created_at,
       })),

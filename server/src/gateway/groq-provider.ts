@@ -295,7 +295,7 @@ export class GroqProvider implements ModelGateway {
       }
     }
 
-    const maxAttempts = 3;
+    const maxAttempts = 5;
     let attempt = 0;
     let httpRes: Response | undefined;
 
@@ -335,8 +335,22 @@ export class GroqProvider implements ModelGateway {
 
       if (httpRes.status === 429) {
         if (attempt < maxAttempts) {
-          const waitTimeMs = 8500;
-          console.warn(`[groq-provider] Rate limit (429) reached for ${request.modelId}, waiting ${waitTimeMs / 1000}s before retry ${attempt}/${maxAttempts}...`);
+          let waitTimeMs = 12000;
+          try {
+            const errBody = await httpRes.text();
+            const match = errBody.match(/try again in ([\d\.]+)s/i);
+            if (match) {
+              const seconds = parseFloat(match[1]);
+              if (!isNaN(seconds) && seconds > 0) {
+                waitTimeMs = Math.ceil(seconds + 2) * 1000;
+              }
+            }
+          } catch {
+            // fallback
+          }
+          console.warn(
+            `[groq-provider] Rate limit (429) reached for ${request.modelId}, waiting ${(waitTimeMs / 1000).toFixed(1)}s before retry ${attempt}/${maxAttempts}...`
+          );
           await new Promise((r) => setTimeout(r, waitTimeMs));
           continue;
         }
