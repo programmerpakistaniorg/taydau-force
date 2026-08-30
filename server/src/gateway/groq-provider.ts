@@ -286,6 +286,15 @@ export class GroqProvider implements ModelGateway {
     const rawJsonSchema = zodToJsonSchema(request.responseSchema, { target: 'jsonSchema7' });
     const jsonSchema = normalizeForGroqStrict(rawJsonSchema as Record<string, unknown>);
 
+    // Determine provider reasoning_effort based on request setting and model capabilities
+    let reasoningEffort: string = request.reasoningEffort ?? 'none';
+    if (request.modelId.startsWith('openai/')) {
+      // Groq requires low | medium | high for openai reasoning models
+      if (reasoningEffort === 'none') {
+        reasoningEffort = 'low';
+      }
+    }
+
     let httpRes: Response;
     try {
       httpRes = await fetch(url, {
@@ -307,9 +316,12 @@ export class GroqProvider implements ModelGateway {
           },
           max_completion_tokens: request.maxTokens ?? 4096,
           temperature: request.temperature ?? 0.7,
-          reasoning_effort: request.modelId.startsWith('openai/') ? 'low' : 'none',
+          reasoning_effort: reasoningEffort,
         }),
       });
+
+
+
 
     } catch (networkErr) {
       const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);

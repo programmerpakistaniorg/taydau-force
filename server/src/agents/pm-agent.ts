@@ -58,7 +58,9 @@ export async function runPMAgent(
       projectId,
       agentRole: 'project_manager',
       purpose: 'Decompose requirements into implementation tasks',
+      reasoningEffort: 'low',
     }
+
   );
 
   return result;

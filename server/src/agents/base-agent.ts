@@ -7,6 +7,9 @@ export interface AgentCallContext {
   purpose?: string;
   taskCode?: string;
   requirementCode?: string;
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  maxTokens?: number;
+  temperature?: number;
 }
 
 export async function callAgent<T>(
@@ -22,6 +25,9 @@ export async function callAgent<T>(
     systemPrompt,
     userPrompt,
     responseSchema,
+    maxTokens: context.maxTokens,
+    temperature: context.temperature,
+    reasoningEffort: context.reasoningEffort,
     projectId: context.projectId,
     agentRole: context.agentRole,
     purpose: context.purpose,

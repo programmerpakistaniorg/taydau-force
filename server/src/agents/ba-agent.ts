@@ -45,6 +45,8 @@ export async function runBAAgent(
       projectId,
       agentRole: 'business_analyst',
       purpose: 'Decompose client brief into requirements',
+      reasoningEffort: 'none',
+      maxTokens: 2048,
     }
   );
   return result;

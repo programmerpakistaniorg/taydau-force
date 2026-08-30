@@ -95,10 +95,11 @@ router.get('/:id', async (req, res, next) => {
     const project = projectResult.rows[0];
 
     // Fetch related data
-    const [requirementsResult, tasksResult, architectureResult, defectsResult, activitiesResult] = await Promise.all([
+    const [requirementsResult, tasksResult, architectureResult, artifactsResult, defectsResult, activitiesResult] = await Promise.all([
       query('SELECT * FROM requirements WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM architecture_specs WHERE project_id = $1', [id]),
+      query('SELECT ca.*, t.code AS task_code FROM code_artifacts ca JOIN tasks t ON ca.task_id = t.id WHERE t.project_id = $1 ORDER BY ca.file_path', [id]),
       query('SELECT * FROM defects WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50', [id]),
     ]);
@@ -146,6 +147,18 @@ router.get('/:id', async (req, res, next) => {
             createdAt: archSpec.created_at,
           }
         : null,
+      codeArtifacts: artifactsResult.rows.map((a) => ({
+        id: a.id,
+        taskId: a.task_id,
+        taskCode: a.task_code,
+        filePath: a.file_path,
+        content: a.content,
+        language: a.language,
+        generatedBy: a.generated_by,
+        artifactType: a.artifact_type,
+        version: a.version,
+        createdAt: a.created_at,
+      })),
       defects: defectsResult.rows.map((d) => ({
         id: d.id,
         code: d.code,

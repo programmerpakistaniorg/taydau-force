@@ -95,7 +95,9 @@ export async function runArchitectAgent(
       projectId,
       agentRole: 'solution_architect',
       purpose: 'Produce system architecture specification',
+      reasoningEffort: 'low',
     }
+
   );
 
   return result;

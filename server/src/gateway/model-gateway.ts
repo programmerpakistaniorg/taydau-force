@@ -19,6 +19,8 @@ export interface ModelGatewayRequest {
   maxTokens?: number;
   /** Sampling temperature; defaults to 0.7 */
   temperature?: number;
+  /** Optional reasoning effort: "none" | "low" | "medium" | "high" */
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
 
   // ── Cost telemetry context ──────────────────────────────────────────────
   /** Project this call belongs to */
