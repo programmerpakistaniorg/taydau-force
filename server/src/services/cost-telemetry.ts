@@ -67,6 +67,16 @@ export function calculateCost(
   const normalizedId = modelId.replace(/[\/\.]/g, '-');
   const pricing = config.pricing[modelId] ?? config.pricing[normalizedId];
   if (!pricing) {
+    // Standard list-price fallbacks for known hackathon models if not configured in env
+    if (normalizedId.includes('20b')) {
+      return (inputTokens / 1_000_000) * 0.20 + (outputTokens / 1_000_000) * 0.40;
+    }
+    if (normalizedId.includes('120b')) {
+      return (inputTokens / 1_000_000) * 0.60 + (outputTokens / 1_000_000) * 1.20;
+    }
+    if (normalizedId.includes('27b')) {
+      return (inputTokens / 1_000_000) * 0.80 + (outputTokens / 1_000_000) * 4.00;
+    }
     console.warn(`[cost-telemetry] No pricing config for model: ${modelId}, using 0`);
     return 0;
   }

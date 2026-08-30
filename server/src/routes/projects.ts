@@ -56,6 +56,32 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// POST /api/projects/:id/advance — advance project to next valid stage
+router.post('/:id/advance', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const projectResult = await query('SELECT * FROM projects WHERE id = $1', [id]);
+    if (projectResult.rows.length === 0) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+    const project = projectResult.rows[0];
+
+    // Trigger orchestrator asynchronously
+    runOrchestrator(project.id, gateway).catch((err) => {
+      console.error(`Orchestrator advance error for project ${project.id}:`, err);
+    });
+
+    res.json({
+      id: project.id,
+      status: project.status,
+      message: `Orchestrator advance triggered from status '${project.status}'`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/projects/:id — full project state
 router.get('/:id', async (req, res, next) => {
   try {
@@ -69,15 +95,17 @@ router.get('/:id', async (req, res, next) => {
     const project = projectResult.rows[0];
 
     // Fetch related data
-    const [requirementsResult, tasksResult, defectsResult, activitiesResult] = await Promise.all([
+    const [requirementsResult, tasksResult, architectureResult, defectsResult, activitiesResult] = await Promise.all([
       query('SELECT * FROM requirements WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY code', [id]),
+      query('SELECT * FROM architecture_specs WHERE project_id = $1', [id]),
       query('SELECT * FROM defects WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50', [id]),
     ]);
 
     // Cost summary
     const costSummary = await getProjectCostSummary(id);
+    const archSpec = architectureResult.rows[0] ?? null;
 
     res.json({
       id: project.id,
@@ -86,29 +114,39 @@ router.get('/:id', async (req, res, next) => {
       status: project.status,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
-      requirements: requirementsResult.rows.map(r => ({
+      requirements: requirementsResult.rows.map((r) => ({
         id: r.id,
         code: r.code,
         title: r.title,
         type: r.type,
         priority: r.priority,
-        acceptanceCriteria: r.acceptance_criteria,
+        acceptanceCriteria: typeof r.acceptance_criteria === 'string' ? JSON.parse(r.acceptance_criteria) : r.acceptance_criteria,
         status: r.status,
         createdAt: r.created_at,
       })),
-      tasks: tasksResult.rows.map(t => ({
+      tasks: tasksResult.rows.map((t) => ({
         id: t.id,
         code: t.code,
         title: t.title,
         description: t.description,
         status: t.status,
         priority: t.priority,
-        dependencies: t.dependencies,
+        dependencies: typeof t.dependencies === 'string' ? JSON.parse(t.dependencies) : t.dependencies,
         assignedRole: t.assigned_role,
         requirementId: t.requirement_id,
         createdAt: t.created_at,
       })),
-      defects: defectsResult.rows.map(d => ({
+      architecture: archSpec
+        ? {
+            id: archSpec.id,
+            techStack: typeof archSpec.tech_stack === 'string' ? JSON.parse(archSpec.tech_stack) : archSpec.tech_stack,
+            fileStructure: typeof archSpec.file_structure === 'string' ? JSON.parse(archSpec.file_structure) : archSpec.file_structure,
+            implementationSpec: archSpec.implementation_spec,
+            decisions: typeof archSpec.decisions === 'string' ? JSON.parse(archSpec.decisions) : archSpec.decisions,
+            createdAt: archSpec.created_at,
+          }
+        : null,
+      defects: defectsResult.rows.map((d) => ({
         id: d.id,
         code: d.code,
         title: d.title,
@@ -118,7 +156,7 @@ router.get('/:id', async (req, res, next) => {
         reworkAttempt: d.rework_attempt,
         createdAt: d.created_at,
       })),
-      activities: activitiesResult.rows.map(a => ({
+      activities: activitiesResult.rows.map((a) => ({
         id: a.id,
         actor: a.actor,
         actorRole: a.actor_role,
@@ -141,3 +179,4 @@ router.get('/:id', async (req, res, next) => {
 });
 
 export default router;
+

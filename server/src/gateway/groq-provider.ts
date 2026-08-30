@@ -307,9 +307,10 @@ export class GroqProvider implements ModelGateway {
           },
           max_completion_tokens: request.maxTokens ?? 4096,
           temperature: request.temperature ?? 0.7,
-          reasoning_effort: 'none', // explicitly disable thinking for structured JSON
+          reasoning_effort: request.modelId.startsWith('openai/') ? 'low' : 'none',
         }),
       });
+
     } catch (networkErr) {
       const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
       throw new GroqNetworkError(`Network error calling ${url}: ${msg}`);
