@@ -27,8 +27,17 @@ STRICT BLACK-BOX PUBLIC EXECUTION CONTRACT:
          with TestClient(app) as c:
              yield c
      \`\`\`
-   - Perform all setup, state creation, validation checks, and state assertions via HTTP endpoints (e.g. POST, GET, PUT/PATCH, DELETE).
-   - Never assume internal database schema names or private helper functions.
+3. DETERMINISTIC TEST ISOLATION & ORDER INDEPENDENCE:
+   - Every acceptance test function MUST be self-contained and independently repeatable in any order.
+   - Do NOT assume the database is globally empty or that no preceding test ran.
+   - When verifying query / listing endpoints (such as GET /products/low-stock):
+     a) Assert specific membership for entities created in that test:
+        assert any(item["name"] == my_low_stock_name for item in resp.json())
+        assert not any(item["name"] == my_sufficient_stock_name for item in resp.json())
+     b) Assert invariant properties of returned items:
+        assert all(item["quantity"] <= item["low_stock_threshold"] for item in resp.json())
+     c) NEVER write \`assert resp.json() == []\` unless your test has isolated state, because earlier tests in the pytest session legitimately populate the database.
+   - Use unique entity names or track returned UUIDs so test functions never collide with data created by other tests.
 
 GOVERNANCE RULES:
 1. INDEPENDENCE: You derive expected behavior from specifications and acceptance criteria alone. You do NOT see Engineer source code.
@@ -148,7 +157,8 @@ ${architecture.implementationSpec}
 1. The ONLY application import permitted in tests is: \`from app.main import app\`.
 2. Do NOT import \`app.database\`, \`app.models\`, \`app.schemas\`, \`app.api\`, or any internal ORM symbols.
 3. Use \`from fastapi.testclient import TestClient\` with \`TestClient(app)\` in \`tests/conftest.py\` and test purely via HTTP.
-4. Correct all syntax, import, or coverage errors.
+4. DETERMINISTIC TEST ISOLATION: Each test function must be self-contained and independently runnable in any order. Do NOT assume the database is globally empty or write \`assert resp.json() == []\` when prior tests have created items. Assert specific entity presence/absence or assert invariants across returned items.
+5. Correct all syntax, import, isolation, or coverage errors.
 
 Please produce the corrected, complete pytest acceptance test suite.
 `.trim();

@@ -259,7 +259,7 @@ export async function executeSandboxTests(
         // All acceptance assertions ran and passed
         status = 'passed';
       } else if (failed > 0) {
-        // Executable acceptance test ran and assertion failed -> valid product defect evidence
+        // Test assertion failed -> check for test isolation / state leakage before classifying as product defect
         status = 'failed';
       } else if (exitCode === 4 || exitCode === 5 || (passed === 0 && failed === 0 && exitCode !== 0)) {
         // Pytest collection/import/syntax error before assertions ran -> QA artifact error
@@ -268,6 +268,54 @@ export async function executeSandboxTests(
         status = 'qa_error';
       } else {
         status = 'failed';
+      }
+
+      // If status is failed, check if failing test(s) pass in isolation (test isolation check)
+      if (status === 'failed' && failingTests.length > 0) {
+        verifyTestIsolation(hostMountPath, failingTests, timeoutMs)
+          .then((isolationCheck) => {
+            if (isolationCheck.hasIsolationError) {
+              console.warn(`[docker-sandbox] QA test isolation failure detected: ${isolationCheck.leakageDetails}`);
+              resolve({
+                status: 'qa_error',
+                exitCode: exitCode ?? null,
+                stdout: stdoutAcc,
+                stderr: stderrAcc + `\n\n[TAYDAU ISOLATION GATE] Detected state leakage: ${isolationCheck.leakageDetails}`,
+                durationMs,
+                testsPassed: passed,
+                testsFailed: failed,
+                timedOut: false,
+                failingTests,
+                errorMessage: `QA_TEST_ISOLATION_ERROR: ${isolationCheck.leakageDetails}`,
+              });
+            } else {
+              resolve({
+                status,
+                exitCode: exitCode ?? null,
+                stdout: stdoutAcc,
+                stderr: stderrAcc,
+                durationMs,
+                testsPassed: passed,
+                testsFailed: failed,
+                timedOut: false,
+                failingTests,
+              });
+            }
+          })
+          .catch(() => {
+            resolve({
+              status,
+              exitCode: exitCode ?? null,
+              stdout: stdoutAcc,
+              stderr: stderrAcc,
+              durationMs,
+              testsPassed: passed,
+              testsFailed: failed,
+              timedOut: false,
+              failingTests,
+            });
+          });
+        return;
       }
 
       resolve({
@@ -283,4 +331,65 @@ export async function executeSandboxTests(
       });
     });
   });
+}
+
+/**
+ * Verifies whether failing test(s) pass when executed in pure isolation in a fresh container.
+ * If a test passes alone, its failure in the full suite was caused by state contamination.
+ */
+async function verifyTestIsolation(
+  hostMountPath: string,
+  failingTests: Array<{ testName: string; failureMessage: string }>,
+  timeoutMs: number
+): Promise<{ hasIsolationError: boolean; leakageDetails: string }> {
+  for (const ft of failingTests) {
+    const nodeTarget = ft.testName.trim();
+    if (!nodeTarget.startsWith('tests/')) continue;
+
+    const containerName = `taydau-iso-${crypto.randomBytes(4).toString('hex')}`;
+    const dockerArgs = [
+      'run',
+      '--rm',
+      '--name', containerName,
+      '--user', '10001:10001',
+      '--network', 'none',
+      '--read-only',
+      '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges',
+      '--memory', '512m',
+      '--cpus', '1.0',
+      '--pids-limit', '64',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=1777',
+      '--tmpfs', '/workspace:rw,size=128m,uid=10001,gid=10001,mode=1777',
+      '-v', `${hostMountPath}:/app_source:ro`,
+      SANDBOX_IMAGE,
+      'sh', '-c', `cp -r /app_source/* /workspace/ && cd /workspace && pytest -q ${nodeTarget}`
+    ];
+
+    const result = await new Promise<{ exitCode: number | null }>((res) => {
+      const child = spawn('docker', dockerArgs, { shell: false, windowsHide: true });
+      const timer = setTimeout(() => {
+        spawn('docker', ['kill', containerName], { shell: false });
+        res({ exitCode: -1 });
+      }, timeoutMs);
+
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        res({ exitCode: code });
+      });
+      child.on('error', () => {
+        clearTimeout(timer);
+        res({ exitCode: -1 });
+      });
+    });
+
+    if (result.exitCode === 0) {
+      return {
+        hasIsolationError: true,
+        leakageDetails: `Test '${nodeTarget}' passed when executed alone in a fresh sandbox, proving failure in the full suite was caused by test state contamination / lack of test fixture isolation.`,
+      };
+    }
+  }
+
+  return { hasIsolationError: false, leakageDetails: '' };
 }
