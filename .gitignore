@@ -7,10 +7,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and builds
 node_modules
+server/node_modules/
 dist
+server/dist/
 dist-ssr
 *.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
+server/.env
+server/.env.local
+server/.env.*.local
+!server/.env.example
 
 # Editor directories and files
 .vscode/*
@@ -23,7 +36,14 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
-.env
-.env.*
-!.env.example
+# Credentials and exports
+*apiKey*.csv
+*apikey*.csv
+*credentials*.csv
+*apiKey*
+*apikey*
+*.pem
+*.key
+
+
+
