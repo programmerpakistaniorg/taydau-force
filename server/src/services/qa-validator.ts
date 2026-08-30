@@ -28,6 +28,13 @@ const PROHIBITED_CODE_PATTERNS = [
   /\bimportlib\b/i,
 ];
 
+// Prohibited internal imports that couple QA tests to implementation internals
+const PROHIBITED_INTERNAL_IMPORTS = [
+  /from\s+app\.(database|models|schemas|api|services|crud|db|core|utils|config)\b/i,
+  /import\s+app\.(database|models|schemas|api|services|crud|db|core|utils|config)\b/i,
+  /from\s+app\s+import\s+(?!main\b)[a-zA-Z0-9_]+/i,
+];
+
 export function validateQAArtifacts(
   output: QAOutput,
   expectedRequirementCodes: string[]
@@ -107,6 +114,15 @@ export function validateQAArtifacts(
     for (const pattern of PROHIBITED_CODE_PATTERNS) {
       if (pattern.test(content)) {
         errors.push(`Prohibited dangerous pattern '${pattern.source}' detected in test file '${normalized}'.`);
+      }
+    }
+
+    // Enforce public black-box execution contract: QA must only import 'from app.main import app'
+    for (const pattern of PROHIBITED_INTERNAL_IMPORTS) {
+      if (pattern.test(content)) {
+        errors.push(
+          `QA test file '${normalized}' violates public contract: internal application import matching '${pattern.source}' is prohibited. QA must only import 'from app.main import app' and test purely via HTTP.`
+        );
       }
     }
 

@@ -3,8 +3,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 
+export type SandboxExecutionStatus = 'passed' | 'failed' | 'qa_error' | 'sandbox_error' | 'timeout';
+
+export interface FailingTestInfo {
+  testName: string;
+  failureMessage: string;
+}
+
 export interface SandboxExecutionResult {
-  status: 'passed' | 'failed' | 'timeout' | 'error';
+  status: SandboxExecutionStatus;
   exitCode: number | null;
   stdout: string;
   stderr: string;
@@ -13,6 +20,7 @@ export interface SandboxExecutionResult {
   testsFailed: number;
   timedOut: boolean;
   errorMessage?: string;
+  failingTests?: FailingTestInfo[];
 }
 
 export interface MaterializeFile {
@@ -87,14 +95,18 @@ export async function cleanupWorkspace(workspaceDir: string): Promise<void> {
 }
 
 /**
- * Parses pytest concise terminal summary for test counts.
+ * Parses pytest concise terminal summary for test counts and failing test details.
  */
-export function parsePytestSummary(stdout: string, stderr: string): { passed: number; failed: number } {
+export function parsePytestSummary(
+  stdout: string,
+  stderr: string
+): { passed: number; failed: number; errors: number; failingTests: FailingTestInfo[] } {
   const combined = `${stdout}\n${stderr}`;
   let passed = 0;
   let failed = 0;
+  let errors = 0;
 
-  // Look for standard pytest summary line: "X passed, Y failed in Z.ZZs"
+  // Look for standard pytest summary line: "X passed, Y failed, Z error in ..."
   const passedMatch = combined.match(/(\d+)\s+passed/i);
   if (passedMatch) {
     passed = parseInt(passedMatch[1], 10);
@@ -107,10 +119,20 @@ export function parsePytestSummary(stdout: string, stderr: string): { passed: nu
 
   const errorMatch = combined.match(/(\d+)\s+error/i);
   if (errorMatch) {
-    failed += parseInt(errorMatch[1], 10);
+    errors = parseInt(errorMatch[1], 10);
   }
 
-  return { passed, failed };
+  const failingTests: FailingTestInfo[] = [];
+  const failRegex = /^FAILED\s+([^\s]+)(?:\s*-\s*(.*))?$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = failRegex.exec(combined)) !== null) {
+    failingTests.push({
+      testName: match[1],
+      failureMessage: match[2]?.trim() || 'Assertion error during test execution',
+    });
+  }
+
+  return { passed, failed, errors, failingTests };
 }
 
 /**
@@ -196,7 +218,7 @@ export async function executeSandboxTests(
       clearTimeout(timeoutHandle);
       const durationMs = Date.now() - startTime;
       resolve({
-        status: 'error',
+        status: 'sandbox_error',
         exitCode: null,
         stdout: stdoutAcc,
         stderr: stderrAcc,
@@ -222,15 +244,31 @@ export async function executeSandboxTests(
           stderr: stderrAcc,
           durationMs,
           testsPassed: 0,
-          testsFailed: 1,
+          testsFailed: 0,
           timedOut: true,
           errorMessage: `Host wall-clock timeout exceeded (${timeoutMs}ms)`,
         });
         return;
       }
 
-      const { passed, failed } = parsePytestSummary(stdoutAcc, stderrAcc);
-      const status = exitCode === 0 ? 'passed' : 'failed';
+      const { passed, failed, errors, failingTests } = parsePytestSummary(stdoutAcc, stderrAcc);
+
+      // Deterministic classification based on execution evidence:
+      let status: SandboxExecutionStatus;
+      if (exitCode === 0 && passed > 0 && failed === 0 && errors === 0) {
+        // All acceptance assertions ran and passed
+        status = 'passed';
+      } else if (failed > 0) {
+        // Executable acceptance test ran and assertion failed -> valid product defect evidence
+        status = 'failed';
+      } else if (exitCode === 4 || exitCode === 5 || (passed === 0 && failed === 0 && exitCode !== 0)) {
+        // Pytest collection/import/syntax error before assertions ran -> QA artifact error
+        status = 'qa_error';
+      } else if (errors > 0) {
+        status = 'qa_error';
+      } else {
+        status = 'failed';
+      }
 
       resolve({
         status,
@@ -241,6 +279,7 @@ export async function executeSandboxTests(
         testsPassed: passed,
         testsFailed: failed,
         timedOut: false,
+        failingTests,
       });
     });
   });

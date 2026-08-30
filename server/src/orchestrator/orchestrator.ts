@@ -4,7 +4,7 @@ import { runBAAgent } from '../agents/ba-agent.js';
 import { runPMAgent, type RequirementContext } from '../agents/pm-agent.js';
 import { runArchitectAgent } from '../agents/architect-agent.js';
 import { runEngineerAgent } from '../agents/engineer-agent.js';
-import { runQAAgent } from '../agents/qa-agent.js';
+import { runQAAgent, runQARepairAgent } from '../agents/qa-agent.js';
 import { validateEngineerArtifacts } from '../services/artifact-validator.js';
 import { validateQAArtifacts } from '../services/qa-validator.js';
 import {
@@ -17,6 +17,7 @@ import { logActivity } from '../services/activity-logger.js';
 import { getRemainingBudget } from '../services/cost-telemetry.js';
 import type { TaskOutput } from '../schemas/task.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
+import type { QAOutput } from '../schemas/qa-artifact.js';
 import crypto from 'crypto';
 
 export async function runOrchestrator(projectId: string, gateway: ModelGateway): Promise<void> {
@@ -52,11 +53,14 @@ export async function runOrchestrator(projectId: string, gateway: ModelGateway):
         break;
 
       case 'verifying':
-        await runSandboxStep(projectId);
+        await runSandboxStep(projectId, project.client_brief, gateway);
         break;
 
       case 'tested_passed':
       case 'defects_found':
+      case 'qa_error':
+      case 'sandbox_error':
+      case 'timed_out':
       case 'analyzing':
       case 'planning':
       case 'architecting':
@@ -724,16 +728,45 @@ async function runQAStep(projectId: string, clientBrief: string, gateway: ModelG
     };
 
     // Call QA Agent (CRITICAL: Engineer source code is NOT passed to QA)
-    const qaOutput = await runQAAgent(gateway, clientBrief, requirements, architecture, projectId);
+    let qaOutput = await runQAAgent(gateway, clientBrief, requirements, architecture, projectId);
 
-    // Deterministic security and requirement coverage validation
-    const valResult = validateQAArtifacts(
+    // Deterministic security, public contract, and requirement coverage validation
+    let valResult = validateQAArtifacts(
       qaOutput,
       requirements.map((r) => r.code)
     );
 
+    // Bounded QA Self-Repair (max 1 repair attempt if initial validation failed)
     if (!valResult.valid) {
-      throw new Error(`QA artifact validation failed: ${valResult.errors.join('; ')}`);
+      await logActivity({
+        projectId,
+        actor: 'QA Engineer',
+        actorRole: 'QA Agent',
+        action: 'initiated self-repair for',
+        target: 'QA test artifacts',
+        type: 'system',
+        tag: 'QA Test Repair',
+        details: `Initial validation failed: ${valResult.errors.join('; ')}. Attempting bounded repair...`,
+      });
+
+      qaOutput = await runQARepairAgent(
+        gateway,
+        clientBrief,
+        requirements,
+        architecture,
+        qaOutput,
+        valResult.errors.join('\n'),
+        projectId
+      );
+
+      valResult = validateQAArtifacts(
+        qaOutput,
+        requirements.map((r) => r.code)
+      );
+
+      if (!valResult.valid) {
+        throw new Error(`QA artifact validation failed after repair: ${valResult.errors.join('; ')}`);
+      }
     }
 
     const reqMap = new Map(reqResult.rows.map((r) => [r.code, r.id]));
@@ -796,7 +829,7 @@ async function runQAStep(projectId: string, clientBrief: string, gateway: ModelG
     });
   } catch (err) {
     await query(
-      `UPDATE projects SET status = 'implemented', updated_at = now() WHERE id = $1`,
+      `UPDATE projects SET status = 'qa_error', updated_at = now() WHERE id = $1`,
       [projectId]
     );
 
@@ -807,7 +840,7 @@ async function runQAStep(projectId: string, clientBrief: string, gateway: ModelG
       action: 'failed test derivation for',
       target: 'project',
       type: 'system',
-      tag: 'Error',
+      tag: 'QA Execution Error',
       details: err instanceof Error ? err.message : String(err),
     });
 
@@ -815,7 +848,11 @@ async function runQAStep(projectId: string, clientBrief: string, gateway: ModelG
   }
 }
 
-async function runSandboxStep(projectId: string): Promise<void> {
+async function runSandboxStep(
+  projectId: string,
+  clientBrief: string,
+  gateway: ModelGateway
+): Promise<void> {
   // Fetch Engineer artifacts
   const engArtifactsRes = await query(
     `SELECT file_path, content FROM code_artifacts 
@@ -825,7 +862,7 @@ async function runSandboxStep(projectId: string): Promise<void> {
   );
 
   // Fetch QA artifacts
-  const qaArtifactsRes = await query(
+  let qaArtifactsRes = await query(
     `SELECT file_path, content FROM qa_test_artifacts 
      WHERE project_id = $1
      ORDER BY file_path`,
@@ -836,7 +873,7 @@ async function runSandboxStep(projectId: string): Promise<void> {
     throw new Error(`Missing Engineer code artifacts or QA test artifacts for sandbox run in project ${projectId}`);
   }
 
-  const runId = crypto.randomUUID();
+  let runId = crypto.randomUUID();
 
   await logActivity({
     projectId,
@@ -850,7 +887,7 @@ async function runSandboxStep(projectId: string): Promise<void> {
   });
 
   const engineerFiles = engArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
-  const qaFiles = qaArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+  let qaFiles = qaArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
 
   let workspaceDir = '';
   let execResult: SandboxExecutionResult;
@@ -861,6 +898,114 @@ async function runSandboxStep(projectId: string): Promise<void> {
   } finally {
     if (workspaceDir) {
       await cleanupWorkspace(workspaceDir);
+    }
+  }
+
+  // If initial run was qa_error (collection / import failure), attempt 1 bounded QA repair
+  if (execResult.status === 'qa_error') {
+    const errorMsg = execResult.stderr || execResult.stdout || 'Pytest collection or import failure';
+    await logActivity({
+      projectId,
+      actor: 'QA Engineer',
+      actorRole: 'QA Agent',
+      action: 'initiated self-repair for',
+      target: 'QA test artifacts',
+      type: 'system',
+      tag: 'QA Test Repair',
+      details: `Sandbox execution failed during collection/import (exit code ${execResult.exitCode}). Attempting bounded repair...`,
+    });
+
+    try {
+      const reqResult = await query(
+        'SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code',
+        [projectId]
+      );
+      const archResult = await query(
+        'SELECT tech_stack, file_structure, implementation_spec, decisions FROM architecture_specs WHERE project_id = $1',
+        [projectId]
+      );
+
+      const requirements: RequirementContext[] = reqResult.rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        title: r.title,
+        type: r.type,
+        priority: r.priority,
+        acceptanceCriteria: Array.isArray(r.acceptance_criteria)
+          ? r.acceptance_criteria
+          : JSON.parse(r.acceptance_criteria),
+      }));
+
+      const rawArch = archResult.rows[0];
+      const architecture: ArchitectureOutput = {
+        techStack: typeof rawArch.tech_stack === 'string' ? JSON.parse(rawArch.tech_stack) : rawArch.tech_stack,
+        fileStructure: typeof rawArch.file_structure === 'string' ? JSON.parse(rawArch.file_structure) : rawArch.file_structure,
+        implementationSpec: rawArch.implementation_spec,
+        decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
+      };
+
+      const prevQA: QAOutput = {
+        testPlanSummary: 'Previous test run before collection error',
+        assumptions: [],
+        requirementCoverage: requirements.map((r) => ({ requirementCode: r.code, testNames: [] })),
+        testFiles: qaFiles.map((f) => ({
+          path: f.path,
+          purpose: 'Acceptance test suite',
+          content: f.content,
+          relatedRequirementCodes: requirements.map((r) => r.code),
+        })),
+      };
+
+      const repairedQA = await runQARepairAgent(
+        gateway,
+        clientBrief,
+        requirements,
+        architecture,
+        prevQA,
+        errorMsg,
+        projectId
+      );
+
+      const val = validateQAArtifacts(repairedQA, requirements.map((r) => r.code));
+      if (val.valid) {
+        // Persist repaired QA artifacts
+        await withTransaction(async (client) => {
+          await client.query('DELETE FROM qa_test_artifacts WHERE project_id = $1', [projectId]);
+          const reqMap = new Map(reqResult.rows.map((r) => [r.code, r.id]));
+          for (const file of repairedQA.testFiles) {
+            const insertRes = await client.query(
+              `INSERT INTO qa_test_artifacts (
+                project_id, file_path, content, language, generated_by, version
+              ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+              [projectId, file.path, file.content, 'python', 'QA Engineer', 2]
+            );
+            const artifactId = insertRes.rows[0].id;
+            for (const rCode of file.relatedRequirementCodes || []) {
+              const reqId = reqMap.get(rCode);
+              if (reqId) {
+                await client.query(
+                  `INSERT INTO qa_test_requirements (qa_test_artifact_id, requirement_id)
+                   VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                  [artifactId, reqId]
+                );
+              }
+            }
+          }
+        });
+
+        qaFiles = repairedQA.testFiles.map((f) => ({ path: f.path, content: f.content }));
+        runId = crypto.randomUUID();
+        try {
+          workspaceDir = await materializeWorkspace(projectId, runId, engineerFiles, qaFiles);
+          execResult = await executeSandboxTests(projectId, runId, workspaceDir);
+        } finally {
+          if (workspaceDir) {
+            await cleanupWorkspace(workspaceDir);
+          }
+        }
+      }
+    } catch (repairErr) {
+      console.warn('[orchestrator] QA repair attempt failed:', repairErr);
     }
   }
 
@@ -898,19 +1043,23 @@ async function runSandboxStep(projectId: string): Promise<void> {
       tag: 'Sandbox Complete',
       details: `pytest passed (${execResult.testsPassed} passed, 0 failed in ${execResult.durationMs}ms)`,
     });
-  } else {
-    // Tests failed, timed out, or error -> Record defects and set project status to 'defects_found'
+  } else if (execResult.status === 'failed') {
+    // Tests executed and assertions failed -> Real Engineer product defect
     await query(
       `UPDATE projects SET status = 'defects_found', updated_at = now() WHERE id = $1`,
       [projectId]
     );
 
-    // Get project requirements to link defect
+    // Identify which requirements were tested by the failing test(s)
     const reqRes = await query(
-      'SELECT id, code, title FROM requirements WHERE project_id = $1 ORDER BY code LIMIT 1',
+      `SELECT r.id, r.code, r.title FROM requirements r
+       JOIN qa_test_requirements qtr ON qtr.requirement_id = r.id
+       JOIN qa_test_artifacts qta ON qta.id = qtr.qa_test_artifact_id
+       WHERE qta.project_id = $1
+       ORDER BY r.code`,
       [projectId]
     );
-    const primaryReqId = reqRes.rows.length > 0 ? reqRes.rows[0].id : null;
+    const targetReq = reqRes.rows[0] || null;
 
     // Idempotency: clear previous defects for this project before inserting
     await query('DELETE FROM defects WHERE project_id = $1', [projectId]);
@@ -919,10 +1068,9 @@ async function runSandboxStep(projectId: string): Promise<void> {
       exitCode: execResult.exitCode,
       testsPassed: execResult.testsPassed,
       testsFailed: execResult.testsFailed,
+      failingTests: execResult.failingTests || [],
       stdout: execResult.stdout.slice(0, 4000),
       stderr: execResult.stderr.slice(0, 4000),
-      timedOut: execResult.timedOut,
-      errorMessage: execResult.errorMessage,
     };
 
     await query(
@@ -931,12 +1079,12 @@ async function runSandboxStep(projectId: string): Promise<void> {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         projectId,
-        primaryReqId,
+        targetReq?.id ?? null,
         'DEF-001',
         'Independent Acceptance Test Failure',
         'High',
         'open',
-        `Deterministic pytest execution in sandbox failed (${execResult.testsFailed} failed, ${execResult.testsPassed} passed).`,
+        `Deterministic pytest assertions failed (${execResult.testsFailed} failed, ${execResult.testsPassed} passed).`,
         JSON.stringify(defectEvidence),
       ]
     );
@@ -949,7 +1097,7 @@ async function runSandboxStep(projectId: string): Promise<void> {
       target: 'deterministic failure evidence',
       type: 'task',
       tag: 'Defect Created',
-      details: `Defect DEF-001 created: ${execResult.testsFailed} test(s) failed in sandbox execution`,
+      details: `Defect DEF-001 created: ${execResult.testsFailed} test assertion(s) failed in sandbox execution`,
     });
 
     await logActivity({
@@ -961,6 +1109,56 @@ async function runSandboxStep(projectId: string): Promise<void> {
       type: 'system',
       tag: 'Sandbox Complete',
       details: `pytest failed with ${execResult.testsFailed} failure(s) in ${execResult.durationMs}ms`,
+    });
+  } else if (execResult.status === 'qa_error') {
+    // QA artifact error (import/syntax/collection failure) -> Do NOT create an Engineer product defect!
+    await query(
+      `UPDATE projects SET status = 'qa_error', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'halted verification due to',
+      target: 'QA test artifact execution error',
+      type: 'system',
+      tag: 'QA Execution Error',
+      details: `QA test suite could not execute in sandbox (exit code ${execResult.exitCode}). No product defect created. Error: ${execResult.stderr.slice(0, 300)}`,
+    });
+  } else if (execResult.status === 'timeout') {
+    await query(
+      `UPDATE projects SET status = 'timed_out', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'timed out during',
+      target: 'sandbox execution',
+      type: 'system',
+      tag: 'Timeout',
+      details: `Host wall-clock timeout exceeded (${execResult.durationMs}ms)`,
+    });
+  } else {
+    // sandbox_error
+    await query(
+      `UPDATE projects SET status = 'sandbox_error', updated_at = now() WHERE id = $1`,
+      [projectId]
+    );
+
+    await logActivity({
+      projectId,
+      actor: 'System',
+      actorRole: 'Orchestrator',
+      action: 'encountered infrastructure error during',
+      target: 'sandbox execution',
+      type: 'system',
+      tag: 'Sandbox Error',
+      details: execResult.errorMessage || 'Sandbox spawn failed',
     });
   }
 }
