@@ -1,0 +1,117 @@
+import { config } from '../config.js';
+import type { ModelGateway } from '../gateway/model-gateway.js';
+import { callAgent } from './base-agent.js';
+import { EngineerOutputSchema, type EngineerOutput } from '../schemas/code-artifact.js';
+import type { RequirementContext } from './pm-agent.js';
+import type { ArchitectureOutput } from '../schemas/architecture.js';
+import type { TaskOutput } from '../schemas/task.js';
+
+const ENGINEER_REWORK_SYSTEM_PROMPT = `You are a Senior Full-Stack Engineer Agent for TayDau Force.
+
+Your task: perform targeted defect remediation and code rework on an existing implementation to resolve an authoritative defect detected during independent acceptance testing.
+
+CORE PRINCIPLES (SYSTEMATIC DEBUGGING & DIFFERENTIAL REVIEW):
+1. ROOT CAUSE FIRST: Analyze the defect description and failure evidence to identify the exact root cause in the faulty source files.
+2. MINIMAL TARGETED CHANGE: Make only the specific code corrections required to fix the defect. Do NOT rewrite unrelated modules or alter public API endpoints defined in the architecture.
+3. PRESERVE VALIDATION: Maintain all Pydantic schema validation, database indexes, and error response contracts.
+4. INDEPENDENCE: You do NOT have access to QA test source code or fixtures. You repair the production source files to satisfy the stated requirement.
+5. NO TESTS IN OUTPUT: You implement production source code only. Do NOT output test files.
+
+Produce clean, production-ready Python code with complete file contents.
+
+MANDATORY JSON OUTPUT STRUCTURE:
+Your JSON output MUST include all 4 required root properties:
+1. "implementationSummary": A concise 1-3 sentence summary of the rework fix.
+2. "taskCoverage": Array of objects { "taskCode": string, "filePaths": string[] } mapping every planned task code (e.g. TASK-001, TASK-002, TASK-003, TASK-004) to its implementing files.
+3. "assumptions": Array of strings describing technical assumptions made.
+4. "files": Array of file objects { "path": string, "purpose": string, "content": string, "relatedTaskCodes": string[] }.
+`;
+
+export interface DefectContext {
+  code: string;
+  title: string;
+  severity: string;
+  description: string;
+  evidence: Record<string, any>;
+  failingTestName?: string;
+  relatedRequirementCode?: string;
+}
+
+export interface EngineerReworkContext {
+  clientBrief: string;
+  requirements: RequirementContext[];
+  architecture: ArchitectureOutput;
+  tasks: TaskOutput[];
+  faultyFiles: Array<{ path: string; content: string }>;
+  defect: DefectContext;
+}
+
+export async function runEngineerReworkAgent(
+  gateway: ModelGateway,
+  ctx: EngineerReworkContext,
+  projectId: string
+): Promise<EngineerOutput> {
+  const reqDetails = ctx.requirements
+    .map(
+      (r) =>
+        `### Requirement ${r.code}: ${r.title}\n- Type: ${r.type} | Priority: ${r.priority}\n- Acceptance Criteria:\n${r.acceptanceCriteria.map((c) => `  * ${c}`).join('\n')}`
+    )
+    .join('\n\n');
+
+  const faultyFilesDetails = ctx.faultyFiles
+    .map((f) => `### Current File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .join('\n\n');
+
+  const reworkPrompt = `
+# Engineer Defect Rework & Remediation Task
+
+## Client Brief
+${ctx.clientBrief}
+
+## Validated Requirements
+${reqDetails}
+
+## Approved Architecture Specification
+- Framework: ${ctx.architecture.techStack.framework}
+- Database: ${ctx.architecture.techStack.database}
+- Implementation Spec: ${ctx.architecture.implementationSpec}
+
+## Planned Tasks to Cover in taskCoverage:
+${ctx.tasks.map((t) => `- ${t.code}: ${t.title}`).join('\n')}
+
+## Open Defect Evidence (From Independent Acceptance Testing)
+- Defect Code: ${ctx.defect.code}
+- Title: ${ctx.defect.title}
+- Severity: ${ctx.defect.severity}
+- Related Requirement: ${ctx.defect.relatedRequirementCode || 'Unspecified'}
+- Failing Test: ${ctx.defect.failingTestName || 'Unspecified'}
+- Failure Description: ${ctx.defect.description}
+- Deterministic Failure Evidence:
+\`\`\`json
+${JSON.stringify(ctx.defect.evidence, null, 2)}
+\`\`\`
+
+## Current Faulty Implementation Source Files (${ctx.faultyFiles.length} files)
+${faultyFilesDetails}
+
+Please analyze the root cause of this defect and generate the complete, corrected set of production source files.
+`.trim();
+
+  const { result } = await callAgent(
+    gateway,
+    config.models.engineer,
+    ENGINEER_REWORK_SYSTEM_PROMPT,
+    reworkPrompt,
+    EngineerOutputSchema,
+    {
+      projectId,
+      agentRole: 'engineer',
+      purpose: `Rework implementation to resolve defect ${ctx.defect.code}`,
+      reasoningEffort: 'medium',
+      maxTokens: 2500,
+      temperature: 0.1,
+    }
+  );
+
+  return result;
+}
