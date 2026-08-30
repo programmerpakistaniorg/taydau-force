@@ -295,49 +295,65 @@ export class GroqProvider implements ModelGateway {
       }
     }
 
-    let httpRes: Response;
-    try {
-      httpRes = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.groq.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: request.modelId,
-          messages,
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: 'structured_output',
-              strict: true,
-              schema: jsonSchema,
-            },
+    const maxAttempts = 3;
+    let attempt = 0;
+    let httpRes: Response | undefined;
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        httpRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.groq.apiKey}`,
+            'Content-Type': 'application/json',
           },
-          max_completion_tokens: request.maxTokens ?? 4096,
-          temperature: request.temperature ?? 0.7,
-          reasoning_effort: reasoningEffort,
-        }),
-      });
+          body: JSON.stringify({
+            model: request.modelId,
+            messages,
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'structured_output',
+                strict: true,
+                schema: jsonSchema,
+              },
+            },
+            max_completion_tokens: request.maxTokens ?? 4096,
+            temperature: request.temperature ?? 0.7,
+            reasoning_effort: reasoningEffort,
+          }),
+        });
+      } catch (networkErr) {
+        if (attempt >= maxAttempts) {
+          const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+          throw new GroqNetworkError(`Network error calling ${url}: ${msg}`);
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
 
-
-
-
-    } catch (networkErr) {
-      const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-      throw new GroqNetworkError(`Network error calling ${url}: ${msg}`);
+      if (httpRes.status === 429) {
+        if (attempt < maxAttempts) {
+          const waitTimeMs = 8500;
+          console.warn(`[groq-provider] Rate limit (429) reached for ${request.modelId}, waiting ${waitTimeMs / 1000}s before retry ${attempt}/${maxAttempts}...`);
+          await new Promise((r) => setTimeout(r, waitTimeMs));
+          continue;
+        }
+      }
+      break;
     }
 
-    if (!httpRes.ok) {
+    if (!httpRes || !httpRes.ok) {
       let bodyText: string;
       try {
-        bodyText = await httpRes.text();
+        bodyText = (await httpRes?.text()) || '<empty response>';
       } catch {
         bodyText = '<unable to read response body>';
       }
       throw new GroqHttpError(
-        `HTTP ${httpRes.status} ${httpRes.statusText} from ${url}: ${bodyText}`,
-        httpRes.status
+        `HTTP ${httpRes?.status} ${httpRes?.statusText} from ${url}: ${bodyText}`,
+        httpRes?.status ?? 500
       );
     }
 

@@ -36,7 +36,8 @@ const MAX_TOTAL_SIZE_BYTES = 200_000;
 
 export function validateEngineerArtifacts(
   output: EngineerOutput,
-  expectedTaskCodes: string[]
+  implementationTaskCodes: string[],
+  qaTaskCodes: string[] = []
 ): ValidationResult {
   const errors: string[] = [];
   let totalSizeBytes = 0;
@@ -130,7 +131,11 @@ export function validateEngineerArtifacts(
       errors.push(`File '${normalized}' has no linked task codes.`);
     } else {
       for (const tCode of file.relatedTaskCodes) {
-        if (!expectedTaskCodes.includes(tCode)) {
+        if (qaTaskCodes.includes(tCode)) {
+          errors.push(
+            `File '${normalized}' references QA verification task '${tCode}'. Engineer code artifacts may only fulfill implementation tasks.`
+          );
+        } else if (!implementationTaskCodes.includes(tCode)) {
           errors.push(`File '${normalized}' references unknown task code '${tCode}'.`);
         }
       }
@@ -148,23 +153,23 @@ export function validateEngineerArtifacts(
     errors.push(`Total source bundle exceeds maximum size limit (${totalSizeBytes} > ${MAX_TOTAL_SIZE_BYTES} bytes).`);
   }
 
-  // 3. Task coverage verification (Every expected task must be covered)
+  // 3. Task coverage verification (Every implementation task must be covered)
   const coveredTaskSet = new Set<string>();
   for (const cov of output.taskCoverage || []) {
-    if (expectedTaskCodes.includes(cov.taskCode) && cov.filePaths.length > 0) {
+    if (implementationTaskCodes.includes(cov.taskCode) && cov.filePaths.length > 0) {
       coveredTaskSet.add(cov.taskCode);
     }
   }
   // Also collect from files' relatedTaskCodes
   for (const file of output.files) {
     for (const tCode of file.relatedTaskCodes || []) {
-      if (expectedTaskCodes.includes(tCode)) {
+      if (implementationTaskCodes.includes(tCode)) {
         coveredTaskSet.add(tCode);
       }
     }
   }
 
-  for (const expectedCode of expectedTaskCodes) {
+  for (const expectedCode of implementationTaskCodes) {
     if (!coveredTaskSet.has(expectedCode)) {
       errors.push(`Orphan implementation task: '${expectedCode}' has no generated code coverage.`);
     }

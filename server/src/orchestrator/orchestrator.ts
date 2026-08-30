@@ -491,7 +491,7 @@ async function runEngineerStep(
         : JSON.parse(r.acceptance_criteria),
     }));
 
-    const tasks: TaskOutput[] = taskResult.rows.map((t) => ({
+    const allTasks: TaskOutput[] = taskResult.rows.map((t) => ({
       code: t.code,
       title: t.title,
       description: t.description || '',
@@ -502,6 +502,10 @@ async function runEngineerStep(
       acceptanceIntent: t.description || t.title,
     }));
 
+    const isQaRole = (role: string) => role.toLowerCase().includes('qa') || role.toLowerCase().includes('test');
+    const implementationTasks = allTasks.filter((t) => !isQaRole(t.assignedRole));
+    const qaTasks = allTasks.filter((t) => isQaRole(t.assignedRole));
+
     const rawArch = archResult.rows[0];
     const architecture: ArchitectureOutput = {
       techStack: typeof rawArch.tech_stack === 'string' ? JSON.parse(rawArch.tech_stack) : rawArch.tech_stack,
@@ -510,12 +514,12 @@ async function runEngineerStep(
       decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
     };
 
-    // Call Engineer Agent (generates structured source code files)
+    // Call Engineer Agent (generates structured source code files for implementation tasks)
     const engineerOutput = await runEngineerAgent(
       gateway,
       clientBrief,
       requirements,
-      tasks,
+      implementationTasks,
       architecture,
       projectId
     );
@@ -523,7 +527,8 @@ async function runEngineerStep(
     // Deterministic security, path, dependency, and coverage validation
     const valResult = validateEngineerArtifacts(
       engineerOutput,
-      tasks.map((t) => t.code)
+      implementationTasks.map((t) => t.code),
+      qaTasks.map((t) => t.code)
     );
 
     if (!valResult.valid) {
@@ -532,8 +537,12 @@ async function runEngineerStep(
       );
     }
 
-    const taskMap = new Map(taskResult.rows.map((t) => [t.code, t.id]));
-    const defaultTaskId = taskResult.rows[0].id;
+    const implTaskMap = new Map(
+      taskResult.rows
+        .filter((t) => !isQaRole(t.assigned_role))
+        .map((t) => [t.code, t.id])
+    );
+    const defaultTaskId = implementationTasks.length > 0 ? (implTaskMap.get(implementationTasks[0].code) ?? taskResult.rows[0].id) : taskResult.rows[0].id;
 
     // Transactionally persist code artifacts into PostgreSQL
     await withTransaction(async (client) => {
@@ -545,7 +554,7 @@ async function runEngineerStep(
 
       for (const file of engineerOutput.files) {
         const primaryTaskCode = file.relatedTaskCodes[0];
-        const taskId = taskMap.get(primaryTaskCode) ?? defaultTaskId;
+        const taskId = implTaskMap.get(primaryTaskCode) ?? defaultTaskId;
         const ext = file.path.endsWith('.py') ? 'python' : 'text';
 
         const insertRes = await client.query(
@@ -564,7 +573,7 @@ async function runEngineerStep(
         );
         const artifactId = insertRes.rows[0].id;
 
-        // Persist all linked task relationships into code_artifact_tasks junction table
+        // Persist only implementation task relationships into code_artifact_tasks junction table
         const linkedTaskCodes = new Set([
           ...(file.relatedTaskCodes || []),
           ...(engineerOutput.taskCoverage
@@ -573,7 +582,7 @@ async function runEngineerStep(
         ]);
 
         for (const tCode of linkedTaskCodes) {
-          const linkedTaskId = taskMap.get(tCode);
+          const linkedTaskId = implTaskMap.get(tCode);
           if (linkedTaskId) {
             await client.query(
               `INSERT INTO code_artifact_tasks (code_artifact_id, task_id)
