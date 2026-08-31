@@ -8,7 +8,19 @@ export default defineConfig({
     port: 5173,
     host: true,
     watch: {
-      ignored: ['**/docs/**', '**/*.pdf', '**/*.zip', '**/.git/**', '**/scratch/**'],
+      ignored: [
+        '**/docs/**',
+        '**/scratch/**',
+        '**/.git/**',
+        '**/*.pdf',
+        '**/*.zip',
+        '**/*.rar',
+        '**/*.7z',
+        '**/*.tar*',
+        '**/*.gz',
+        '**/*.iso',
+        '**/*.tmp',
+      ],
     },
     proxy: {
       '/api': {
