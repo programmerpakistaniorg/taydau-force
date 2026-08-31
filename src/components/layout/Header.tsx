@@ -194,8 +194,8 @@ export const Header: React.FC = () => {
             <div className="flex items-center gap-2.5">
               <h1 className="text-base font-bold text-slate-900 tracking-tight">
                 {mode === 'live'
-                  ? (project?.name || 'Autonomous Inventory Management API')
-                  : 'Smart Inventory Management System'}
+                  ? (project?.name || 'Smart Wholesale Inventory System')
+                  : 'Smart Wholesale Inventory System'}
               </h1>
               {mode === 'live' ? (
                 <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
