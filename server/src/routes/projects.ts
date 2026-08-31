@@ -82,6 +82,27 @@ router.post('/:id/advance', async (req, res, next) => {
   }
 });
 
+// GET /api/projects — list projects
+router.get('/', async (req, res, next) => {
+  try {
+    const result = await query(
+      'SELECT id, name, client_brief, status, created_at, updated_at FROM projects ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json({
+      projects: result.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        clientBrief: r.client_brief,
+        status: r.status,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/projects/:id — full project state
 router.get('/:id', async (req, res, next) => {
   try {
@@ -104,6 +125,11 @@ router.get('/:id', async (req, res, next) => {
       testRunsResult,
       defectsResult,
       activitiesResult,
+      qaSuiteResult,
+      codeReviewResult,
+      securityFindingsResult,
+      releaseReadinessResult,
+      llmCallsResult,
     ] = await Promise.all([
       query('SELECT * FROM requirements WHERE project_id = $1 ORDER BY code', [id]),
       query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY code', [id]),
@@ -118,6 +144,7 @@ router.get('/:id', async (req, res, next) => {
           ca.generated_by,
           ca.artifact_type,
           ca.version,
+          ca.sha256,
           ca.created_at,
           COALESCE(
             array_agg(t.code ORDER BY t.code) FILTER (WHERE t.code IS NOT NULL),
@@ -139,6 +166,8 @@ router.get('/:id', async (req, res, next) => {
           qa.language,
           qa.generated_by,
           qa.version,
+          qa.is_frozen,
+          qa.sha256,
           qa.created_at,
           COALESCE(
             array_agg(r.code ORDER BY r.code) FILTER (WHERE r.code IS NOT NULL),
@@ -154,11 +183,19 @@ router.get('/:id', async (req, res, next) => {
       query('SELECT * FROM test_runs WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM defects WHERE project_id = $1 ORDER BY created_at DESC', [id]),
       query('SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50', [id]),
+      query('SELECT * FROM qa_suites WHERE project_id = $1 ORDER BY created_at DESC LIMIT 1', [id]),
+      query('SELECT * FROM code_reviews WHERE project_id = $1 ORDER BY created_at DESC LIMIT 1', [id]),
+      query('SELECT * FROM security_findings WHERE project_id = $1 ORDER BY created_at ASC', [id]),
+      query('SELECT * FROM release_readiness WHERE project_id = $1 ORDER BY evaluated_at DESC LIMIT 1', [id]),
+      query('SELECT * FROM llm_calls WHERE project_id = $1 ORDER BY created_at ASC', [id]),
     ]);
 
     // Cost summary
     const costSummary = await getProjectCostSummary(id);
     const archSpec = architectureResult.rows[0] ?? null;
+    const qaSuite = qaSuiteResult.rows[0] ?? null;
+    const codeReview = codeReviewResult.rows[0] ?? null;
+    const releaseReadiness = releaseReadinessResult.rows[0] ?? null;
 
     res.json({
       id: project.id,
@@ -209,6 +246,7 @@ router.get('/:id', async (req, res, next) => {
         generatedBy: a.generated_by,
         artifactType: a.artifact_type,
         version: a.version,
+        sha256: a.sha256,
         createdAt: a.created_at,
       })),
       qaTestArtifacts: qaArtifactsResult.rows.map((qa) => ({
@@ -219,8 +257,19 @@ router.get('/:id', async (req, res, next) => {
         generatedBy: qa.generated_by,
         requirementCodes: qa.requirement_codes,
         version: qa.version,
+        isFrozen: qa.is_frozen,
+        sha256: qa.sha256,
         createdAt: qa.created_at,
       })),
+      qaSuite: qaSuite
+        ? {
+            suiteSha256: qaSuite.suite_sha256,
+            fileCount: qaSuite.file_count,
+            isFrozen: qaSuite.is_frozen,
+            version: qaSuite.version,
+            createdAt: qaSuite.created_at,
+          }
+        : null,
       testRuns: testRunsResult.rows.map((tr) => ({
         id: tr.id,
         exitCode: tr.exit_code,
@@ -242,7 +291,47 @@ router.get('/:id', async (req, res, next) => {
         description: d.description,
         evidence: typeof d.evidence === 'string' ? JSON.parse(d.evidence) : d.evidence,
         reworkAttempt: d.rework_attempt,
+        resolvedBy: d.resolved_by,
+        faultOrigin: d.fault_origin,
+        isControlledFault: d.is_controlled_fault,
         createdAt: d.created_at,
+      })),
+      codeReview: codeReview
+        ? {
+            summary: codeReview.summary,
+            findings: typeof codeReview.findings === 'string' ? JSON.parse(codeReview.findings) : codeReview.findings,
+            architectureCompliance: typeof codeReview.architecture_compliance === 'string' ? JSON.parse(codeReview.architecture_compliance) : codeReview.architecture_compliance,
+            maintainabilityAssessment: codeReview.maintainability_assessment,
+            modelId: codeReview.model_id,
+            createdAt: codeReview.created_at,
+          }
+        : null,
+      securityFindings: securityFindingsResult.rows.map((s) => ({
+        id: s.id,
+        source: s.source,
+        severity: s.severity,
+        rule: s.rule,
+        filePath: s.file_path,
+        evidence: s.evidence,
+        status: s.status,
+        createdAt: s.created_at,
+      })),
+      releaseReadiness: releaseReadiness
+        ? {
+            isReady: releaseReadiness.is_ready,
+            checks: typeof releaseReadiness.checks === 'string' ? JSON.parse(releaseReadiness.checks) : releaseReadiness.checks,
+            evaluatedAt: releaseReadiness.evaluated_at,
+          }
+        : null,
+      llmCalls: llmCallsResult.rows.map((c) => ({
+        id: c.id,
+        agentRole: c.agent_role,
+        modelId: c.model_id,
+        inputTokens: c.input_tokens,
+        outputTokens: c.output_tokens,
+        costUsd: parseFloat(c.cost_usd),
+        latencyMs: c.latency_ms,
+        createdAt: c.created_at,
       })),
       activities: activitiesResult.rows.map((a) => ({
         id: a.id,
