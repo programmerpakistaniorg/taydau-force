@@ -17,14 +17,15 @@ Mandatory Implementation Rules:
   - Validation: Pydantic v2
   - Database: SQLite via SQLAlchemy ORM (self-contained, no external database service)
 - File Scope:
-  - Generate between 4 and 6 essential files under "app/" (e.g. app/database.py, app/models.py, app/schemas.py, app/api/endpoints.py, app/main.py) and optional requirements.txt.
+  - Generate 3 to 4 concise essential files under "app/" (e.g. app/database.py, app/models.py, app/schemas.py, app/main.py).
+  - Keep code focused, clean, and concise. Combine routes cleanly in app/main.py or app/api.py.
   - DO NOT generate duplicate files. Each file path in the files array must be unique.
-  - DO NOT generate test files (such as "tests/test_products.py" or any "tests/*"). Independent QA will write the test suite in a separate stage.
-  - DO NOT use external database engines (no asyncpg, psycopg2, redis). Use SQLite ("sqlite:///./inventory.db").
+  - DO NOT generate test files. Independent QA will write tests separately.
+  - DO NOT use external database engines. Use SQLite ("sqlite:///./app.db").
 - Code Quality:
   - Every file must contain complete, functional, production-grade Python code.
   - Never use placeholders, ellipses (...), or unimplemented stubs (# TODO).
-  - Write clean, concise, idiomatic Python code.
+  - Write clean, concise, idiomatic Python code without excessive verbosity.
   - Implement full validation (e.g. quantity >= 0, threshold >= 0) and proper HTTP status codes (201, 200, 400, 404, 422).
   - Use atomic database transactions for stock updates.
 - Traceability:
@@ -77,7 +78,7 @@ export async function runEngineerAgent(
     `Database: ${architecture.techStack.database}`,
     `Framework: ${architecture.techStack.framework}`,
     `Planned Files: ${architecture.fileStructure.join(', ')}`,
-    `Implementation Spec Summary:\n${architecture.implementationSpec.slice(0, 1800)}`,
+    `Implementation Spec Summary:\n${architecture.implementationSpec.slice(0, 1200)}`,
   ].join('\n');
 
   const userPrompt = [
@@ -99,7 +100,7 @@ export async function runEngineerAgent(
       agentRole: 'engineer',
       purpose: 'Generate implementation code artifacts',
       reasoningEffort: 'medium',
-      maxTokens: 5500,
+      maxTokens: 4200,
       temperature: 0.1,
     }
   );

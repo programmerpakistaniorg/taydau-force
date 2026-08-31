@@ -3,8 +3,158 @@ export interface ProjectSummary {
   name: string;
   clientBrief: string;
   status: string;
+  stage?: string;
+  stageStatus?: string;
+  progress?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NextAction {
+  type: 'answer_questions' | 'approve_requirements' | 'approve_design' | 'retry' | 'working' | 'delivery' | 'none';
+  label: string | null;
+  description: string;
+  requiresUser: boolean;
+  targetRoute: string;
+  entityId?: string;
+  count?: number;
+  role?: string;
+  roleKey?: string;
+}
+
+export interface ProjectWorkflow {
+  id: string;
+  projectId: string;
+  stage: string;
+  stageStatus: string;
+  progress: number;
+  nextActionType: string | null;
+  nextActionPayload: Record<string, any>;
+  requiredRoles: string[];
+  activeRole: string | null;
+  approvedRequirementBaselineId: string | null;
+  approvedDesignSpecId: string | null;
+  retryCount: number;
+  lastErrorCode: string | null;
+  lastErrorSummary: string | null;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectFact {
+  id: string;
+  factKey: string;
+  category: string;
+  value: any;
+  sourceRole: string;
+  sourceType: string;
+  confirmationStatus: string;
+  confidence: number;
+  version: number;
+  isCurrent: boolean;
+  createdAt: string;
+}
+
+export interface ClientInteraction {
+  id: string;
+  agentRole: string;
+  workflowStage: string;
+  factKey: string;
+  interactionType: 'single_choice' | 'multi_choice' | 'free_text' | 'recommendation' | 'approval' | 'confirmation';
+  question: string;
+  whyItMatters: string;
+  options: string[];
+  recommendedOption?: string;
+  allowCustom?: boolean;
+  impact?: 'low' | 'medium' | 'high' | 'critical';
+  required?: boolean;
+  status: 'pending' | 'answered' | 'cancelled' | 'superseded';
+  answer?: any;
+  createdAt: string;
+  answeredAt?: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  artifactType: 'requirements' | 'design';
+  artifactId: string;
+  artifactVersion: number;
+  status: 'pending' | 'approved' | 'changes_requested' | 'rejected';
+  feedback?: string;
+  scopeClassification?: 'design_only' | 'possible_scope_change' | 'not_applicable';
+  createdAt: string;
+  decidedAt?: string;
+}
+
+export interface RequirementBaseline {
+  id: string;
+  version: number;
+  status: string;
+  snapshot: any;
+  createdAt: string;
+  approvedAt?: string;
+}
+
+export interface DesignScreen {
+  id: string;
+  name: string;
+  purpose: string;
+  route: string;
+  primaryUser: string;
+  sections: string[];
+  primaryActions: string[];
+  wireframeElements: string[];
+}
+
+export interface DesignSpec {
+  id: string;
+  version: number;
+  status: string;
+  summary: string;
+  design: {
+    productExperienceSummary: string;
+    uxGoals: string[];
+    screens: DesignScreen[];
+    navigation: {
+      type: string;
+      items: Array<{ label: string; route: string; iconName?: string }>;
+    };
+    userFlows: Array<{ name: string; steps: string[] }>;
+    designSystem: {
+      styleDirection: string;
+      colors: {
+        primary: string;
+        secondary: string;
+        background: string;
+        surface: string;
+        text: string;
+      };
+      typography: {
+        headingFont: string;
+        bodyFont: string;
+      };
+      componentPrinciples: string[];
+    };
+    responsiveBehavior: string;
+    loadingStates: string[];
+    emptyStates: string[];
+    errorStates: string[];
+    assumptions: string[];
+  };
+  previousVersionId?: string;
+  revisionReason?: string;
+  clientFeedback?: string;
+  createdAt: string;
+  approvedAt?: string;
+}
+
+export interface InterruptionMetrics {
+  totalQuestions: number;
+  questionsAnswered: number;
+  questionsPending: number;
+  questionsPerRole: Record<string, number>;
+  approvalsCount: number;
+  totalInterruptions: number;
 }
 
 export interface BackendRequirement {
@@ -47,9 +197,13 @@ export interface BackendArchitecture {
   }>;
   implementationSpec: string;
   decisions: Array<{
+    code?: string;
     title: string;
     decision: string;
-    rationale: string;
+    rationale?: string;
+    status?: string;
+    context?: string;
+    consequences?: string;
   }>;
   createdAt: string;
 }
@@ -94,8 +248,8 @@ export interface BackendQASuite {
 export interface BackendTestRun {
   id: string;
   exitCode: number;
-  status: 'passed' | 'failed' | 'error';
-  testType: string;
+  status?: string;
+  testType?: string;
   durationMs: number;
   testsPassed: number;
   testsFailed: number;
@@ -163,7 +317,7 @@ export interface ReleaseCheck {
 
 export interface BackendReleaseReadiness {
   isReady: boolean;
-  checks: ReleaseCheck[];
+  checks: ReleaseCheck[] | Record<string, boolean>;
   evaluatedAt: string;
 }
 
@@ -184,7 +338,7 @@ export interface BackendActivity {
   actorRole: string;
   action: string;
   target: string;
-  type: 'task' | 'qa' | 'security' | 'defect' | 'governor' | 'system';
+  type: string;
   tag?: string;
   details?: string;
   createdAt: string;
@@ -215,6 +369,16 @@ export interface FullProjectResponse {
   status: string;
   createdAt: string;
   updatedAt: string;
+  workflow: ProjectWorkflow;
+  nextAction: NextAction;
+  interruptionMetrics: InterruptionMetrics;
+  projectFacts: ProjectFact[];
+  clientInteractions: ClientInteraction[];
+  pendingInteractions: ClientInteraction[];
+  approvalRequests: ApprovalRequest[];
+  pendingApproval: ApprovalRequest | null;
+  requirementBaselines: RequirementBaseline[];
+  designSpecs: DesignSpec[];
   requirements: BackendRequirement[];
   tasks: BackendTask[];
   architecture: BackendArchitecture | null;

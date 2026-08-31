@@ -1,78 +1,91 @@
-import { FullProjectResponse, ProjectSummary } from '../types/api';
+import type { FullProjectResponse, ProjectSummary } from '../types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE = '/api';
 
-class ApiError extends Error {
-  status: number;
-  data: any;
-
-  constructor(message: string, status: number, data?: any) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
-  }
+export async function fetchProjects(): Promise<ProjectSummary[]> {
+  const res = await fetch(`${API_BASE}/projects`);
+  if (!res.ok) throw new Error('Failed to fetch projects');
+  const data = await res.json();
+  return data.projects;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${path.startsWith('/') ? path : '/' + path}`;
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    ...options.headers,
-  };
-
-  try {
-    const response = await fetch(url, { ...options, headers });
-    
-    let body: any = null;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      body = await response.json();
-    } else {
-      body = await response.text();
-    }
-
-    if (!response.ok) {
-      const errorMessage = typeof body === 'object' && body?.error 
-        ? body.error 
-        : `Request failed with status ${response.status}`;
-      throw new ApiError(errorMessage, response.status, body);
-    }
-
-    return body as T;
-  } catch (err: any) {
-    if (err instanceof ApiError) {
-      throw err;
-    }
-    throw new ApiError(err.message || 'Network connection failure', 0, err);
-  }
+export async function fetchProject(id: string): Promise<FullProjectResponse> {
+  const res = await fetch(`${API_BASE}/projects/${id}`);
+  if (!res.ok) throw new Error(`Failed to fetch project ${id}`);
+  return res.json();
 }
 
-export const api = {
-  /** List all projects */
-  async getProjects(): Promise<{ projects: ProjectSummary[] }> {
-    return request<{ projects: ProjectSummary[] }>('/projects');
-  },
+export async function createProject(name: string, clientBrief: string): Promise<{ id: string; name: string; status: string }> {
+  const res = await fetch(`${API_BASE}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, clientBrief }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create project');
+  }
+  return res.json();
+}
 
-  /** Get complete project detail */
-  async getProject(id: string): Promise<FullProjectResponse> {
-    return request<FullProjectResponse>(`/projects/${id}`);
-  },
+export async function answerInteraction(projectId: string, interactionId: string, answer: any): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/interactions/${interactionId}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answer }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to submit answer');
+  }
+  return res.json();
+}
 
-  /** Create project with client brief (starts BA automatically) */
-  async createProject(name: string, clientBrief: string): Promise<{ id: string; name: string; status: string }> {
-    return request<{ id: string; name: string; status: string }>('/projects', {
-      method: 'POST',
-      body: JSON.stringify({ name, clientBrief }),
-    });
-  },
+export async function approveRequest(projectId: string, approvalId: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to approve request');
+  }
+  return res.json();
+}
 
-  /** Advance project to next lifecycle stage */
-  async advanceProject(id: string): Promise<{ id: string; status: string; message: string }> {
-    return request<{ id: string; status: string; message: string }>(`/projects/${id}/advance`, {
-      method: 'POST',
-    });
-  },
-};
+export async function requestChanges(projectId: string, approvalId: string, feedback: string): Promise<{ success: boolean; classification: string; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/request-changes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to request changes');
+  }
+  return res.json();
+}
+
+export async function retryStage(projectId: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to retry stage');
+  }
+  return res.json();
+}
+
+export async function advanceProject(id: string): Promise<{ id: string; status: string }> {
+  const res = await fetch(`${API_BASE}/projects/${id}/advance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to advance project');
+  }
+  return res.json();
+}

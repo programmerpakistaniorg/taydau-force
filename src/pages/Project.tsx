@@ -28,10 +28,18 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { DEMO_PROJECT_INFO } from '../data/mockData';
 import { useLiveProject } from '../context/LiveProjectContext';
-
-const DEFAULT_SAMPLE_BRIEF = "I run a small wholesale business and need a simple system where my team can add products, update stock and see which items are running low.";
+import { InteractionCard } from '../components/workflow/InteractionCard';
+import { ApprovalCard } from '../components/workflow/ApprovalCard';
 
 const PROJECT_STARTER_TEMPLATES = [
+  {
+    label: 'Car Detailing App',
+    name: 'AutoShine Detailing Platform',
+    brief: 'I run a small car detailing business and need a clean web application for customers to book detailing packages, choose date/time slots, view service pricing, and for staff to manage appointments.',
+    type: 'Small Business',
+    audience: 'My Team & Customers',
+    goal: 'Automate Bookings & Appointments',
+  },
   {
     label: 'Inventory System',
     name: 'Smart Wholesale Inventory System',
@@ -49,36 +57,12 @@ const PROJECT_STARTER_TEMPLATES = [
     goal: 'Improve Customer Experience',
   },
   {
-    label: 'Booking System',
-    name: 'Appointment & Booking Platform',
-    brief: 'An online booking system that allows customers to select services, choose available appointment time slots, receive confirmations, and manage schedules.',
-    type: 'Small Business',
-    audience: 'General Public / Open Web',
-    goal: 'Save Time & Automate Work',
-  },
-  {
-    label: 'Internal Dashboard',
-    name: 'Operations & KPI Dashboard',
-    brief: 'An internal operations dashboard to track monthly team milestones, delivery budgets, employee assignments, and generate summary reports.',
-    type: 'Corporate / Enterprise',
+    label: 'Internal Notes API',
+    name: 'Internal Notes & Task API',
+    brief: 'Build an internal microservice API to create, read, update, and categorize employee notes with title, body, and tag fields. Pure backend service, no UI is required.',
+    type: 'Internal Service',
     audience: 'Internal Team Only',
-    goal: 'Scale Operations & Reduce Costs',
-  },
-  {
-    label: 'Business Website',
-    name: 'Corporate Services Website',
-    brief: 'A modern business website with company portfolio, services overview, client testimonials, and an interactive contact lead capture form.',
-    type: 'Startup / SaaS',
-    audience: 'General Public / Open Web',
-    goal: 'Sell Products or Services',
-  },
-  {
-    label: 'Marketplace',
-    name: 'B2B Wholesale Marketplace',
-    brief: 'A multi-vendor product marketplace where suppliers can list catalog products, buyers can browse items, and admins can manage order requests.',
-    type: 'Retail & E-Commerce',
-    audience: 'My Team & Customers',
-    goal: 'Sell Products or Services',
+    goal: 'Backend Microservice API',
   },
 ];
 
@@ -89,471 +73,272 @@ export const Project: React.FC = () => {
     project,
     projectsList,
     isLoading,
-    isAdvancing,
+    isActionInProgress,
     createProject,
     loadProject,
-    refreshProject
+    answerInteraction,
+    approveRequest,
+    requestChanges,
   } = useLiveProject();
 
   const [isCreating, setIsCreating] = useState<boolean>(!project);
   const [newProjectName, setNewProjectName] = useState<string>('');
   const [newProjectBrief, setNewProjectBrief] = useState<string>('');
-  const [businessType, setBusinessType] = useState<string>('Small Business');
-  const [targetAudience, setTargetAudience] = useState<string>('My Team & Customers');
-  const [primaryGoal, setPrimaryGoal] = useState<string>('Save Time & Automate Work');
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
+  const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number | null>(null);
 
-  // If there's no project loaded, open creation form by default
-  React.useEffect(() => {
-    if (!project && !isLoading) {
-      setIsCreating(true);
-    }
-  }, [project, isLoading]);
-
-  const handleTemplateSelect = (tpl: typeof PROJECT_STARTER_TEMPLATES[0]) => {
-    setNewProjectName(tpl.name);
-    setNewProjectBrief(tpl.brief);
-    setBusinessType(tpl.type);
-    setTargetAudience(tpl.audience);
-    setPrimaryGoal(tpl.goal);
-  };
-
-  const handleCreateSubmit = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectBrief.trim()) return;
-    setCreateError(null);
-    const name = newProjectName.trim() || 'New Software Project';
     try {
-      await createProject(name, newProjectBrief.trim());
+      await createProject(newProjectName.trim() || 'Untitled Project', newProjectBrief.trim());
       setIsCreating(false);
-    } catch (err: any) {
-      setCreateError(err.message || 'Failed to create project');
+    } catch (err) {
+      console.error('Project creation failed:', err);
     }
   };
 
-  if (mode === 'demo') {
-    const { baOutput } = DEMO_PROJECT_INFO;
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <FolderKanban className="w-5 h-5 text-brand-blue" />
-                My Project
-              </h2>
-              <span className="px-2.5 py-0.5 text-xs font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                Concept Demonstration
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Project overview, business goals, and extracted requirements for <strong className="text-slate-800">{DEMO_PROJECT_INFO.name}</strong>.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="teal" size="md">
-              Client: {DEMO_PROJECT_INFO.company}
-            </Badge>
-            <Badge variant="primary" size="md">
-              Target SLA: {DEMO_PROJECT_INFO.targetSLA}
-            </Badge>
-          </div>
-        </div>
+  const handleApplyTemplate = (tpl: typeof PROJECT_STARTER_TEMPLATES[0], idx: number) => {
+    setSelectedTemplateIndex(idx);
+    setNewProjectName(tpl.name);
+    setNewProjectBrief(tpl.brief);
+  };
 
-        {/* Business Goal Card */}
-        <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-brand-blue" />
-              Your Project Idea
-            </span>
-          </div>
-          <blockquote className="p-4 bg-slate-50/80 border-l-4 border-brand-blue text-sm text-slate-900 italic rounded-r-lg font-serif leading-relaxed">
-            &ldquo;{DEMO_PROJECT_INFO.clientRequirement}&rdquo;
-          </blockquote>
-        </div>
+  const pendingInteraction = project?.pendingInteractions?.[0];
+  const pendingApproval = project?.pendingApproval;
 
-        {/* Requirements Summary */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <FileCheck className="w-4 h-4 text-emerald-600" />
-            What the System Will Build
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {baOutput.actors.map((actor, idx) => (
-              <Card key={idx} className="p-4! space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900">{actor.role}</h4>
-                  <Badge variant="primary" size="sm">{actor.badge}</Badge>
-                </div>
-                <p className="text-[11px] text-slate-600 leading-snug">{actor.description}</p>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =========================================================================
-  // LIVE MODE RENDERING (BUSINESS-FIRST UX)
-  // =========================================================================
   return (
     <div className="space-y-6">
-      {/* Header & Controls */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-brand-blue" />
-              My Project
-            </h2>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              {project ? (project.status === 'release_ready' ? 'Ready for Delivery' : 'In Progress') : 'No Active Project'}
-            </span>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FolderKanban className="w-5 h-5 text-brand-blue" />
+            Project Onboarding & Client Decisions
+          </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Describe what your business needs. TayDau understands your idea, creates clear requirements, and prepares the build plan.
+            Work collaboratively with your AI software team. Answer role-specific decisions and review deliverables.
           </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-wrap items-center gap-2">
-          {projectsList.length > 0 && (
-            <select
-              value={project?.id || ''}
-              onChange={(e) => loadProject(e.target.value)}
-              className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-            >
-              {projectsList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {project && (
+        {mode === 'live' && (
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setIsCreating(!isCreating)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue hover:bg-blue-700 text-white shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue hover:bg-blue-700 text-white shadow-xs transition-all"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>{isCreating ? 'Close Form' : 'Start New Project'}</span>
+              <span>{isCreating ? 'View Active Project' : 'New Project'}</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Onboarding Intake Form (When Starting a Project or No Project Active) */}
-      {(isCreating || !project) && (
-        <form onSubmit={handleCreateSubmit} className="p-6 bg-gradient-to-br from-blue-50/90 to-indigo-50/50 border border-blue-200 rounded-2xl space-y-4 shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-center justify-between border-b border-blue-200/60 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-brand-blue" />
-                What would you like to build?
-              </h3>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Describe your idea in your own words. You do not need any technical knowledge.
-              </p>
-            </div>
-            {project && (
-              <button
-                type="button"
-                onClick={() => setIsCreating(false)}
-                className="text-xs text-slate-400 hover:text-slate-700 font-medium"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-
-          {/* Starter Templates (Inspiration) */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-bold text-slate-700 block">
-              Need inspiration? Start with an example:
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {PROJECT_STARTER_TEMPLATES.map((tpl, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleTemplateSelect(tpl)}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-blue-200/80 hover:border-brand-blue hover:bg-blue-50/50 text-xs font-semibold text-slate-700 transition-all shadow-2xs active:scale-98"
-                >
-                  {tpl.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-1">
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Project Name
-              </label>
-              <input
-                type="text"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                required
-                className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                placeholder="e.g. Invoicing & Billing Portal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Your Idea & Business Needs
-              </label>
-              <textarea
-                value={newProjectBrief}
-                onChange={(e) => setNewProjectBrief(e.target.value)}
-                rows={3}
-                required
-                minLength={10}
-                className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden leading-relaxed"
-                placeholder="e.g., I want an invoicing app where my team can create customer invoices, send automated payment reminders, and track overdue bills."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Business Type (Optional)
-                </label>
-                <select
-                  value={businessType}
-                  onChange={(e) => setBusinessType(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                >
-                  <option value="Small Business">Small Business</option>
-                  <option value="Startup / SaaS">Startup / SaaS</option>
-                  <option value="Retail & E-Commerce">Retail & E-Commerce</option>
-                  <option value="Service Agency / Consulting">Service Agency / Consulting</option>
-                  <option value="Corporate / Enterprise">Corporate / Enterprise</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Who Will Use It? (Optional)
-                </label>
-                <select
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                >
-                  <option value="My Team & Customers">My Team & Customers</option>
-                  <option value="Internal Team Only">Internal Team Only</option>
-                  <option value="External Clients Only">External Clients Only</option>
-                  <option value="General Public / Open Web">General Public / Open Web</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Primary Goal (Optional)
-                </label>
-                <select
-                  value={primaryGoal}
-                  onChange={(e) => setPrimaryGoal(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                >
-                  <option value="Save Time & Automate Work">Save Time & Automate Work</option>
-                  <option value="Sell Products or Services">Sell Products or Services</option>
-                  <option value="Track & Organize Data">Track & Organize Data</option>
-                  <option value="Improve Customer Experience">Improve Customer Experience</option>
-                  <option value="Scale Operations & Reduce Costs">Scale Operations & Reduce Costs</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {createError && (
-            <p className="text-xs text-rose-600 font-semibold">{createError}</p>
-          )}
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-blue-200/60">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-brand-blue hover:bg-blue-600 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-98"
-            >
-              <Play className="w-4 h-4" />
-              <span>{isLoading ? 'TayDau Team Working...' : 'Start Building My Project →'}</span>
-            </button>
-          </div>
-        </form>
+      {/* Top Banner: Active Human Decision / Question Card */}
+      {mode === 'live' && project && pendingInteraction && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <InteractionCard
+            interaction={pendingInteraction}
+            onSubmit={(ans) => answerInteraction(pendingInteraction.id, ans)}
+            isLoading={isActionInProgress}
+          />
+        </div>
       )}
 
-      {project && (
-        <>
-          {/* Understood Business Goal Card */}
-          <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-brand-blue" />
-                We Understood Your Project
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium">
-                Project: {project.name}
-              </span>
-            </div>
+      {/* Top Banner: Active Human Approval Gate Card */}
+      {mode === 'live' && project && pendingApproval && !pendingInteraction && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <ApprovalCard
+            approval={pendingApproval}
+            project={project}
+            onApprove={() => approveRequest(pendingApproval.id)}
+            onRequestChanges={(fb) => requestChanges(pendingApproval.id, fb)}
+            isLoading={isActionInProgress}
+          />
+        </div>
+      )}
 
-            <blockquote className="p-4 bg-slate-50 border-l-4 border-brand-blue text-xs sm:text-sm text-slate-900 rounded-r-lg font-medium leading-relaxed">
-              &ldquo;{project.clientBrief}&rdquo;
-            </blockquote>
+      {/* Create Project Form */}
+      {isCreating && mode === 'live' && (
+        <Card className="p-6 md:p-8 border-2 border-brand-blue/30 bg-gradient-to-b from-blue-50/20 to-white">
+          <div className="max-w-3xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-brand-blue" />
+              Describe What You Want Built
+            </h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Our Business Analyst will analyze your requirements, recommend sensible defaults, and orchestrate the software team.
+            </p>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100 text-xs text-slate-500">
-              <div className="flex items-center gap-3">
-                <span>Features Planned: <strong className="text-slate-800">{project.requirements?.length || 0} Core Features</strong></span>
-                <span>•</span>
-                <span>Estimated AI Delivery Cost: <strong className="text-slate-800">&lt; $0.03</strong></span>
+            {/* Inspiration Starter Chips */}
+            <div className="mb-6">
+              <span className="text-xs font-bold text-slate-700 block mb-2">Starter Templates:</span>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_STARTER_TEMPLATES.map((tpl, idx) => (
+                  <button
+                    key={tpl.label}
+                    type="button"
+                    onClick={() => handleApplyTemplate(tpl, idx)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      selectedTemplateIndex === idx
+                        ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
               </div>
-
-              <button
-                onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-                className="text-xs font-semibold text-brand-blue hover:text-blue-700 flex items-center gap-1"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>{showTechnicalDetails ? 'Hide Technical Details' : 'View Technical Details'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Feature Cards: What The System Needs */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FileCheck className="w-4 h-4 text-emerald-600" />
-                What the System Needs to Deliver
-              </h3>
-              <span className="text-xs text-slate-500">
-                {project.requirements?.length || 0} Features Ready
-              </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {project.requirements && project.requirements.length > 0 ? (
-                project.requirements.map((req) => (
-                  <Card key={req.id} className="p-4! space-y-3 flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between">
-                        <span className="px-2 py-0.5 rounded bg-blue-50 text-brand-blue text-[11px] font-bold">
-                          {req.title}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                          {req.status === 'validated' || project.status === 'release_ready' ? 'Completed ✓' : 'Planned'}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-700 font-medium">
-                        {req.title}
-                      </p>
-
-                      <div className="space-y-1 pt-2 border-t border-slate-100">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                          Acceptance Checks ({req.acceptanceCriteria?.length || 0})
-                        </span>
-                        <ul className="space-y-1 text-[11px] text-slate-600">
-                          {(req.acceptanceCriteria || []).map((c, i) => (
-                            <li key={i} className="flex items-start gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                              <span>{c}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Technical ID: {req.code}</span>
-                      <span className="text-emerald-600 font-semibold">Verified</span>
-                    </div>
-                  </Card>
-                ))
-              ) : (
-                <div className="col-span-3 p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
-                  Understanding your project requirements...
-                </div>
-              )}
-            </div>
-
-            {/* Next Step Action Button */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+            <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <strong className="text-xs font-bold text-slate-900 block">Next: Review Solution Design & Features</strong>
-                <span className="text-[11px] text-slate-500">See how TayDau designed and verified this software.</span>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Project Name (Optional)</label>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="e.g. AutoShine Detailing Platform"
+                  className="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none bg-white text-slate-900"
+                />
               </div>
 
-              <button
-                onClick={() => navigate('/requirements')}
-                className="px-4 py-2 bg-brand-blue hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
-              >
-                <span>Review & Continue</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Your Natural Language Brief</label>
+                <textarea
+                  value={newProjectBrief}
+                  onChange={(e) => setNewProjectBrief(e.target.value)}
+                  placeholder="Describe your business idea, users, and what features you need..."
+                  rows={4}
+                  className="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none bg-white text-slate-900"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={isActionInProgress || !newProjectBrief.trim()}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-blue hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isActionInProgress ? 'Starting Team...' : 'Assemble AI Team & Deliver'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </Card>
+      )}
+
+      {/* Project Overview Cards */}
+      {project && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left 2 Cols: Details & Facts */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="p-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-brand-blue" />
+                Client Brief
+              </h4>
+              <p className="text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 leading-relaxed">
+                "{project.clientBrief}"
+              </p>
+            </Card>
+
+            {/* Confirmed Project Facts Knowledge Base */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Project Knowledge Base (Confirmed Facts)
+                </h4>
+                <span className="text-xs text-slate-400 font-mono">
+                  {project.projectFacts?.length || 0} facts recorded
+                </span>
+              </div>
+
+              {project.projectFacts && project.projectFacts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {project.projectFacts.map((f) => (
+                    <div key={f.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-mono font-bold text-indigo-700">{f.factKey}</span>
+                        <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                          {f.confirmationStatus}
+                        </span>
+                      </div>
+                      <div className="text-slate-800 font-medium">
+                        {typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                        <span>Source: {f.sourceRole}</span>
+                        <span>•</span>
+                        <span>Confidence: {f.confidence * 100}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">No confirmed facts recorded yet. As you answer decisions, they appear here.</p>
+              )}
+            </Card>
           </div>
 
-          {/* Expandable Technical Details */}
-          {showTechnicalDetails && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-150">
-              <Card
-                title={
-                  <span className="flex items-center gap-2 text-slate-900">
-                    <Scale className="w-4 h-4 text-brand-blue" />
-                    Governed Delivery Standards
-                  </span>
-                }
-              >
-                <ul className="space-y-2 text-xs text-slate-700">
-                  <li className="flex items-start gap-2 p-2 bg-blue-50/50 border border-blue-200/60 rounded-lg">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue shrink-0 mt-0.5" />
-                    <span><strong>Separation of Duties:</strong> QA derives tests independently without seeing Engineer source code.</span>
-                  </li>
-                  <li className="flex items-start gap-2 p-2 bg-emerald-50/50 border border-emerald-200/60 rounded-lg">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong>Protected Verification:</strong> Code executes in a network-isolated, rootless Docker environment.</span>
-                  </li>
-                  <li className="flex items-start gap-2 p-2 bg-purple-50/50 border border-purple-200/60 rounded-lg">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
-                    <span><strong>Cost Visibility:</strong> Live token accounting across every AI role.</span>
-                  </li>
-                </ul>
-              </Card>
+          {/* Right Col: Interruption Telemetry & Project List */}
+          <div className="space-y-6">
+            {/* Interruption Telemetry */}
+            <Card className="p-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-indigo-600" />
+                Client Interruption Governance
+              </h4>
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Total Questions Asked:</span>
+                  <span className="font-bold text-slate-900">{project.interruptionMetrics?.totalQuestions || 0}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Questions Answered:</span>
+                  <span className="font-bold text-emerald-700">{project.interruptionMetrics?.questionsAnswered || 0}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Approval Gates:</span>
+                  <span className="font-bold text-indigo-700">{project.interruptionMetrics?.approvalsCount || 0}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+                  TayDau strictly limits client interruptions to essential professional decisions (max 3 questions per role).
+                </p>
+              </div>
+            </Card>
 
-              <Card
-                title={
-                  <span className="flex items-center gap-2 text-slate-900">
-                    <Compass className="w-4 h-4 text-emerald-600" />
-                    Selected Technical Stack
-                  </span>
-                }
-              >
-                <div className="space-y-2 text-xs">
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                    <span className="font-semibold text-slate-700">Backend / Database</span>
-                    <span className="font-mono font-bold text-slate-900">
-                      {project.architecture?.techStack.framework || 'FastAPI'} + {project.architecture?.techStack.database || 'SQLite'}
-                    </span>
-                  </div>
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                    <span className="font-semibold text-slate-700">Verification Engine</span>
-                    <span className="font-mono font-bold text-slate-900">Pytest (8 Independent Tests)</span>
-                  </div>
+            {/* Switch Active Project */}
+            {projectsList.length > 0 && (
+              <Card className="p-6">
+                <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <FolderCheck className="w-4 h-4 text-brand-teal" />
+                  Your Projects ({projectsList.length})
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {projectsList.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => loadProject(p.id)}
+                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all flex items-center justify-between ${
+                        p.id === project?.id
+                          ? 'border-brand-blue bg-blue-50/60 font-semibold text-brand-blue'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{p.name}</span>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                        {p.progress || 0}%
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </Card>
-            </div>
-          )}
-        </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

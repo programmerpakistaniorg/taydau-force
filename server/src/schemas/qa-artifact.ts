@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const GeneratedTestFileSchema = z.object({
   path: z.string().min(1).max(250),
-  purpose: z.string().min(5).max(500),
-  content: z.string().min(10).max(50_000),
+  purpose: z.string().min(1).max(500),
+  content: z.string().max(50_000),
   relatedRequirementCodes: z.array(z.string().regex(/^REQ-\d{3}$/)),
 });
 

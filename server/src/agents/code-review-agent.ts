@@ -41,7 +41,7 @@ export async function runCodeReviewAgent(
     .join('\n\n');
 
   const filesDetails = ctx.implementationFiles
-    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .map((f) => `### File: ${f.path}\n\`\`\`python\n${f.content.slice(0, 2000)}\n\`\`\``)
     .join('\n\n');
 
   const reviewPrompt = `
@@ -56,7 +56,7 @@ ${reqDetails}
 ## Approved Architecture Specification
 - Framework: ${ctx.architecture.techStack.framework}
 - Database: ${ctx.architecture.techStack.database}
-- Spec: ${ctx.architecture.implementationSpec}
+- Spec Summary: ${ctx.architecture.implementationSpec.slice(0, 1000)}
 
 ## Deterministic QA Evidence Summary
 ${ctx.qaSummary}
@@ -85,7 +85,7 @@ Please conduct a thorough code review evaluating:
       agentRole: 'code_reviewer',
       purpose: 'Independent code review and architectural quality audit',
       reasoningEffort: 'medium',
-      maxTokens: 3500,
+      maxTokens: 2000,
       temperature: 0.1,
     }
   );

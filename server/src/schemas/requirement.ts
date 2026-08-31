@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ClarificationQuestionSchema } from './design-spec.js';
 
 export const RequirementOutputSchema = z.object({
   code: z.string().regex(/^REQ-\d{3}$/, 'Must be REQ-XXX format'),
@@ -9,8 +10,12 @@ export const RequirementOutputSchema = z.object({
 });
 
 export const BAOutputSchema = z.object({
-  requirements: z.array(RequirementOutputSchema).min(1).max(5),
-  businessObjective: z.string().min(10).max(500),
+  status: z.enum(['ready', 'needs_clarification']),
+  clarifications: z.array(ClarificationQuestionSchema),
+  requirements: z.array(RequirementOutputSchema),
+  businessObjective: z.string(),
+  targetUsers: z.array(z.string()),
+  assumptions: z.array(z.string()),
 });
 
 export type BAOutput = z.infer<typeof BAOutputSchema>;

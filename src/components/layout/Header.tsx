@@ -1,91 +1,76 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
   RotateCcw,
   Layers,
-  Building2,
-  AlertCircle,
   CheckCircle2,
-  Clock,
   Radio,
-  Play,
   RefreshCw,
-  FolderCheck,
   Zap,
   Info,
   ShieldCheck,
   Server,
   Database,
   Terminal,
-  X
+  X,
+  ArrowRight,
+  HelpCircle,
+  Play
 } from 'lucide-react';
 import { useSimulation, SIMULATION_STEPS } from '../../context/SimulationContext';
 import { useLiveProject } from '../../context/LiveProjectContext';
+import { ROLE_REGISTRY, type RoleKey } from '../../config/roles';
 
-function mapLiveStatus(status: string | undefined): { label: string; bg: string; text: string; border: string } {
-  switch (status) {
-    case 'release_ready':
-      return { label: 'Ready for Delivery', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300' };
-    case 'tested_passed':
-      return { label: 'Testing Complete', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-300' };
-    case 'verifying':
-      return { label: 'Testing & Checking', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-300' };
-    case 'implementing':
-    case 'implemented':
-      return { label: 'Building Your Application', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300' };
-    case 'architecting':
-    case 'designed':
-      return { label: 'Designing Your Solution', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-300' };
-    case 'planning':
-    case 'planned':
-      return { label: 'Planning Your Project', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-300' };
-    case 'analyzing':
-    case 'analyzed':
-      return { label: 'Understanding Your Needs', bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-300' };
-    case 'submitted':
-      return { label: 'Getting Started', bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-300' };
-    case 'defects_found':
-      return { label: 'Needs Attention', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300' };
-    case 'qa_error':
-      return { label: 'Testing Needs Attention', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-300' };
-    case 'sandbox_error':
-      return { label: 'Verification Unavailable', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300' };
-    case 'timed_out':
-      return { label: 'Verification Timed Out', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300' };
-    default:
-      return { label: status || 'Ready', bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-300' };
+function mapWorkflowStageToDisplay(stage: string | undefined, status: string | undefined): { label: string; bg: string; text: string; border: string } {
+  if (status === 'failed') {
+    return { label: 'Needs Attention', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300' };
   }
-}
+  if (status === 'completed' || stage === 'completed') {
+    return { label: 'Verified & Delivery Ready', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300' };
+  }
+  if (status === 'waiting_for_client') {
+    return { label: 'Action Required', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-300' };
+  }
 
-function getLiveProgressPercent(status: string | undefined): number {
-  switch (status) {
-    case 'release_ready': return 100;
-    case 'tested_passed': return 90;
-    case 'verifying': return 75;
-    case 'implemented': return 65;
-    case 'implementing': return 50;
-    case 'designed': return 40;
-    case 'architecting': return 35;
-    case 'planned': return 25;
-    case 'planning': return 20;
-    case 'analyzed': return 15;
-    case 'analyzing':
-    case 'submitted': return 10;
-    default: return 0;
+  switch (stage) {
+    case 'created':
+    case 'business_analysis':
+      return { label: 'Business Analysis', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300' };
+    case 'requirements_review':
+      return { label: 'Requirements Review', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300' };
+    case 'project_planning':
+      return { label: 'Delivery Planning', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-300' };
+    case 'ui_ux_design':
+    case 'design_review':
+      return { label: 'Product Design', bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-300' };
+    case 'technical_architecture':
+      return { label: 'Solution Architecture', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-300' };
+    case 'implementation':
+      return { label: 'Engineering Implementation', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-300' };
+    case 'code_review':
+      return { label: 'Code & Security Audit', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300' };
+    case 'independent_qa':
+      return { label: 'Independent QA Sandbox', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-300' };
+    case 'release_evaluation':
+      return { label: 'Release Gate Verification', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300' };
+    default:
+      return { label: 'Ready', bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-300' };
   }
 }
 
 export const Header: React.FC = () => {
+  const navigate = useNavigate();
   const { currentStep, stepInfo, simulateNextStep, resetSimulation, isSimulating } = useSimulation();
   const {
     mode,
     setMode,
     project,
     isPolling,
-    isAdvancing,
+    isActionInProgress,
     currentProgressMessage,
-    advanceProject,
-    refreshProject
+    refreshProject,
+    retryStage,
   } = useLiveProject();
 
   const [showSystemDetails, setShowSystemDetails] = useState<boolean>(false);
@@ -93,8 +78,10 @@ export const Header: React.FC = () => {
   const isMaxStep = currentStep === SIMULATION_STEPS.length - 1;
   const simProgressPercent = currentStep >= 11 ? 100 : currentStep >= 8 ? 75 : currentStep >= 4 ? 50 : 25;
 
-  const liveStatusInfo = mapLiveStatus(project?.status);
-  const liveProgressPercent = getLiveProgressPercent(project?.status);
+  const liveWorkflow = project?.workflow;
+  const liveProgressPercent = liveWorkflow?.progress ?? 0;
+  const stageDisplay = mapWorkflowStageToDisplay(liveWorkflow?.stage, liveWorkflow?.stageStatus);
+  const nextAction = project?.nextAction;
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
@@ -103,7 +90,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2">
           {mode === 'live' ? (
             <span className="inline-flex items-center gap-1.5 font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               {project ? 'LIVE PROJECT' : 'LIVE MODE'}
             </span>
           ) : (
@@ -115,13 +102,12 @@ export const Header: React.FC = () => {
 
           <span className="text-slate-400 hidden sm:inline text-[11px]">
             {mode === 'live'
-              ? 'Real autonomous software delivery with independent verification.'
+              ? 'Autonomous human-team software delivery organization.'
               : 'Interactive concept demonstration with simulated workflow.'}
           </span>
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
-          {/* System Status Popover Button */}
           <button
             onClick={() => setShowSystemDetails(!showSystemDetails)}
             className="text-slate-400 hover:text-slate-200 flex items-center gap-1 transition-colors"
@@ -133,7 +119,6 @@ export const Header: React.FC = () => {
 
           <span className="text-slate-600">|</span>
 
-          {/* Mode Switcher Button */}
           <button
             onClick={() => setMode(mode === 'live' ? 'demo' : 'live')}
             className="px-2.5 py-0.5 rounded-md font-semibold text-[11px] transition-colors border flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
@@ -151,23 +136,23 @@ export const Header: React.FC = () => {
           <div className="flex flex-wrap items-center gap-6">
             <div className="flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-slate-400">AI Service:</span>
+              <span className="text-slate-400">Model Gateway (Groq):</span>
               <span className="font-semibold text-emerald-400">Connected</span>
             </div>
             <div className="flex items-center gap-2">
               <Database className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-slate-400">Project Database:</span>
+              <span className="text-slate-400">PostgreSQL Facts & DB:</span>
               <span className="font-semibold text-emerald-400">Connected</span>
             </div>
             <div className="flex items-center gap-2">
               <Terminal className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-slate-400">Safe Test System:</span>
+              <span className="text-slate-400">Air-Gapped Sandbox:</span>
               <span className="font-semibold text-emerald-400">Available</span>
             </div>
             <div className="flex items-center gap-2">
               <Server className="w-3.5 h-3.5 text-teal-400" />
-              <span className="text-slate-400">Backend Service:</span>
-              <span className="font-semibold text-emerald-400">Online</span>
+              <span className="text-slate-400">Specialist Roles:</span>
+              <span className="font-semibold text-emerald-400">7 Active</span>
             </div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
@@ -197,20 +182,20 @@ export const Header: React.FC = () => {
                     <h1 className="text-base font-bold text-slate-900 tracking-tight">
                       {project.name}
                     </h1>
-                    <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
-                      {liveStatusInfo.label}
+                    <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${stageDisplay.bg} ${stageDisplay.text} ${stageDisplay.border}`}>
+                      {stageDisplay.label}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
                     <span className="flex items-center gap-1 text-slate-700 font-medium">
                       <Layers className="w-3.5 h-3.5 text-brand-blue" />
-                      Status:{' '}
+                      Stage:{' '}
                       <span className="text-brand-blue font-semibold">
-                        {liveStatusInfo.label}
+                        {stageDisplay.label}
                       </span>
-                      {project.status === 'release_ready' && (
+                      {liveProgressPercent === 100 && (
                         <span className="text-emerald-600 font-semibold flex items-center gap-0.5 ml-1">
-                          <CheckCircle2 className="w-3 h-3" /> (8/8 Checks Passed)
+                          <CheckCircle2 className="w-3 h-3" /> (All 7 Quality Gates Passed)
                         </span>
                       )}
                     </span>
@@ -231,7 +216,7 @@ export const Header: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                    <span>Start a project to begin your software delivery.</span>
+                    <span>Start a project to initiate autonomous software delivery.</span>
                   </div>
                 </>
               )
@@ -242,7 +227,7 @@ export const Header: React.FC = () => {
                     Smart Wholesale Inventory System
                   </h1>
                   <span className="px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-md">
-                    In Progress
+                    Concept Simulation
                   </span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
@@ -251,14 +236,14 @@ export const Header: React.FC = () => {
                     Status: <span className="text-brand-blue font-semibold">Concept Simulation</span>
                   </span>
                   <span className="text-slate-300">•</span>
-                  <span className="text-slate-500">Sprint 2 of 4</span>
+                  <span className="text-slate-500">7 Specialist Roles</span>
                 </div>
               </>
             )}
           </div>
         </div>
 
-        {/* Right: Controls & Progress */}
+        {/* Right: Next Action & Progress */}
         <div className="flex items-center gap-4">
           {/* Progress Gauge */}
           <div className="hidden lg:flex flex-col items-end gap-1">
@@ -271,7 +256,9 @@ export const Header: React.FC = () => {
             <div className="w-36 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  mode === 'live' && liveProgressPercent === 100 ? 'bg-emerald-600' : 'bg-brand-blue'
+                  (mode === 'live' && liveProgressPercent === 100) || (mode === 'demo' && simProgressPercent === 100)
+                    ? 'bg-emerald-600'
+                    : 'bg-brand-blue'
                 }`}
                 style={{ width: `${mode === 'live' ? liveProgressPercent : simProgressPercent}%` }}
               />
@@ -279,16 +266,33 @@ export const Header: React.FC = () => {
           </div>
 
           {mode === 'live' ? (
-            /* Live Controls */
+            /* Contextual NextAction Controls */
             <div className="flex items-center gap-2">
-              {project && project.status !== 'release_ready' && (
+              {nextAction && nextAction.requiresUser && (
                 <button
-                  onClick={() => advanceProject()}
-                  disabled={isAdvancing || isPolling}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue hover:bg-blue-700 disabled:bg-slate-300 text-white shadow-xs transition-all"
+                  onClick={() => {
+                    if (nextAction.type === 'retry') {
+                      retryStage();
+                    } else if (nextAction.targetRoute) {
+                      navigate(nextAction.targetRoute);
+                    }
+                  }}
+                  disabled={isActionInProgress}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all animate-bounce duration-1000"
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{isAdvancing ? 'Advancing...' : 'Advance Stage'}</span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{nextAction.label || 'Action Required'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {nextAction?.type === 'delivery' && (
+                <button
+                  onClick={() => navigate('/delivery')}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>View Delivery</span>
                 </button>
               )}
 
@@ -337,30 +341,13 @@ export const Header: React.FC = () => {
       {mode === 'live' && isPolling && (
         <div className="px-6 py-2 bg-blue-50/90 border-t border-blue-200 flex items-center justify-between text-xs animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-slate-800">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
-            <span className="font-bold text-brand-blue">TayDau Team Working:</span>
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+            <span className="font-bold text-brand-blue">TayDau Software Team:</span>
             <span>{currentProgressMessage}</span>
           </div>
           <span className="text-[11px] text-blue-700 font-mono flex items-center gap-1">
             <RefreshCw className="w-3 h-3 animate-spin" />
-            Updating...
-          </span>
-        </div>
-      )}
-
-      {/* Dynamic Simulated Step Toast (Demo Mode) */}
-      {mode === 'demo' && currentStep > 0 && (
-        <div className="px-6 py-2 bg-blue-50/70 border-t border-blue-100/80 flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex items-center gap-2 text-slate-700">
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-brand-blue text-white">
-              Step {currentStep}: {stepInfo.badge}
-            </span>
-            <span className="font-semibold text-slate-900">{stepInfo.title}:</span>
-            <span className="text-slate-600 hidden md:inline">{stepInfo.description}</span>
-          </div>
-          <span className="text-[11px] text-blue-700 font-medium shrink-0 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-            Specialist: {stepInfo.actor}
+            Working...
           </span>
         </div>
       )}

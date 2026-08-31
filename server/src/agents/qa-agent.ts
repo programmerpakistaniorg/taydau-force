@@ -43,7 +43,9 @@ GOVERNANCE RULES:
 1. INDEPENDENCE: You derive expected behavior from specifications and acceptance criteria alone. You do NOT see Engineer source code.
 2. AUTHORITY: Deterministic test results are authoritative. You cannot fabricate test outcomes.
 3. STRUCTURE:
-   - Output must contain standalone, executable pytest test files placed in the 'tests/' directory (e.g., 'tests/conftest.py', 'tests/test_products.py').
+   - Output must contain standalone, executable pytest test files placed in the 'tests/' directory.
+   - Generate strictly 2 concise test files: 'tests/conftest.py' and 'tests/test_api.py' (covering all REQs with 4-6 focused test functions).
+   - Keep test functions clean, concise, and focused to ensure fast execution and compact JSON output.
 4. COVERAGE:
    - Every requirement code (REQ-XXX) must be mapped in relatedRequirementCodes and covered with thorough positive and negative test cases.
    - Positive cases: valid payloads, correct HTTP status codes (200/201), expected response structures.
@@ -65,7 +67,11 @@ export async function runQAAgent(
   const reqDetails = requirements
     .map(
       (r) =>
-        `### Requirement ${r.code}: ${r.title}\n- Type: ${r.type} | Priority: ${r.priority}\n- Acceptance Criteria:\n${r.acceptanceCriteria.map((c) => `  * ${c}`).join('\n')}`
+        `### Requirement ${r.code}: ${r.title}
+- Type: ${r.type}
+- Priority: ${r.priority}
+- Acceptance Criteria:
+${r.acceptanceCriteria.map((c) => `  * ${c}`).join('\n')}`
     )
     .join('\n\n');
 
@@ -108,7 +114,7 @@ Please independently derive and author the complete pytest acceptance test suite
       agentRole: 'qa_engineer',
       purpose: 'Independently derive acceptance test suite from requirements and contracts',
       reasoningEffort: 'medium',
-      maxTokens: 3500,
+      maxTokens: 4200,
       temperature: 0.1,
     }
   );

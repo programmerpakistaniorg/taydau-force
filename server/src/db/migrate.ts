@@ -20,7 +20,13 @@ async function migrate(): Promise<void> {
   const executed = new Set(result.rows.map((r) => r.name));
 
   // Read .sql files from migrations/ directory
-  const migrationsDir = path.join(__dirname, 'migrations');
+  let migrationsDir = path.join(__dirname, 'migrations');
+  if (!fs.existsSync(migrationsDir)) {
+    migrationsDir = path.resolve(__dirname, '../../src/db/migrations');
+  }
+  if (!fs.existsSync(migrationsDir)) {
+    migrationsDir = path.resolve(process.cwd(), 'src/db/migrations');
+  }
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))

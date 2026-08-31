@@ -50,6 +50,7 @@ server/.env.*.local
 # Temporary sandbox execution workspaces
 .taydau/
 
-
-
-
+# Archives and external research
+*.rar
+*.zip
+TayDau - Research/

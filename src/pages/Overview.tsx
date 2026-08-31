@@ -68,7 +68,7 @@ export const Overview: React.FC = () => {
     mode,
     project,
     advanceProject,
-    isAdvancing,
+    isActionInProgress,
     isPolling
   } = useLiveProject();
 

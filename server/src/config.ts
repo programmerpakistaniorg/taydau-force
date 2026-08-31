@@ -78,16 +78,20 @@ export const config = {
   models: modelProvider === 'groq'
     ? {
         ba: requireEnv('GROQ_BA_MODEL', 'qwen/qwen3.8-27b'),
-        pm: requireEnv('GROQ_PM_MODEL', 'openai/gpt-oss-20b'),
-        architect: requireEnv('GROQ_ARCHITECT_MODEL', 'openai/gpt-oss-120b'),
+        pm: requireEnv('GROQ_PM_MODEL', 'qwen/qwen3.8-27b'),
+        designer: requireEnv('GROQ_DESIGNER_MODEL', 'qwen/qwen3.8-27b'),
+        architect: requireEnv('GROQ_ARCHITECT_MODEL', 'qwen/qwen3.8-27b'),
         engineer: requireEnv('GROQ_ENGINEER_MODEL', 'qwen/qwen3.8-27b'),
-        qa: requireEnv('GROQ_QA_MODEL', 'openai/gpt-oss-120b'),
+        codeReview: requireEnv('GROQ_CODE_REVIEW_MODEL', 'qwen/qwen3.8-27b'),
+        qa: requireEnv('GROQ_QA_MODEL', 'qwen/qwen3.8-27b'),
       }
     : {
         ba: requireEnv('QWEN_BA_MODEL', 'qwen-plus'),
         pm: requireEnv('QWEN_PM_MODEL', 'qwen-plus'),
+        designer: requireEnv('QWEN_DESIGNER_MODEL', 'qwen-plus'),
         architect: requireEnv('QWEN_ARCHITECT_MODEL', 'qwen-max'),
         engineer: requireEnv('QWEN_ENGINEER_MODEL', 'qwen-max'),
+        codeReview: requireEnv('QWEN_CODE_REVIEW_MODEL', 'qwen-max'),
         qa: requireEnv('QWEN_QA_MODEL', 'qwen-plus'),
       },
 

@@ -1,53 +1,95 @@
 import { config } from '../config.js';
 import type { ModelGateway } from '../gateway/model-gateway.js';
-import { callAgent, type AgentCallContext } from './base-agent.js';
-import { BAOutputSchema, type BAOutput } from '../schemas/requirement.js';
+import { callAgent } from './base-agent.js';
+import { BAOutputSchema, type BAOutput, type RequirementOutput } from '../schemas/requirement.js';
 
-const BA_SYSTEM_PROMPT = `You are a Business Analyst for TayDau Force, an autonomous software delivery organization.
+const BA_SYSTEM_PROMPT = `You are Aria Analyst, Lead Business Analyst for TayDau Force, an autonomous software delivery organization.
 
-Your job: decompose a client brief into clear, testable software requirements.
+Your job: Understand the client's business idea, resolve genuine high-value business ambiguity, and turn confirmed goals into structured, testable software requirements.
 
-Rules:
-- Produce 2-4 requirements maximum
-- Each requirement must have: code (REQ-001 format), title, type, priority, and 1-3 acceptance criteria
-- Acceptance criteria must be specific enough for automated pytest testing
-- Keep each requirement small — implementable by a single engineer in one task
-- Focus on the core functionality requested
-- Include a businessObjective summarizing the overall goal
+Responsibilities:
+1. Clarification Analysis: If the client brief lacks critical business information (e.g. primary user groups, core operational pain point, or legacy process) and these are NOT already answered in Confirmed Project Facts, return status 'needs_clarification' with 1 to 3 targeted multiple-choice questions.
+2. Requirements Derivation: When information is clear or confirmed facts exist, return status 'ready' with 2-4 concrete, testable requirements (REQ-001 format).
+3. Acceptance Criteria: Every requirement must have 1-3 crisp, deterministic acceptance criteria suitable for automated testing.
+4. Boundary Rules: You own business needs. NEVER ask technical architecture questions (such as React vs Vue, PostgreSQL vs MongoDB, or Docker).
+5. Completeness: Once the client has answered clarification questions in Confirmed Project Facts, do NOT ask further questions; return status 'ready' with requirements populated.
 
-Return the result strictly in JSON format. Do not include any text outside the JSON.
-Return ONLY a valid JSON object with this exact structure:
+Output Format:
+Return strictly a valid JSON object matching this schema:
 {
+  "status": "ready" | "needs_clarification",
+  "clarifications": [
+    {
+      "factKey": "users.primary_groups",
+      "question": "Who will primarily use this application?",
+      "whyItMatters": "Determines the role-based workflows and access permissions TayDau designs.",
+      "type": "single_choice",
+      "options": ["Business Team & Customers", "Internal Staff Only", "Customers Only"],
+      "recommendedOption": "Business Team & Customers",
+      "allowCustom": true,
+      "impact": "high",
+      "required": true
+    }
+  ],
+  "businessObjective": "Clear 1-2 sentence business goal summary",
+  "targetUsers": ["Business Owner", "Customers"],
   "requirements": [
     {
       "code": "REQ-001",
-      "title": "...",
-      "type": "Functional|Security|Integration|Non-Functional",
-      "priority": "Critical|High|Medium|Low",
-      "acceptanceCriteria": ["criterion 1", "criterion 2"]
+      "title": "Customer Appointment Booking",
+      "type": "Functional",
+      "priority": "High",
+      "acceptanceCriteria": ["User can select service and schedule an appointment.", "System prevents double booking for the same time slot."]
     }
   ],
-  "businessObjective": "..."
+  "assumptions": ["Standard web browser access"]
 }`;
 
 export async function runBAAgent(
   gateway: ModelGateway,
   clientBrief: string,
-  projectId: string
+  projectId: string,
+  confirmedFacts: Record<string, any> = {},
+  revisionContext?: {
+    clientFeedback?: string;
+    previousRequirements?: RequirementOutput[];
+  }
 ): Promise<BAOutput> {
+  const factsSummary = Object.entries(confirmedFacts)
+    .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+    .join('\n') || 'None recorded yet';
+
+  let userPrompt = [
+    `Client Brief:\n${clientBrief}`,
+    `\nConfirmed Project Facts:\n${factsSummary}`,
+  ].join('\n');
+
+  if (revisionContext?.clientFeedback) {
+    userPrompt += [
+      '\n\n=== REQUIREMENTS REVISION REQUEST ===',
+      `Client Feedback:\n${revisionContext.clientFeedback}`,
+      `Previous Requirements:\n${revisionContext.previousRequirements?.map((r) => `${r.code}: ${r.title}`).join('\n') || 'None'}`,
+      '\nPlease update the requirements baseline accordingly.',
+    ].join('\n');
+  } else {
+    userPrompt += '\n\nPlease evaluate if business clarification is required or generate the requirements baseline.';
+  }
+
   const { result } = await callAgent(
     gateway,
     config.models.ba,
     BA_SYSTEM_PROMPT,
-    `Client Brief:\n\n${clientBrief}`,
+    userPrompt,
     BAOutputSchema,
     {
       projectId,
       agentRole: 'business_analyst',
-      purpose: 'Decompose client brief into requirements',
+      purpose: revisionContext ? 'Revise requirements baseline' : 'Decompose client brief & evaluate clarifications',
       reasoningEffort: 'none',
-      maxTokens: 2048,
+      maxTokens: 2500,
+      temperature: 0.1,
     }
   );
+
   return result;
 }
