@@ -44,7 +44,7 @@ export const Delivery: React.FC = () => {
     return (
       <NoProjectState
         pageTitle="No Software Ready for Delivery"
-        message="Start a new project to run our autonomous AI team through requirements, design, coding, testing, and verified release."
+        message="Start a project and TayDau will guide it from your initial idea through planning, development, independent testing and final delivery."
       />
     );
   }

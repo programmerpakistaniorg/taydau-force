@@ -50,7 +50,7 @@ export const Execution: React.FC = () => {
     return (
       <NoProjectState
         pageTitle="No Build in Progress"
-        message="Start a new project to have our Senior Full-Stack Engineer generate production code and monitor real-time build progress."
+        message="Start a project and TayDau will build the application and show you each completed part here."
       />
     );
   }

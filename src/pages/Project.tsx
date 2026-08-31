@@ -31,6 +31,57 @@ import { useLiveProject } from '../context/LiveProjectContext';
 
 const DEFAULT_SAMPLE_BRIEF = "I run a small wholesale business and need a simple system where my team can add products, update stock and see which items are running low.";
 
+const PROJECT_STARTER_TEMPLATES = [
+  {
+    label: 'Inventory System',
+    name: 'Smart Wholesale Inventory System',
+    brief: 'I run a wholesale distribution business and need an inventory system where my team can add products, update stock quantities, filter low-stock items, and prevent duplicate SKUs.',
+    type: 'Small Business',
+    audience: 'My Team & Customers',
+    goal: 'Track & Organize Data',
+  },
+  {
+    label: 'Customer Portal',
+    name: 'Client Services Portal',
+    brief: 'A secure customer portal where clients can log in, view account status, submit support requests, download invoices, and review project delivery progress.',
+    type: 'Service Agency / Consulting',
+    audience: 'My Team & Customers',
+    goal: 'Improve Customer Experience',
+  },
+  {
+    label: 'Booking System',
+    name: 'Appointment & Booking Platform',
+    brief: 'An online booking system that allows customers to select services, choose available appointment time slots, receive confirmations, and manage schedules.',
+    type: 'Small Business',
+    audience: 'General Public / Open Web',
+    goal: 'Save Time & Automate Work',
+  },
+  {
+    label: 'Internal Dashboard',
+    name: 'Operations & KPI Dashboard',
+    brief: 'An internal operations dashboard to track monthly team milestones, delivery budgets, employee assignments, and generate summary reports.',
+    type: 'Corporate / Enterprise',
+    audience: 'Internal Team Only',
+    goal: 'Scale Operations & Reduce Costs',
+  },
+  {
+    label: 'Business Website',
+    name: 'Corporate Services Website',
+    brief: 'A modern business website with company portfolio, services overview, client testimonials, and an interactive contact lead capture form.',
+    type: 'Startup / SaaS',
+    audience: 'General Public / Open Web',
+    goal: 'Sell Products or Services',
+  },
+  {
+    label: 'Marketplace',
+    name: 'B2B Wholesale Marketplace',
+    brief: 'A multi-vendor product marketplace where suppliers can list catalog products, buyers can browse items, and admins can manage order requests.',
+    type: 'Retail & E-Commerce',
+    audience: 'My Team & Customers',
+    goal: 'Sell Products or Services',
+  },
+];
+
 export const Project: React.FC = () => {
   const navigate = useNavigate();
   const {
@@ -47,9 +98,9 @@ export const Project: React.FC = () => {
   const [isCreating, setIsCreating] = useState<boolean>(!project);
   const [newProjectName, setNewProjectName] = useState<string>('');
   const [newProjectBrief, setNewProjectBrief] = useState<string>('');
-  const [businessType, setBusinessType] = useState<string>('Small / Mid Business');
-  const [targetAudience, setTargetAudience] = useState<string>('Team & Customers');
-  const [primaryGoal, setPrimaryGoal] = useState<string>('Automate workflow & save time');
+  const [businessType, setBusinessType] = useState<string>('Small Business');
+  const [targetAudience, setTargetAudience] = useState<string>('My Team & Customers');
+  const [primaryGoal, setPrimaryGoal] = useState<string>('Save Time & Automate Work');
   const [createError, setCreateError] = useState<string | null>(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
 
@@ -59,6 +110,14 @@ export const Project: React.FC = () => {
       setIsCreating(true);
     }
   }, [project, isLoading]);
+
+  const handleTemplateSelect = (tpl: typeof PROJECT_STARTER_TEMPLATES[0]) => {
+    setNewProjectName(tpl.name);
+    setNewProjectBrief(tpl.brief);
+    setBusinessType(tpl.type);
+    setTargetAudience(tpl.audience);
+    setPrimaryGoal(tpl.goal);
+  };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +274,26 @@ export const Project: React.FC = () => {
             )}
           </div>
 
-          <div className="space-y-4">
+          {/* Starter Templates (Inspiration) */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-slate-700 block">
+              Need inspiration? Start with an example:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {PROJECT_STARTER_TEMPLATES.map((tpl, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleTemplateSelect(tpl)}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-blue-200/80 hover:border-brand-blue hover:bg-blue-50/50 text-xs font-semibold text-slate-700 transition-all shadow-2xs active:scale-98"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-1">
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1">
                 Project Name
@@ -250,39 +328,50 @@ export const Project: React.FC = () => {
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                   Business Type (Optional)
                 </label>
-                <input
-                  type="text"
+                <select
                   value={businessType}
                   onChange={(e) => setBusinessType(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                  placeholder="e.g. Services, Retail"
-                />
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
+                >
+                  <option value="Small Business">Small Business</option>
+                  <option value="Startup / SaaS">Startup / SaaS</option>
+                  <option value="Retail & E-Commerce">Retail & E-Commerce</option>
+                  <option value="Service Agency / Consulting">Service Agency / Consulting</option>
+                  <option value="Corporate / Enterprise">Corporate / Enterprise</option>
+                </select>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                   Who Will Use It? (Optional)
                 </label>
-                <input
-                  type="text"
+                <select
                   value={targetAudience}
                   onChange={(e) => setTargetAudience(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                  placeholder="e.g. Sales Team & Customers"
-                />
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
+                >
+                  <option value="My Team & Customers">My Team & Customers</option>
+                  <option value="Internal Team Only">Internal Team Only</option>
+                  <option value="External Clients Only">External Clients Only</option>
+                  <option value="General Public / Open Web">General Public / Open Web</option>
+                </select>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                   Primary Goal (Optional)
                 </label>
-                <input
-                  type="text"
+                <select
                   value={primaryGoal}
                   onChange={(e) => setPrimaryGoal(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                  placeholder="e.g. Save time & get paid faster"
-                />
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
+                >
+                  <option value="Save Time & Automate Work">Save Time & Automate Work</option>
+                  <option value="Sell Products or Services">Sell Products or Services</option>
+                  <option value="Track & Organize Data">Track & Organize Data</option>
+                  <option value="Improve Customer Experience">Improve Customer Experience</option>
+                  <option value="Scale Operations & Reduce Costs">Scale Operations & Reduce Costs</option>
+                </select>
               </div>
             </div>
           </div>
@@ -291,14 +380,14 @@ export const Project: React.FC = () => {
             <p className="text-xs text-rose-600 font-semibold">{createError}</p>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-blue-200/60">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-blue-200/60">
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 px-5 py-2.5 bg-brand-blue hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+              className="flex items-center gap-2 px-6 py-3 bg-brand-blue hover:bg-blue-600 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-98"
             >
-              <Play className="w-3.5 h-3.5" />
-              <span>{isLoading ? 'TayDau Team Working...' : 'Create My Project'}</span>
+              <Play className="w-4 h-4" />
+              <span>{isLoading ? 'TayDau Team Working...' : 'Start Building My Project →'}</span>
             </button>
           </div>
         </form>

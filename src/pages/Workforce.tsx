@@ -34,8 +34,9 @@ const LIVE_ROLES = [
     role: 'Business Analyst',
     name: 'Aria Analyst',
     model: 'qwen/qwen3.8-27b',
-    simpleWhatItDid: 'Understood your business goals and turned your description into 3 concrete features with clear acceptance checks.',
-    simpleResult: '3 Structured Features Ready (REQ-001, 002, 003)',
+    staticIntro: 'Understands your business idea and prepares clear, testable requirements.',
+    executedWhatItDid: 'Understood your business goals and turned your description into 3 concrete features with clear acceptance checks.',
+    executedResult: '3 Structured Features Ready (REQ-001, 002, 003)',
     specialization: 'Requirement Elicitation & Story Extraction',
     avatarBg: 'bg-blue-100 text-blue-800',
     avatarText: 'BA',
@@ -50,8 +51,9 @@ const LIVE_ROLES = [
     role: 'Project Manager',
     name: 'Marcus Planner',
     model: 'openai/gpt-oss-20b',
-    simpleWhatItDid: 'Broke down the project into 4 actionable build tasks with clear execution order and dependencies.',
-    simpleResult: '4 Build Tasks Planned & Sequenced',
+    staticIntro: 'Plans build tasks, sequences execution order, and manages delivery milestones.',
+    executedWhatItDid: 'Broke down the project into 4 actionable build tasks with clear execution order and dependencies.',
+    executedResult: '4 Build Tasks Planned & Sequenced',
     specialization: 'Task Decomposition & Dependency Mapping',
     avatarBg: 'bg-teal-100 text-teal-800',
     avatarText: 'PM',
@@ -66,8 +68,9 @@ const LIVE_ROLES = [
     role: 'Solution Architect',
     name: 'Arthur Blueprint',
     model: 'openai/gpt-oss-120b',
-    simpleWhatItDid: 'Chose the best technology stack and designed clean database storage and application structure.',
-    simpleResult: 'Architecture Specification & SQLite Design',
+    staticIntro: 'Designs the technical architecture, data storage schema, and secure environment limits.',
+    executedWhatItDid: 'Chose the best technology stack and designed clean database storage and application structure.',
+    executedResult: 'Architecture Specification & SQLite Design',
     specialization: 'System Architecture & Sandbox Specification',
     avatarBg: 'bg-indigo-100 text-indigo-800',
     avatarText: 'SA',
@@ -82,8 +85,9 @@ const LIVE_ROLES = [
     role: 'Software Engineer',
     name: 'Devon Coder',
     model: 'qwen/qwen3.8-27b',
-    simpleWhatItDid: 'Wrote the complete application code, API routes, and database tables to fulfill all requested features.',
-    simpleResult: '6 Production Source Files Created',
+    staticIntro: 'Writes complete production-grade software code and API endpoints to fulfill requirements.',
+    executedWhatItDid: 'Wrote the complete application code, API routes, and database tables to fulfill all requested features.',
+    executedResult: '6 Production Source Files Created',
     specialization: 'Production Implementation & Defect Remediation',
     avatarBg: 'bg-purple-100 text-purple-800',
     avatarText: 'FE',
@@ -98,8 +102,9 @@ const LIVE_ROLES = [
     role: 'Independent QA Tester',
     name: 'Quinn Tester',
     model: 'openai/gpt-oss-120b',
-    simpleWhatItDid: 'Created 8 independent automated tests purely from requirements without seeing the Engineer source code.',
-    simpleResult: '8/8 Acceptance Tests Passed',
+    staticIntro: 'Creates independent automated test suites from requirements without seeing implementation code.',
+    executedWhatItDid: 'Created 8 independent automated tests purely from requirements without seeing the Engineer source code.',
+    executedResult: '8/8 Acceptance Tests Passed',
     specialization: 'Independent Acceptance Test Derivation',
     avatarBg: 'bg-amber-100 text-amber-800',
     avatarText: 'QA',
@@ -114,8 +119,9 @@ const LIVE_ROLES = [
     role: 'Code Reviewer',
     name: 'Dr. Evelyn Auditor',
     model: 'openai/gpt-oss-120b',
-    simpleWhatItDid: 'Independently audited the code quality and security to verify there were zero release-blocking bugs.',
-    simpleResult: 'Quality Cleared (0 Blocking Issues)',
+    staticIntro: 'Audits code quality, architectural compliance, and security before software release.',
+    executedWhatItDid: 'Independently audited the code quality and security to verify there were zero release-blocking bugs.',
+    executedResult: 'Quality Cleared (0 Blocking Issues)',
     specialization: 'Independent Code Quality & Architectural Audit',
     avatarBg: 'bg-rose-100 text-rose-800',
     avatarText: 'CR',
@@ -132,23 +138,25 @@ export const Workforce: React.FC = () => {
   const { mode, project } = useLiveProject();
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
 
+  const hasProject = Boolean(project);
+
   const liveAgents = React.useMemo(() => {
     return LIVE_ROLES.map((roleDef, idx) => {
       const call = project?.llmCalls.find(c => c.agentRole === roleDef.roleKey);
-      const isExecuted = Boolean(call) || project?.status === 'release_ready';
+      const isExecuted = hasProject && (Boolean(call) || project?.status === 'release_ready');
 
       return {
         id: `live-agent-${idx + 1}`,
         role: roleDef.role,
         name: roleDef.name,
-        status: isExecuted ? 'Completed' : 'Active',
-        simpleWhatItDid: roleDef.simpleWhatItDid,
-        simpleResult: roleDef.simpleResult,
+        status: isExecuted ? 'Completed' : 'Ready',
+        whatItDoes: isExecuted ? roleDef.executedWhatItDid : roleDef.staticIntro,
+        result: isExecuted ? roleDef.executedResult : 'Awaiting Project Brief',
         specialization: roleDef.specialization,
         isCoreTeam: true,
-        currentTask: isExecuted ? 'Completed' : 'Ready',
+        currentTask: isExecuted ? 'Completed' : 'Ready to Assign',
         tasksCompleted: isExecuted ? 1 : 0,
-        costUsd: call?.costUsd ?? (roleDef.roleKey === 'engineer' ? 0.013178 : roleDef.roleKey === 'qa_engineer' ? 0.004979 : 0.003262),
+        costUsd: isExecuted ? (call?.costUsd ?? (roleDef.roleKey === 'engineer' ? 0.013178 : roleDef.roleKey === 'qa_engineer' ? 0.004979 : 0.003262)) : null,
         model: call?.modelId ?? roleDef.model,
         avatarBg: roleDef.avatarBg,
         avatarText: roleDef.avatarText,
@@ -159,7 +167,7 @@ export const Workforce: React.FC = () => {
         permissionsCannot: roleDef.permissionsCannot,
       };
     });
-  }, [project]);
+  }, [project, hasProject]);
 
   const agents = mode === 'live' ? liveAgents : simAgents;
 
@@ -170,7 +178,7 @@ export const Workforce: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-blue" />
-            Your AI Delivery Team {mode === 'live' ? '(Live Delivery)' : ''}
+            {mode === 'live' && !hasProject ? 'Meet Your AI Delivery Team' : 'Your AI Delivery Team'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             Specialized AI roles handle different parts of your project so the same agent does not build, test and approve its own work.
@@ -180,9 +188,21 @@ export const Workforce: React.FC = () => {
           <Badge variant="primary" size="md">
             {mode === 'live' ? '6 Specialized Roles' : '7 Core Roles'}
           </Badge>
-          <Badge variant="success" size="md">
-            All Roles Completed ✓
-          </Badge>
+          {mode === 'live' ? (
+            hasProject ? (
+              <Badge variant="success" size="md">
+                {project?.status === 'release_ready' ? 'All Roles Completed ✓' : 'In Progress'}
+              </Badge>
+            ) : (
+              <Badge variant="neutral" size="md">
+                Status: Ready
+              </Badge>
+            )
+          ) : (
+            <Badge variant="success" size="md">
+              All Roles Completed ✓
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -202,7 +222,7 @@ export const Workforce: React.FC = () => {
 
         <button
           onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-          className="text-xs font-semibold text-brand-blue hover:text-blue-700 shrink-0 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs"
+          className="text-xs font-semibold text-brand-blue hover:text-blue-700 shrink-0 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs transition-colors"
         >
           <Eye className="w-3.5 h-3.5" />
           <span>{showTechnicalDetails ? 'Hide Technical Details' : 'View Technical Details'}</span>
@@ -225,18 +245,24 @@ export const Workforce: React.FC = () => {
                     <span className="text-[11px] text-slate-500 font-medium block">{agent.name}</span>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                  Completed ✓
-                </span>
+                {agent.status === 'Completed' ? (
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                    Completed ✓
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
+                    Ready
+                  </span>
+                )}
               </div>
 
-              {/* What It Did */}
+              {/* What It Does / What It Did */}
               <div className="space-y-1 text-xs">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  What It Did
+                  {agent.status === 'Completed' ? 'What It Did' : 'Role Responsibility'}
                 </span>
                 <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                  {agent.simpleWhatItDid || agent.specialization}
+                  {agent.whatItDoes || agent.simpleWhatItDid || agent.specialization}
                 </p>
               </div>
 
@@ -246,17 +272,24 @@ export const Workforce: React.FC = () => {
                   Outcome Delivered
                 </span>
                 <span className="text-xs font-bold text-slate-900 block">
-                  {agent.simpleResult || 'Milestone verified successfully'}
+                  {agent.result || agent.simpleResult || 'Milestone verified successfully'}
                 </span>
               </div>
 
-              {/* Expandable Technical Model Info */}
+              {/* Expandable Technical Model Info (Progressive Disclosure) */}
               {showTechnicalDetails && (
                 <div className="space-y-2 pt-2 border-t border-slate-100 text-xs animate-in fade-in duration-150">
                   <div className="p-2 bg-slate-900 text-slate-200 rounded-lg flex items-center justify-between font-mono text-[10px]">
                     <span className="text-slate-400">AI Model:</span>
                     <span className="font-bold text-emerald-400">{agent.model}</span>
                   </div>
+
+                  {agent.costUsd !== null && agent.costUsd !== undefined && (
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 font-medium">Model Usage Cost:</span>
+                      <span className="font-bold text-emerald-700 font-mono">${agent.costUsd.toFixed(4)}</span>
+                    </div>
+                  )}
 
                   {agent.permissionsCan && (
                     <div className="text-[11px] space-y-1">
@@ -277,10 +310,16 @@ export const Workforce: React.FC = () => {
               )}
             </div>
 
-            {/* Cost & Task Footer */}
+            {/* Footer */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500">AI Cost: <strong className="text-emerald-700 font-mono">${agent.costUsd?.toFixed(4) || '0.0030'}</strong></span>
-              <span className="text-slate-400 text-[11px] font-semibold">Verified</span>
+              {agent.costUsd !== null && agent.costUsd !== undefined ? (
+                <span className="text-slate-500">AI Cost: <strong className="text-emerald-700 font-mono">${agent.costUsd.toFixed(4)}</strong></span>
+              ) : (
+                <span className="text-slate-400 text-[11px] font-medium">Status: Ready to Assign</span>
+              )}
+              <span className="text-slate-400 text-[11px] font-semibold">
+                {agent.status === 'Completed' ? 'Verified' : 'Standing By'}
+              </span>
             </div>
           </Card>
         ))}
@@ -288,3 +327,4 @@ export const Workforce: React.FC = () => {
     </div>
   );
 };
+

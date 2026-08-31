@@ -142,7 +142,7 @@ export const Overview: React.FC = () => {
               AI Delivery Team
             </div>
             <p className="text-[11px] text-slate-300 leading-snug">
-              Specialized AI roles handle planning, development, testing and review.
+              Specialized AI roles plan, build, test and review your project.
             </p>
           </div>
 
@@ -152,7 +152,7 @@ export const Overview: React.FC = () => {
               Independent Testing
             </div>
             <p className="text-[11px] text-slate-300 leading-snug">
-              The system that defines acceptance tests is separated from the Engineer.
+              Testing is handled separately from the AI that builds your application.
             </p>
           </div>
 
@@ -162,7 +162,7 @@ export const Overview: React.FC = () => {
               Safe Verification
             </div>
             <p className="text-[11px] text-slate-300 leading-snug">
-              Generated software is tested inside a protected temporary environment.
+              Generated software is checked inside a protected test environment.
             </p>
           </div>
 
@@ -172,7 +172,7 @@ export const Overview: React.FC = () => {
               Cost Visibility
             </div>
             <p className="text-[11px] text-slate-300 leading-snug">
-              See estimated AI delivery cost throughout the project.
+              See estimated AI usage and cost throughout your project.
             </p>
           </div>
         </div>
@@ -318,23 +318,40 @@ export const Overview: React.FC = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {CUSTOMER_LIFECYCLE_STAGES.map((stage: any, idx: number) => {
+            const isCompleted = mode === 'demo' || (mode === 'live' && hasProject && project?.status === 'release_ready');
             return (
               <div
                 key={idx}
-                className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5 flex flex-col justify-between"
+                className={`p-3 rounded-xl border shadow-2xs space-y-1.5 flex flex-col justify-between transition-all ${
+                  isCompleted
+                    ? 'bg-white border-slate-200'
+                    : 'bg-slate-50/80 border-slate-200/80 text-slate-400'
+                }`}
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center justify-center">
+                    <span
+                      className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                        isCompleted
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
                       {stage.num}
                     </span>
-                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
-                      <CheckCircle2 className="w-3 h-3" />
+                    <span className="text-[10px] font-bold">
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-slate-300 block" />
+                      )}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900 mt-1">{stage.name}</h4>
+                  <h4 className={`text-xs font-bold mt-1 ${isCompleted ? 'text-slate-900' : 'text-slate-600'}`}>
+                    {stage.name}
+                  </h4>
                 </div>
-                <span className="text-[10px] text-slate-500 line-clamp-1 block">
+                <span className="text-[10px] text-slate-400 line-clamp-1 block">
                   {stage.lead}
                 </span>
               </div>
@@ -356,37 +373,62 @@ export const Overview: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowTechnicalLog(!showTechnicalLog)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-300"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span>{showTechnicalLog ? 'Hide Technical Log' : 'View Full Audit Log'}</span>
-          </button>
+          {hasProject && (
+            <button
+              onClick={() => setShowTechnicalLog(!showTechnicalLog)}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-300"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>{showTechnicalLog ? 'Hide Technical Log' : 'View Full Audit Log'}</span>
+            </button>
+          )}
         </div>
 
         {/* Clean Business-Readable Journey Feed */}
-        <Card className="p-4! space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {DEFAULT_PROJECT_JOURNEY.map((item, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-3 text-xs"
-              >
-                <div className="p-1 rounded-full bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </div>
-                <div className="space-y-0.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <strong className="text-slate-900 font-bold">{item.step}</strong>
-                    <span className="text-[10px] font-mono text-slate-400">{item.time}</span>
+        {hasProject || mode === 'demo' ? (
+          <Card className="p-4! space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {DEFAULT_PROJECT_JOURNEY.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-3 text-xs"
+                >
+                  <div className="p-1 rounded-full bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-snug">{item.detail}</p>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-slate-900 font-bold">{item.step}</strong>
+                      <span className="text-[10px] font-mono text-slate-400">{item.time}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-snug">{item.detail}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+        ) : (
+          <Card className="p-8! text-center space-y-4 border-dashed border-slate-300 bg-slate-50/50">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-brand-blue flex items-center justify-center mx-auto shadow-2xs">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1.5">
+              <h4 className="text-sm font-bold text-slate-900">Your delivery journey will appear here</h4>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Start a project and TayDau will show each completed step from understanding your needs through final delivery.
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link
+                to="/project"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition-all"
+              >
+                <span>Start Building My Project</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </Card>
+        )}
 
         {/* Granular Technical Audit Log (Expandable) */}
         {showTechnicalLog && (

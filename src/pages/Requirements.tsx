@@ -113,7 +113,7 @@ export const Requirements: React.FC = () => {
     return (
       <NoProjectState
         pageTitle="No Features Planned Yet"
-        message="Start a new project to have our Business Analyst extract and structure your software features with acceptance criteria."
+        message="Start a project and TayDau will turn your idea into clear features and define how each one should work."
       />
     );
   }

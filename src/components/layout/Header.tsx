@@ -104,7 +104,7 @@ export const Header: React.FC = () => {
           {mode === 'live' ? (
             <span className="inline-flex items-center gap-1.5 font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px]">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              LIVE PROJECT
+              {project ? 'LIVE PROJECT' : 'LIVE MODE'}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[11px]">
@@ -150,24 +150,24 @@ export const Header: React.FC = () => {
         <div className="bg-slate-950 text-slate-200 border-b border-slate-800 px-6 py-3 text-xs flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-150">
           <div className="flex flex-wrap items-center gap-6">
             <div className="flex items-center gap-2">
-              <Server className="w-3.5 h-3.5 text-teal-400" />
-              <span className="text-slate-400">Backend:</span>
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-slate-400">AI Service:</span>
               <span className="font-semibold text-emerald-400">Connected</span>
             </div>
             <div className="flex items-center gap-2">
               <Database className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-slate-400">Database:</span>
+              <span className="text-slate-400">Project Database:</span>
               <span className="font-semibold text-emerald-400">Connected</span>
             </div>
             <div className="flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-slate-400">AI Provider:</span>
-              <span className="font-semibold text-emerald-400">Active</span>
+              <Terminal className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-slate-400">Safe Test System:</span>
+              <span className="font-semibold text-emerald-400">Available</span>
             </div>
             <div className="flex items-center gap-2">
-              <Terminal className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-slate-400">Test Sandbox:</span>
-              <span className="font-semibold text-emerald-400">Available</span>
+              <Server className="w-3.5 h-3.5 text-teal-400" />
+              <span className="text-slate-400">Backend Service:</span>
+              <span className="font-semibold text-emerald-400">Online</span>
             </div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
@@ -190,47 +190,71 @@ export const Header: React.FC = () => {
         {/* Left: Project & Stage Context */}
         <div className="flex items-center gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-base font-bold text-slate-900 tracking-tight">
-                {mode === 'live'
-                  ? (project?.name || 'No Active Project')
-                  : 'Smart Wholesale Inventory System'}
-              </h1>
-              {mode === 'live' ? (
-                project ? (
-                  <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
-                    {liveStatusInfo.label}
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200 rounded-md">
-                    Awaiting Project
-                  </span>
-                )
+            {mode === 'live' ? (
+              project ? (
+                <>
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                      {project.name}
+                    </h1>
+                    <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
+                      {liveStatusInfo.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                    <span className="flex items-center gap-1 text-slate-700 font-medium">
+                      <Layers className="w-3.5 h-3.5 text-brand-blue" />
+                      Status:{' '}
+                      <span className="text-brand-blue font-semibold">
+                        {liveStatusInfo.label}
+                      </span>
+                      {project.status === 'release_ready' && (
+                        <span className="text-emerald-600 font-semibold flex items-center gap-0.5 ml-1">
+                          <CheckCircle2 className="w-3 h-3" /> (8/8 Checks Passed)
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-500">
+                      ID: {project.id.slice(0, 8)}
+                    </span>
+                  </div>
+                </>
               ) : (
-                <span className="px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-md">
-                  In Progress
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-              <span className="flex items-center gap-1 text-slate-700 font-medium">
-                <Layers className="w-3.5 h-3.5 text-brand-blue" />
-                Status:{' '}
-                <span className="text-brand-blue font-semibold">
-                  {mode === 'live' ? (project ? liveStatusInfo.label : 'Idle') : 'Concept Simulation'}
-                </span>
-                {mode === 'live' && project?.status === 'release_ready' && (
-                  <span className="text-emerald-600 font-semibold flex items-center gap-0.5 ml-1">
-                    <CheckCircle2 className="w-3 h-3" /> (8/8 Checks Passed)
+                <>
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                      No Active Project
+                    </h1>
+                    <span className="px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200 rounded-md">
+                      Ready
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                    <span>Start a project to begin your software delivery.</span>
+                  </div>
+                </>
+              )
+            ) : (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                    Smart Wholesale Inventory System
+                  </h1>
+                  <span className="px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-md">
+                    In Progress
                   </span>
-                )}
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-slate-500">
-                {mode === 'live' ? (project ? `ID: ${project.id.slice(0, 8)}` : 'Create a project to start') : 'Sprint 2 of 4'}
-              </span>
-            </div>
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                  <span className="flex items-center gap-1 text-slate-700 font-medium">
+                    <Layers className="w-3.5 h-3.5 text-brand-blue" />
+                    Status: <span className="text-brand-blue font-semibold">Concept Simulation</span>
+                  </span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-slate-500">Sprint 2 of 4</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

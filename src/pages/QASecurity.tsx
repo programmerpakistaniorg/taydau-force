@@ -39,7 +39,7 @@ export const QASecurity: React.FC = () => {
     return (
       <NoProjectState
         pageTitle="No Testing Runs Yet"
-        message="Start a new project to have our Independent QA Engineer derive test suites and execute them inside hardened Docker containers."
+        message="Start a project and TayDau will independently test your application and check it inside a protected environment before delivery."
       />
     );
   }

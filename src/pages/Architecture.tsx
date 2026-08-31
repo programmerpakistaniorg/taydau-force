@@ -38,7 +38,7 @@ export const Architecture: React.FC = () => {
     return (
       <NoProjectState
         pageTitle="No Solution Design Yet"
-        message="Start a new project to have our Solution Architect design the technical blueprint, data schema, and security architecture."
+        message="Start a project and TayDau will choose how your application should be built, how information should be stored, and how the solution should be protected."
       />
     );
   }
