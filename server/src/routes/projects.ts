@@ -264,6 +264,8 @@ router.get('/:id', async (req, res, next) => {
       qaSuite: qaSuite
         ? {
             suiteSha256: qaSuite.suite_sha256,
+            suiteHash: qaSuite.suite_sha256,
+            qaModel: 'openai/gpt-oss-120b',
             fileCount: qaSuite.file_count,
             isFrozen: qaSuite.is_frozen,
             version: qaSuite.version,

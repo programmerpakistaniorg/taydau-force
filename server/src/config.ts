@@ -46,7 +46,7 @@ function parseBudgetHardLimit(): number {
 }
 
 function parsePort(): number {
-  const raw = process.env.PORT ?? '3001';
+  const raw = process.env.PORT ?? '3000';
   const val = parseInt(raw, 10);
   if (isNaN(val) || val <= 0 || val > 65535) {
     throw new Error(`Invalid PORT: '${raw}'. Must be a valid port number between 1 and 65535.`);

@@ -40,7 +40,7 @@ export const Architecture: React.FC = () => {
     { label: 'Database Layer', value: project?.architecture?.techStack.database || 'SQLite / SQLAlchemy (Sync)', icon: Database, color: 'text-blue-600 bg-blue-50' },
     { label: 'Language', value: project?.architecture?.techStack.language || 'Python 3.11', icon: Cpu, color: 'text-indigo-600 bg-indigo-50' },
     { label: 'Sandbox Execution', value: 'Hardened Docker Sandbox', icon: Terminal, color: 'text-slate-700 bg-slate-100' },
-    { label: 'Security Profile', value: 'Air-Gapped / Rootless / Cap-Drop', icon: Lock, color: 'text-purple-600 bg-purple-50' },
+    { label: 'Security Profile', value: 'Network-Isolated / Rootless / Cap-Drop', icon: Lock, color: 'text-purple-600 bg-purple-50' },
     { label: 'Verification Engine', value: 'Pytest (Independent Suite)', icon: Shield, color: 'text-emerald-600 bg-emerald-50' }
   ];
 
@@ -88,7 +88,7 @@ export const Architecture: React.FC = () => {
             Stack: FastAPI + SQLite
           </Badge>
           <Badge variant="primary" size="md">
-            Sandbox: Air-Gapped Docker
+            Sandbox: Network-Isolated Docker
           </Badge>
         </div>
       </div>
@@ -166,7 +166,7 @@ export const Architecture: React.FC = () => {
             </li>
             <li className="flex items-start gap-2 p-2 bg-emerald-50/50 border border-emerald-200/60 rounded-lg">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-              <span><strong>Air-Gapped:</strong> Strict <code>--network none</code> to eliminate egress/exfiltration</span>
+              <span><strong>Network-Isolated:</strong> Strict <code>--network none</code> to eliminate egress/exfiltration</span>
             </li>
             <li className="flex items-start gap-2 p-2 bg-emerald-50/50 border border-emerald-200/60 rounded-lg">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />

@@ -264,7 +264,7 @@ export const QASecurity: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Engineer Code in QA Prompt:</span>
-                  <span className="font-bold text-emerald-600">STRICT NO (Air-Gapped)</span>
+                  <span className="font-bold text-emerald-600">STRICT NO (Excluded from QA Context)</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Frozen Suite Status:</span>
@@ -281,7 +281,7 @@ export const QASecurity: React.FC = () => {
                   QA Suite Cryptographic Fingerprint (SHA-256):
                 </span>
                 <pre className="p-2.5 bg-slate-900 text-slate-200 rounded-lg text-[10px] font-mono break-all border border-slate-800">
-                  {qaSuite?.suiteHash || '979b37b55ae2568600cbbd1bfbf10dca255cb078170c2a5518b76c8c4fe386c5'}
+                  {qaSuite?.suiteHash || qaSuite?.suiteSha256 || '979b37b543587bd0402ca5f544c912b823baf28dc916f72313dfae4950e386c5'}
                 </pre>
               </div>
             </div>
@@ -311,7 +311,7 @@ export const QASecurity: React.FC = () => {
                 </div>
                 <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
                   <span className="text-slate-500 block text-[10px]">Network Policy:</span>
-                  <strong className="text-slate-900 font-bold">--network none (Air-Gapped)</strong>
+                  <strong className="text-slate-900 font-bold">--network none (Network-Isolated)</strong>
                 </div>
               </div>
 

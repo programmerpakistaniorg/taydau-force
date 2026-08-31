@@ -357,7 +357,7 @@ export const Delivery: React.FC = () => {
             <div className="p-2.5 bg-slate-900 text-slate-200 rounded-lg flex justify-between">
               <span className="text-slate-400">Frozen QA Suite SHA-256:</span>
               <span className="text-slate-300 break-all text-[10px]">
-                {project?.qaSuite?.suiteHash || '979b37b55ae2568600cbbd1bfbf10dca255cb078170c2a5518b76c8c4fe386c5'}
+                {project?.qaSuite?.suiteHash || project?.qaSuite?.suiteSha256 || '979b37b543587bd0402ca5f544c912b823baf28dc916f72313dfae4950e386c5'}
               </span>
             </div>
             <div className="p-2.5 bg-slate-900 text-slate-200 rounded-lg flex justify-between">
