@@ -76,12 +76,24 @@ export const Overview: React.FC = () => {
   const [showTechnicalLog, setShowTechnicalLog] = useState<boolean>(false);
 
   // Live real values
+  const hasProject = Boolean(project);
   const liveReqCount = project ? project.requirements.length : 0;
   const liveTestsPassed = project ? (project.testRuns[0]?.testsPassed ?? 0) : 0;
   const liveTestsTotal = project ? ((project.testRuns[0]?.testsPassed ?? 0) + (project.testRuns[0]?.testsFailed ?? 0)) : 0;
   const liveOpenDefects = project ? (project.defects.filter(d => d.status === 'open').length) : 0;
   const liveCost = project ? (project.costSummary?.totalCostUsed ?? 0) : 0;
   const liveCostPerReq = project ? (project.costSummary?.costPerVerifiedReq ?? (liveReqCount > 0 ? liveCost / liveReqCount : 0)) : 0;
+
+  // Percentage calculations
+  const reqPercent = mode === 'live'
+    ? (hasProject && liveReqCount > 0 ? 100 : 0)
+    : 100;
+  const testPercent = mode === 'live'
+    ? (hasProject && liveTestsTotal > 0 ? Math.round((liveTestsPassed / liveTestsTotal) * 100) : 0)
+    : 100;
+  const costPercent = mode === 'live'
+    ? (hasProject ? Math.min(100, Math.max(1, (liveCost / 5) * 100)) : 0)
+    : simCostSummary.budgetUsedPercent;
 
   const activities = mode === 'live'
     ? (project?.activities && project.activities.length > 0 ? project.activities : [])
@@ -169,115 +181,124 @@ export const Overview: React.FC = () => {
       {/* 2. Top Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Requirements */}
-        <Card className="relative overflow-hidden p-4! border-slate-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+        <Card className="relative overflow-hidden p-4! border-slate-200 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block truncate">
                 Requirements Completed
               </span>
-              <div className="flex items-baseline gap-2 mt-1.5">
-                <span className="text-2xl font-black text-slate-900">
-                  {mode === 'live' ? `${liveReqCount} / ${liveReqCount}` : '18 / 18'}
+              <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
+                <span className="text-2xl font-black text-slate-900 whitespace-nowrap">
+                  {mode === 'live' ? (hasProject ? `${liveReqCount} / ${liveReqCount}` : '0 / 0') : '18 / 18'}
                 </span>
-                <span className="text-xs font-bold text-emerald-600 flex items-center">
-                  <TrendingUp className="w-3 h-3 mr-0.5" />
-                  100%
+                <span className={`text-xs font-bold whitespace-nowrap flex items-center ${reqPercent > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {reqPercent > 0 && <TrendingUp className="w-3 h-3 mr-0.5" />}
+                  {reqPercent}%
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Everything requested is covered.
+              <span className="text-[11px] text-slate-500 mt-1 block truncate">
+                {hasProject ? 'Everything requested is covered.' : 'Awaiting project creation.'}
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-emerald-600 h-full rounded-full w-full" />
+            <div
+              className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+              style={{ width: `${reqPercent}%` }}
+            />
           </div>
         </Card>
 
         {/* Metric 2: Tests */}
-        <Card className="relative overflow-hidden p-4! border-slate-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+        <Card className="relative overflow-hidden p-4! border-slate-200 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block truncate">
                 Tests Passed
               </span>
-              <div className="flex items-baseline gap-2 mt-1.5">
-                <span className="text-2xl font-black text-slate-900">
-                  {mode === 'live' ? `${liveTestsPassed} / ${liveTestsTotal}` : '18 / 18'}
+              <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
+                <span className="text-2xl font-black text-slate-900 whitespace-nowrap">
+                  {mode === 'live' ? (hasProject ? `${liveTestsPassed} / ${liveTestsTotal}` : '0 / 0') : '18 / 18'}
                 </span>
-                <span className="text-xs font-bold text-teal-600">
-                  Passed (100%)
+                <span className={`text-xs font-bold whitespace-nowrap ${testPercent > 0 ? 'text-teal-600' : 'text-slate-400'}`}>
+                  {hasProject ? (liveTestsTotal > 0 ? `Passed (${testPercent}%)` : 'Pending') : '0%'}
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Independent checks succeeded.
+              <span className="text-[11px] text-slate-500 mt-1 block truncate">
+                {hasProject ? 'Independent checks succeeded.' : 'No test suites run yet.'}
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-brand-teal">
+            <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-brand-teal shrink-0">
               <FileCheck2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-brand-teal h-full rounded-full w-full" />
+            <div
+              className="bg-brand-teal h-full rounded-full transition-all duration-500"
+              style={{ width: `${testPercent}%` }}
+            />
           </div>
         </Card>
 
         {/* Metric 3: Open Issues */}
-        <Card className="relative overflow-hidden p-4! border-slate-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+        <Card className="relative overflow-hidden p-4! border-slate-200 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block truncate">
                 Open Blocking Issues
               </span>
-              <div className="flex items-baseline gap-2 mt-1.5">
-                <span className="text-2xl font-black text-slate-900">
+              <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
+                <span className="text-2xl font-black text-slate-900 whitespace-nowrap">
                   {mode === 'live' ? liveOpenDefects : 0}
                 </span>
-                <span className="text-xs font-bold text-emerald-600">
-                  0 Blockers
+                <span className={`text-xs font-bold whitespace-nowrap ${hasProject ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {hasProject ? '0 Blockers' : 'None'}
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                No release blockers.
+              <span className="text-[11px] text-slate-500 mt-1 block truncate">
+                {hasProject ? 'No release blockers.' : 'No issues detected.'}
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-brand-blue">
+            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-brand-blue shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-emerald-500 h-full rounded-full w-full" />
+            <div
+              className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+              style={{ width: `${hasProject ? 100 : 0}%` }}
+            />
           </div>
         </Card>
 
         {/* Metric 4: Cost */}
-        <Card className="relative overflow-hidden p-4! border-slate-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+        <Card className="relative overflow-hidden p-4! border-slate-200 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block truncate">
                 Estimated AI Cost
               </span>
-              <div className="flex items-baseline gap-1.5 mt-1.5">
-                <span className="text-2xl font-black text-slate-900">
+              <div className="flex items-baseline gap-1.5 mt-1.5 flex-wrap">
+                <span className="text-2xl font-black text-slate-900 whitespace-nowrap">
                   ${(mode === 'live' ? liveCost : simCostSummary.totalCostUsed).toFixed(3)}
                 </span>
-                <span className="text-[11px] font-bold text-slate-400">/ $5.00 limit</span>
+                <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">/ $5.00 limit</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Estimated list-price equivalent.
+              <span className="text-[11px] text-slate-500 mt-1 block truncate">
+                {hasProject ? 'Estimated list-price equivalent.' : 'Budget allocated.'}
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 shrink-0">
               <Coins className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-amber-500 h-full rounded-full"
-              style={{ width: `${mode === 'live' ? (liveCost / 5) * 100 : simCostSummary.budgetUsedPercent}%` }}
+              className="bg-amber-500 h-full rounded-full transition-all duration-500"
+              style={{ width: `${costPercent}%` }}
             />
           </div>
         </Card>
