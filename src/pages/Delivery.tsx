@@ -239,45 +239,45 @@ export const Delivery: React.FC = () => {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <RotateCcw className="w-4 h-4 text-purple-600" />
-            How TayDau Handles Software Errors (Demonstration)
+            Automated Defect Recovery Demonstration
           </h3>
           <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wider">
-            Controlled Test
+            Controlled Recovery Demonstration
           </span>
         </div>
 
         <Card className="p-5! bg-purple-50/60 border-purple-200 space-y-3.5 text-xs">
           <p className="text-purple-950 leading-relaxed">
-            Your real software project had zero bugs and passed on the first run. To demonstrate what happens when something does break, we ran a separate test with an intentional error. The system caught it, reported the bug, and repaired it automatically:
+            TayDau detected an intentionally introduced error, created an issue, generated a repair and verified the correction against the unchanged independent test set:
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 pt-1 text-[11px]">
             <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1">
-              <span className="text-[10px] font-bold text-purple-600 uppercase block">1. Intentional Mistake</span>
-              <p className="text-slate-800 font-semibold">Error Introduced</p>
+              <span className="text-[10px] font-bold text-purple-600 uppercase block">1. Intentional Fault</span>
+              <p className="text-slate-800 font-semibold">Error Injected</p>
               <span className="text-[10px] text-slate-500 block">Controlled test case</span>
             </div>
 
             <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1">
-              <span className="text-[10px] font-bold text-rose-600 uppercase block">2. Test Catches It</span>
-              <p className="text-slate-800 font-semibold">QA Rejects Build</p>
+              <span className="text-[10px] font-bold text-rose-600 uppercase block">2. Detection</span>
+              <p className="text-slate-800 font-semibold">QA Catches Issue</p>
               <span className="text-[10px] text-slate-500 block">Independent check</span>
             </div>
 
             <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1">
-              <span className="text-[10px] font-bold text-amber-600 uppercase block">3. Defect Filed</span>
+              <span className="text-[10px] font-bold text-amber-600 uppercase block">3. Defect Registered</span>
               <p className="text-slate-800 font-semibold">DEF-001 Logged</p>
-              <span className="text-[10px] text-slate-500 block">Automatic report</span>
+              <span className="text-[10px] text-slate-500 block">Structured issue</span>
             </div>
 
             <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1">
-              <span className="text-[10px] font-bold text-blue-600 uppercase block">4. AI Repairs Code</span>
+              <span className="text-[10px] font-bold text-blue-600 uppercase block">4. Engineer Repair</span>
               <p className="text-slate-800 font-semibold">Fix Implemented</p>
-              <span className="text-[10px] text-slate-500 block">Version 2 generated</span>
+              <span className="text-[10px] text-slate-500 block">Targeted rework</span>
             </div>
 
             <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase block">5. Retest & Pass</span>
+              <span className="text-[10px] font-bold text-emerald-600 uppercase block">5. Retest & Verify</span>
               <p className="text-slate-800 font-semibold">8 of 8 Pass</p>
               <span className="text-[10px] text-emerald-700 font-bold block">Defect Resolved</span>
             </div>

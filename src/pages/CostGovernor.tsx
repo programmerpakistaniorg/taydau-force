@@ -90,16 +90,16 @@ export const CostGovernor: React.FC = () => {
           </Card>
 
           <Card className="p-4! space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cost per Feature</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cost per Verified Requirement</span>
             <div className="text-2xl font-black text-emerald-700 font-mono">
               ${(simCostSummary.totalCostUsed / 9).toFixed(3)}
             </div>
-            <span className="text-[11px] text-slate-500 block">Per verified requirement</span>
+            <span className="text-[11px] text-slate-500 block">Less than 1¢ per verified requirement</span>
           </Card>
 
           <Card className="p-4! space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">AI Team Activities</span>
-            <div className="text-2xl font-black text-slate-900 font-mono">7 Sessions</div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">AI Delivery Roles</span>
+            <div className="text-2xl font-black text-slate-900 font-mono">7 Roles</div>
             <span className="text-[11px] text-slate-500 block">Across 7 specialized roles</span>
           </Card>
         </div>
@@ -150,14 +150,14 @@ export const CostGovernor: React.FC = () => {
         </Card>
 
         <Card className="p-4! space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cost per Feature</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cost per Verified Requirement</span>
           <div className="text-2xl font-black text-emerald-700 font-mono">${genuineCostPerReq.toFixed(4)}</div>
-          <span className="text-[11px] text-slate-500 block">Less than 1¢ per feature</span>
+          <span className="text-[11px] text-slate-500 block">Less than 1¢ per verified requirement</span>
         </Card>
 
         <Card className="p-4! space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">AI Team Activities</span>
-          <div className="text-2xl font-black text-slate-900 font-mono">6 Work Sessions</div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">AI Delivery Roles</span>
+          <div className="text-2xl font-black text-slate-900 font-mono">6 Roles</div>
           <span className="text-[11px] text-slate-500 block">6 specialized delivery roles</span>
         </Card>
       </div>
@@ -245,15 +245,15 @@ export const CostGovernor: React.FC = () => {
         </div>
       )}
 
-      {/* SEPARATE SECTION: HOW TAYDAU HANDLES MISTAKES */}
+      {/* SEPARATE SECTION: AUTOMATED DEFECT RECOVERY DEMONSTRATION */}
       <div className="p-5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-purple-200 text-purple-900 text-[10px] font-bold uppercase tracking-wider">
-              Controlled Test
+              Controlled Recovery Demonstration
             </span>
             <h4 className="text-xs font-bold text-slate-900">
-              How TayDau Handles Mistakes & Repairs Software
+              Automated Defect Recovery Demonstration
             </h4>
           </div>
           <span className="text-xs font-mono text-purple-950 font-bold">
@@ -262,7 +262,7 @@ export const CostGovernor: React.FC = () => {
         </div>
 
         <p className="text-xs text-purple-900 leading-relaxed">
-          Your genuine software project passed all 8 tests on its first run with zero bugs. To test what happens when code fails, TayDau ran a separate controlled benchmark where an intentional error was introduced. The independent QA suite caught the mistake immediately, logged a defect, and the Engineer repaired it automatically without human intervention.
+          TayDau detected an intentionally introduced error, created an issue, generated a repair and verified the correction against the unchanged independent test set (DEF-001 resolved with 8/8 tests passing).
         </p>
       </div>
     </div>
