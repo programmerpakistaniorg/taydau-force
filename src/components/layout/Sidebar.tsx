@@ -38,9 +38,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
   ];
 
   return (
-    <aside className="w-64 bg-brand-navy flex flex-col shrink-0 text-slate-200 border-r border-slate-800 select-none z-20 min-h-screen">
+    <aside className="w-64 h-screen sticky top-0 flex flex-col shrink-0 bg-brand-navy text-slate-200 border-r border-slate-800 select-none z-20 overflow-hidden">
       {/* Brand Header */}
-      <div className="px-5 py-5 border-b border-slate-800/80 flex items-center gap-3">
+      <div className="px-5 py-5 border-b border-slate-800/80 flex items-center gap-3 shrink-0">
         <img
           src="/TayDau-Force-Logo.png"
           alt="TayDau Force Logo"
@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
       </div>
 
       {/* Primary Navigation */}
-      <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto min-h-0">
         <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
           Delivery Workspace
         </div>
@@ -100,32 +100,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
       </div>
 
       {/* Mode-Aware Sidebar Footer Card */}
-      {mode === 'live' ? (
-        <div className="p-3 mx-3 mb-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-200">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 mb-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            LIVE PROJECT
+      <div className="shrink-0">
+        {mode === 'live' ? (
+          <div className="p-3 mx-3 mb-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-200">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 mb-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE PROJECT
+            </div>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              {project
+                ? (project.status === 'release_ready' ? 'Ready for Delivery • 8/8 passed' : 'Project in progress')
+                : 'No project active • Start a project to begin'}
+            </p>
           </div>
-          <p className="text-[11px] text-slate-300 leading-snug">
-            {project
-              ? (project.status === 'release_ready' ? 'Ready for Delivery • 8/8 passed' : 'Project in progress')
-              : 'No project active • Start a project to begin'}
-          </p>
-        </div>
-      ) : (
-        <div className="p-3 mx-3 mb-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            SIMULATION MODE
+        ) : (
+          <div className="p-3 mx-3 mb-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 mb-1">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              SIMULATION MODE
+            </div>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              Step {currentStep} of 11 • Concept demonstration
+            </p>
           </div>
-          <p className="text-[11px] text-slate-400 leading-snug">
-            Step {currentStep} of 11 • Concept demonstration
-          </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Footer / Docs */}
-      <div className="p-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+      <div className="p-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
         <button
           onClick={onOpenDocModal}
           className="flex items-center gap-1.5 hover:text-white transition-colors"
