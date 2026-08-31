@@ -102,24 +102,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
       {/* Mode-Aware Sidebar Footer Card */}
       <div className="shrink-0">
         {mode === 'live' ? (
-          <div className="p-3 mx-3 mb-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-200">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 mb-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE PROJECT
+          <div className="px-2.5 py-1.5 mx-3 mb-2 rounded-md bg-emerald-950/40 border border-emerald-800/40 text-emerald-200">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE PROJECT</span>
             </div>
-            <p className="text-[11px] text-slate-300 leading-snug">
+            <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
               {project
                 ? (project.status === 'release_ready' ? 'Ready for Delivery • 8/8 passed' : 'Project in progress')
                 : 'No project active • Start a project to begin'}
             </p>
           </div>
         ) : (
-          <div className="p-3 mx-3 mb-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 mb-1">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              SIMULATION MODE
+          <div className="px-2.5 py-1.5 mx-3 mb-2 rounded-md bg-slate-800/60 border border-slate-700/60 text-slate-300">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-300">
+              <Sparkles className="w-3 h-3 text-blue-400" />
+              <span>SIMULATION MODE</span>
             </div>
-            <p className="text-[11px] text-slate-400 leading-snug">
+            <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
               Step {currentStep} of 11 • Concept demonstration
             </p>
           </div>
