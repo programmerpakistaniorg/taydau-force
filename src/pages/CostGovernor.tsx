@@ -24,6 +24,7 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 const CANONICAL_LIVE_ROLES = [
   { role: 'Business Analyst', name: 'Aria Analyst', model: 'qwen/qwen3.8-27b', tokensIn: 2010, tokensOut: 62, cost: 0.001858, tier: 'Analytical (27B)' },
@@ -38,6 +39,15 @@ export const CostGovernor: React.FC = () => {
   const { costSummary: simCostSummary } = useSimulation();
   const { mode, project } = useLiveProject();
   const [showDetailedTelemetry, setShowDetailedTelemetry] = useState<boolean>(false);
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Project Costs Yet"
+        message="Start a new project to track real-time token economics, budget boundaries, and per-feature AI costs."
+      />
+    );
+  }
 
   const genuineTotalCost = project?.costSummary?.totalCostUsed ?? 0.027987;
   const genuineCostPerReq = project?.costSummary?.costPerVerifiedReq ?? 0.009329;

@@ -107,7 +107,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
             LIVE PROJECT
           </div>
           <p className="text-[11px] text-slate-300 leading-snug">
-            Ready for Delivery • 8/8 tests passed • 100% complete
+            {project
+              ? (project.status === 'release_ready' ? 'Ready for Delivery • 8/8 passed' : 'Project in progress')
+              : 'No project active • Start a project to begin'}
           </p>
         </div>
       ) : (

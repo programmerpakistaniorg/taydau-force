@@ -29,10 +29,20 @@ import { Badge } from '../components/common/Badge';
 import { StatusPill } from '../components/common/StatusPill';
 import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 export const QASecurity: React.FC = () => {
   const { currentStep, defects: simDefects, securityFindings: simSecurityFindings, requirements: simRequirements } = useSimulation();
   const { mode, project } = useLiveProject();
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Testing Runs Yet"
+        message="Start a new project to have our Independent QA Engineer derive test suites and execute them inside hardened Docker containers."
+      />
+    );
+  }
 
   const isTest23Passed = currentStep >= 10;
   const integrationPassed = isTest23Passed ? 17 : 16;

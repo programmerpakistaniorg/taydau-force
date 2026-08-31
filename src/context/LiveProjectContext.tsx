@@ -5,7 +5,6 @@ import { FullProjectResponse, ProjectSummary } from '../types/api';
 export type AppMode = 'live' | 'demo';
 
 const DEFAULT_MODE: AppMode = (import.meta.env.VITE_TAYDAU_MODE as AppMode) || 'live';
-const DEFAULT_VERIFIED_PROJECT_ID = import.meta.env.VITE_DEMO_PROJECT_ID || '40799dec-1aed-48af-827b-c3c0c6060d4f';
 
 interface LiveProjectContextType {
   mode: AppMode;
@@ -23,7 +22,6 @@ interface LiveProjectContextType {
   createProject: (name: string, clientBrief: string) => Promise<string>;
   advanceProject: (id?: string) => Promise<void>;
   refreshProject: () => Promise<void>;
-  loadVerifiedProject: () => Promise<void>;
 }
 
 const LiveProjectContext = createContext<LiveProjectContextType | undefined>(undefined);
@@ -82,7 +80,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-    return localStorage.getItem('taydau_active_project_id') || DEFAULT_VERIFIED_PROJECT_ID;
+    return localStorage.getItem('taydau_active_project_id') || null;
   });
 
   const [project, setProject] = useState<FullProjectResponse | null>(null);
@@ -113,6 +111,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     } catch (err: any) {
       if (!isBackgroundPoll) {
         setError(err.message || 'Failed to load project from backend');
+        setProject(null);
       }
       return null;
     } finally {
@@ -125,21 +124,23 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   const fetchProjectsList = useCallback(async () => {
     try {
       const res = await api.getProjects();
-      setProjectsList(res.projects || []);
+      const list = res.projects || [];
+      setProjectsList(list);
 
-      // Find controlled rework project if available
-      const reworkSummary = res.projects.find(p => 
-        p.name.toLowerCase().includes('controlled rework') || 
-        p.name.toLowerCase().includes('rework demo')
-      );
-      if (reworkSummary) {
-        try {
-          const reworkData = await api.getProject(reworkSummary.id);
-          setReworkProject(reworkData);
-        } catch {
-          // Ignore non-critical background load
+      // If activeProjectId is not in list or list is empty, synchronize state
+      setActiveProjectId(prev => {
+        if (list.length === 0) {
+          localStorage.removeItem('taydau_active_project_id');
+          setProject(null);
+          return null;
         }
-      }
+        if (prev && list.some(p => p.id === prev)) {
+          return prev;
+        }
+        const fallbackId = list[0].id;
+        localStorage.setItem('taydau_active_project_id', fallbackId);
+        return fallbackId;
+      });
     } catch {
       // Non-blocking for offline demo fallback
     }
@@ -150,10 +151,6 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     localStorage.setItem('taydau_active_project_id', id);
     await fetchProjectDetails(id);
   }, [fetchProjectDetails]);
-
-  const loadVerifiedProject = useCallback(async () => {
-    await loadProject(DEFAULT_VERIFIED_PROJECT_ID);
-  }, [loadProject]);
 
   const createProject = useCallback(async (name: string, clientBrief: string): Promise<string> => {
     setIsLoading(true);
@@ -261,7 +258,6 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         createProject,
         advanceProject,
         refreshProject,
-        loadVerifiedProject,
       }}
     >
       {children}

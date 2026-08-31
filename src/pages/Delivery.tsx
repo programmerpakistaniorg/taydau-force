@@ -33,11 +33,21 @@ import { StatusPill } from '../components/common/StatusPill';
 import { Modal } from '../components/common/Modal';
 import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 export const Delivery: React.FC = () => {
   const { currentStep, requirements: simRequirements } = useSimulation();
   const { mode, project } = useLiveProject();
   const [isEvidenceOpen, setIsEvidenceOpen] = useState<boolean>(false);
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Software Ready for Delivery"
+        message="Start a new project to run our autonomous AI team through requirements, design, coding, testing, and verified release."
+      />
+    );
+  }
 
   const isTest23Passed = currentStep >= 10;
 

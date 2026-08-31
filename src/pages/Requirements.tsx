@@ -22,6 +22,7 @@ import { Drawer } from '../components/common/Drawer';
 import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { Requirement } from '../types';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 export const Requirements: React.FC = () => {
   const { requirements: simRequirements } = useSimulation();
@@ -107,6 +108,15 @@ export const Requirements: React.FC = () => {
   });
 
   const verifiedCount = requirements.filter((r) => r.verificationStatus === 'Verified').length;
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Features Planned Yet"
+        message="Start a new project to have our Business Analyst extract and structure your software features with acceptance criteria."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

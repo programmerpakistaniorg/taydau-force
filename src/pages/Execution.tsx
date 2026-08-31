@@ -34,6 +34,7 @@ import { Drawer } from '../components/common/Drawer';
 import { useSimulation, SIMULATION_STEPS } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { Task, KanbanLane } from '../types';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 export const Execution: React.FC = () => {
   const {
@@ -44,6 +45,15 @@ export const Execution: React.FC = () => {
   } = useSimulation();
 
   const { mode, project } = useLiveProject();
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Build in Progress"
+        message="Start a new project to have our Senior Full-Stack Engineer generate production code and monitor real-time build progress."
+      />
+    );
+  }
 
   const [activeTab, setActiveTab] = useState<'outcomes' | 'kanban'>('outcomes');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');

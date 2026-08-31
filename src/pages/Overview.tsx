@@ -67,7 +67,6 @@ export const Overview: React.FC = () => {
   const {
     mode,
     project,
-    loadVerifiedProject,
     advanceProject,
     isAdvancing,
     isPolling
@@ -77,12 +76,12 @@ export const Overview: React.FC = () => {
   const [showTechnicalLog, setShowTechnicalLog] = useState<boolean>(false);
 
   // Live real values
-  const liveReqCount = project?.requirements.length || 3;
-  const liveTestsPassed = project?.testRuns[0]?.testsPassed ?? 8;
-  const liveTestsTotal = (project?.testRuns[0]?.testsPassed ?? 8) + (project?.testRuns[0]?.testsFailed ?? 0);
-  const liveOpenDefects = project?.defects.filter(d => d.status === 'open').length || 0;
-  const liveCost = project?.costSummary?.totalCostUsed ?? 0.027987;
-  const liveCostPerReq = project?.costSummary?.costPerVerifiedReq ?? (liveCost / 3);
+  const liveReqCount = project ? project.requirements.length : 0;
+  const liveTestsPassed = project ? (project.testRuns[0]?.testsPassed ?? 0) : 0;
+  const liveTestsTotal = project ? ((project.testRuns[0]?.testsPassed ?? 0) + (project.testRuns[0]?.testsFailed ?? 0)) : 0;
+  const liveOpenDefects = project ? (project.defects.filter(d => d.status === 'open').length) : 0;
+  const liveCost = project ? (project.costSummary?.totalCostUsed ?? 0) : 0;
+  const liveCostPerReq = project ? (project.costSummary?.costPerVerifiedReq ?? (liveReqCount > 0 ? liveCost / liveReqCount : 0)) : 0;
 
   const activities = mode === 'live'
     ? (project?.activities && project.activities.length > 0 ? project.activities : [])
@@ -114,21 +113,12 @@ export const Overview: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <Link
               to="/project"
-              className="px-4 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all active:scale-98"
+              className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all active:scale-98"
             >
               <FolderGit2 className="w-4 h-4" />
-              <span>Start a Project</span>
+              <span>{project ? 'View My Project' : 'Start a Project'}</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
             </Link>
-
-            {mode === 'live' && (
-              <button
-                onClick={loadVerifiedProject}
-                className="px-4 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-xs transition-all"
-              >
-                <FolderCheck className="w-4 h-4 text-emerald-400" />
-                <span>View Example Project</span>
-              </button>
-            )}
           </div>
         </div>
 

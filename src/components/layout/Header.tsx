@@ -85,7 +85,6 @@ export const Header: React.FC = () => {
     isAdvancing,
     currentProgressMessage,
     advanceProject,
-    loadVerifiedProject,
     refreshProject
   } = useLiveProject();
 
@@ -194,13 +193,19 @@ export const Header: React.FC = () => {
             <div className="flex items-center gap-2.5">
               <h1 className="text-base font-bold text-slate-900 tracking-tight">
                 {mode === 'live'
-                  ? (project?.name || 'Smart Wholesale Inventory System')
+                  ? (project?.name || 'No Active Project')
                   : 'Smart Wholesale Inventory System'}
               </h1>
               {mode === 'live' ? (
-                <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
-                  {liveStatusInfo.label}
-                </span>
+                project ? (
+                  <span className={`px-2.5 py-0.5 text-[11px] font-bold border rounded-md ${liveStatusInfo.bg} ${liveStatusInfo.text} ${liveStatusInfo.border}`}>
+                    {liveStatusInfo.label}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200 rounded-md">
+                    Awaiting Project
+                  </span>
+                )
               ) : (
                 <span className="px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-md">
                   In Progress
@@ -213,7 +218,7 @@ export const Header: React.FC = () => {
                 <Layers className="w-3.5 h-3.5 text-brand-blue" />
                 Status:{' '}
                 <span className="text-brand-blue font-semibold">
-                  {mode === 'live' ? liveStatusInfo.label : 'Concept Simulation'}
+                  {mode === 'live' ? (project ? liveStatusInfo.label : 'Idle') : 'Concept Simulation'}
                 </span>
                 {mode === 'live' && project?.status === 'release_ready' && (
                   <span className="text-emerald-600 font-semibold flex items-center gap-0.5 ml-1">
@@ -223,7 +228,7 @@ export const Header: React.FC = () => {
               </span>
               <span className="text-slate-300">•</span>
               <span className="text-slate-500">
-                {mode === 'live' ? 'ID: INV-001' : 'Sprint 2 of 4'}
+                {mode === 'live' ? (project ? `ID: ${project.id.slice(0, 8)}` : 'Create a project to start') : 'Sprint 2 of 4'}
               </span>
             </div>
           </div>
@@ -252,15 +257,6 @@ export const Header: React.FC = () => {
           {mode === 'live' ? (
             /* Live Controls */
             <div className="flex items-center gap-2">
-              <button
-                onClick={loadVerifiedProject}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors shadow-2xs"
-                title="Open Verified Example Project (8/8 Passed, Ready for Delivery)"
-              >
-                <FolderCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Open Example Project</span>
-              </button>
-
               {project && project.status !== 'release_ready' && (
                 <button
                   onClick={() => advanceProject()}

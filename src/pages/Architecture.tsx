@@ -28,10 +28,20 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { ARCHITECTURE_DECISION_RECORDS } from '../data/mockData';
 import { useLiveProject } from '../context/LiveProjectContext';
+import { NoProjectState } from '../components/common/NoProjectState';
 
 export const Architecture: React.FC = () => {
   const { mode, project } = useLiveProject();
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
+
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Solution Design Yet"
+        message="Start a new project to have our Solution Architect design the technical blueprint, data schema, and security architecture."
+      />
+    );
+  }
 
   const liveTechStack = [
     { label: 'Application Service', value: project?.architecture?.techStack.framework || 'FastAPI 0.115', icon: Server, color: 'text-teal-600 bg-teal-50' },
