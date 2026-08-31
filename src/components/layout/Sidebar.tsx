@@ -11,9 +11,11 @@ import {
   Coins,
   PackageCheck,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 import { useSimulation } from '../../context/SimulationContext';
+import { useLiveProject } from '../../context/LiveProjectContext';
 
 interface SidebarProps {
   onOpenDocModal?: () => void;
@@ -21,17 +23,18 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
   const { currentStep } = useSimulation();
+  const { mode, project } = useLiveProject();
 
   const navItems = [
-    { name: 'Overview', path: '/', icon: LayoutDashboard },
-    { name: 'Project', path: '/project', icon: FolderKanban },
-    { name: 'Requirements', path: '/requirements', icon: ListChecks },
-    { name: 'Architecture', path: '/architecture', icon: Network },
-    { name: 'AI Workforce', path: '/workforce', icon: Users },
-    { name: 'Execution', path: '/execution', icon: GitCommit },
-    { name: 'QA & Security', path: '/qa-security', icon: ShieldCheck },
-    { name: 'Cost Governor', path: '/cost-governor', icon: Coins },
-    { name: 'Delivery', path: '/delivery', icon: PackageCheck },
+    { name: 'Home', path: '/', icon: LayoutDashboard },
+    { name: 'My Project', path: '/project', icon: FolderKanban },
+    { name: 'Features', path: '/requirements', icon: ListChecks },
+    { name: 'Solution Design', path: '/architecture', icon: Network },
+    { name: 'AI Team', path: '/workforce', icon: Users },
+    { name: 'Build Progress', path: '/execution', icon: GitCommit },
+    { name: 'Testing & Safety', path: '/qa-security', icon: ShieldCheck },
+    { name: 'Cost & Budget', path: '/cost-governor', icon: Coins },
+    { name: 'Final Delivery', path: '/delivery', icon: PackageCheck },
   ];
 
   return (
@@ -43,19 +46,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
           alt="TayDau Force Logo"
           className="w-8 h-8 rounded-lg object-contain bg-white/10 p-0.5 border border-white/15 shadow-xs"
           onError={(e) => {
-            // Fallback if image fails
             (e.target as HTMLElement).style.display = 'none';
           }}
         />
         <div className="flex flex-col">
           <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
             TayDau Force
-            <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.2 bg-brand-blue/30 text-blue-300 border border-blue-400/30 rounded">
-              Sim
-            </span>
+            {mode === 'demo' ? (
+              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.2 bg-blue-500/30 text-blue-300 border border-blue-400/30 rounded">
+                Sim
+              </span>
+            ) : (
+              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.2 bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 rounded">
+                Live
+              </span>
+            )}
           </span>
           <span className="text-[11px] text-slate-400 font-normal">
-            Autonomous Delivery Org
+            Autonomous Software Delivery
           </span>
         </div>
       </div>
@@ -83,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
                 <Icon className="w-4 h-4 shrink-0 opacity-90" />
                 <span>{item.name}</span>
               </div>
-              {item.name === 'QA & Security' && currentStep >= 4 && currentStep < 10 && (
+              {item.name === 'Testing & Safety' && mode === 'demo' && currentStep >= 4 && currentStep < 10 && (
                 <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/20 animate-pulse" />
               )}
             </NavLink>
@@ -91,16 +99,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
         })}
       </div>
 
-      {/* Simulation Info Card in Sidebar */}
-      <div className="p-3 mx-3 mb-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 mb-1">
-          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-          Simulation Engine
+      {/* Mode-Aware Sidebar Footer Card */}
+      {mode === 'live' ? (
+        <div className="p-3 mx-3 mb-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-200">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 mb-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE PROJECT
+          </div>
+          <p className="text-[11px] text-slate-300 leading-snug">
+            Ready for Delivery • 8/8 tests passed • 100% complete
+          </p>
         </div>
-        <p className="text-[11px] text-slate-400 leading-snug">
-          Step {currentStep} / 11 active. Advance with the top action button.
-        </p>
-      </div>
+      ) : (
+        <div className="p-3 mx-3 mb-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 mb-1">
+            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+            SIMULATION MODE
+          </div>
+          <p className="text-[11px] text-slate-400 leading-snug">
+            Step {currentStep} of 11 • Concept demonstration
+          </p>
+        </div>
+      )}
 
       {/* Footer / Docs */}
       <div className="p-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">

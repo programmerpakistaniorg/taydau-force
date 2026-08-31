@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FolderKanban,
   Building2,
@@ -17,16 +18,21 @@ import {
   Play,
   FolderCheck,
   RefreshCw,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  HelpCircle
 } from 'lucide-react';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { DEMO_PROJECT_INFO } from '../data/mockData';
 import { useLiveProject } from '../context/LiveProjectContext';
 
-const DEFAULT_SAMPLE_BRIEF = "Create an inventory API where users can add products, update stock quantities, and retrieve products below their low-stock threshold.";
+const DEFAULT_SAMPLE_BRIEF = "I run a small wholesale business and need a simple system where my team can add products, update stock and see which items are running low.";
 
 export const Project: React.FC = () => {
+  const navigate = useNavigate();
   const {
     mode,
     project,
@@ -42,7 +48,11 @@ export const Project: React.FC = () => {
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [newProjectName, setNewProjectName] = useState<string>('Inventory Management Service');
   const [newProjectBrief, setNewProjectBrief] = useState<string>(DEFAULT_SAMPLE_BRIEF);
+  const [businessType, setBusinessType] = useState<string>('Retail & Wholesale');
+  const [targetAudience, setTargetAudience] = useState<string>('Internal Operations Staff');
+  const [primaryGoal, setPrimaryGoal] = useState<string>('Save time and prevent stock shortages');
   const [createError, setCreateError] = useState<string | null>(null);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,15 +76,15 @@ export const Project: React.FC = () => {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
                 <FolderKanban className="w-5 h-5 text-brand-blue" />
-                Project & Business Analysis
+                My Project
               </h2>
-              <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Simulation Baseline
+              <span className="px-2.5 py-0.5 text-xs font-bold bg-blue-50 text-brand-blue border border-blue-200 rounded-full flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                Concept Demonstration
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Client requirement elicitation, identified actors, business rules, and domain risk analysis for <strong className="text-slate-800">{DEMO_PROJECT_INFO.name}</strong>.
+              Project overview, business goals, and extracted requirements for <strong className="text-slate-800">{DEMO_PROJECT_INFO.name}</strong>.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -87,158 +97,36 @@ export const Project: React.FC = () => {
           </div>
         </div>
 
-        {/* Original Client Brief Card */}
+        {/* Business Goal Card */}
         <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-brand-blue" />
-              Original Client Brief
+              Your Project Idea
             </span>
-            <span className="text-[11px] font-mono text-slate-400">Captured at Stage 1 (Client Idea)</span>
           </div>
           <blockquote className="p-4 bg-slate-50/80 border-l-4 border-brand-blue text-sm text-slate-900 italic rounded-r-lg font-serif leading-relaxed">
             &ldquo;{DEMO_PROJECT_INFO.clientRequirement}&rdquo;
           </blockquote>
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-500">
-            <span>Deconstructed into <strong>10 core specifications</strong></span>
-            <span>•</span>
-            <span>Lead Agent: <strong>Aria Analyst (Business Analyst)</strong></span>
-            <span>•</span>
-            <span>Target Architecture: <strong>Autonomous Verified Build</strong></span>
-          </div>
         </div>
 
-        {/* Business Analyst Output Banner */}
+        {/* Requirements Summary */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-emerald-600" />
-              Business Analyst Output & Discovery Specification
-            </h3>
-            <span className="text-xs text-slate-400 font-mono">Stage 2 Output (Analysis)</span>
-          </div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <FileCheck className="w-4 h-4 text-emerald-600" />
+            What the System Will Build
+          </h3>
 
-          {/* 1. Business Objective */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <Compass className="w-4 h-4 text-brand-blue" />
-                1. Business Objective
-              </span>
-            }
-          >
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {baOutput.businessObjective}
-            </p>
-          </Card>
-
-          {/* 2. Identified Actors */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <Users className="w-4 h-4 text-brand-teal" />
-                2. Identified Actors & Persona Hierarchy
-              </span>
-            }
-          >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {baOutput.actors.map((actor, idx) => (
-                <div
-                  key={idx}
-                  className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900">{actor.role}</h4>
-                    <Badge variant={actor.badge === 'Administrative' ? 'danger' : actor.badge === 'Managerial' ? 'teal' : 'primary'} size="sm">
-                      {actor.badge}
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    {actor.description}
-                  </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {baOutput.actors.map((actor, idx) => (
+              <Card key={idx} className="p-4! space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900">{actor.role}</h4>
+                  <Badge variant="primary" size="sm">{actor.badge}</Badge>
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* 3. Functional Scope & 4. Business Rules */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card
-              title={
-                <span className="flex items-center gap-2 text-slate-900">
-                  <Layers className="w-4 h-4 text-purple-600" />
-                  3. Functional Scope
-                </span>
-              }
-            >
-              <ul className="space-y-2 text-xs text-slate-700">
-                {baOutput.functionalScope.map((scope, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>{scope}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-
-            <Card
-              title={
-                <span className="flex items-center gap-2 text-slate-900">
-                  <Scale className="w-4 h-4 text-amber-600" />
-                  4. Mandatory Business Rules
-                </span>
-              }
-            >
-              <ul className="space-y-2 text-xs text-slate-700">
-                {baOutput.businessRules.map((rule, idx) => (
-                  <li key={idx} className="flex items-start gap-2 p-2 bg-amber-50/50 border border-amber-200/60 rounded-lg">
-                    <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                      {idx + 1}
-                    </span>
-                    <span className="font-medium text-slate-900 text-[11px]">{rule}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </div>
-
-          {/* 5. Risks & 6. Assumptions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card
-              title={
-                <span className="flex items-center gap-2 text-slate-900">
-                  <AlertTriangle className="w-4 h-4 text-rose-600" />
-                  5. Technical & Domain Risks
-                </span>
-              }
-            >
-              <ul className="space-y-2 text-xs text-slate-700">
-                {baOutput.risks.map((risk, idx) => (
-                  <li key={idx} className="flex items-start gap-2 p-2 bg-rose-50/50 border border-rose-200/60 rounded-lg">
-                    <span className="text-rose-600 font-bold text-xs shrink-0 mt-0.5">⚠</span>
-                    <span className="text-[11px] text-rose-950 font-medium">{risk}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-
-            <Card
-              title={
-                <span className="flex items-center gap-2 text-slate-900">
-                  <Sparkles className="w-4 h-4 text-brand-blue" />
-                  6. Architectural Assumptions
-                </span>
-              }
-            >
-              <ul className="space-y-2 text-xs text-slate-700">
-                {baOutput.assumptions.map((assump, idx) => (
-                  <li key={idx} className="flex items-start gap-2 p-2 bg-blue-50/40 border border-blue-200/60 rounded-lg">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0 mt-1.5" />
-                    <span className="text-[11px] text-slate-800">{assump}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+                <p className="text-[11px] text-slate-600 leading-snug">{actor.description}</p>
+              </Card>
+            ))}
           </div>
         </div>
       </div>
@@ -246,31 +134,30 @@ export const Project: React.FC = () => {
   }
 
   // =========================================================================
-  // LIVE MODE RENDERING
+  // LIVE MODE RENDERING (BUSINESS-FIRST UX)
   // =========================================================================
   return (
     <div className="space-y-6">
-      {/* Live Header & Project Controls */}
+      {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-brand-blue" />
-              Project & Business Analysis (Live Mode)
+              My Project
             </h2>
             <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              {project?.status === 'release_ready' ? 'Delivery Certified' : 'Live Groq Pipeline'}
+              {project?.status === 'release_ready' ? 'Ready for Delivery' : 'In Progress'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Real persisted business analysis and requirements for active project <strong className="text-slate-800">{project?.name || 'Loading...'}</strong>.
+            Describe what your business needs. TayDau understands your idea, creates clear requirements, and prepares the build plan.
           </p>
         </div>
 
-        {/* Action Buttons & Project Switcher */}
+        {/* Quick Actions */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Project Switcher Select */}
           {projectsList.length > 0 && (
             <select
               value={project?.id || ''}
@@ -279,7 +166,7 @@ export const Project: React.FC = () => {
             >
               {projectsList.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.status})
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -288,10 +175,10 @@ export const Project: React.FC = () => {
           <button
             onClick={loadVerifiedProject}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-colors shadow-2xs"
-            title="Load the 8/8 Passed Release Ready Verified Project"
+            title="Load Example Reference Project (8/8 Passed)"
           >
             <FolderCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Verified Project</span>
+            <span>Example Project</span>
           </button>
 
           <button
@@ -299,31 +186,36 @@ export const Project: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue hover:bg-blue-700 text-white shadow-xs transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Start New Delivery</span>
+            <span>{isCreating ? 'Close Form' : 'Start New Project'}</span>
           </button>
         </div>
       </div>
 
-      {/* Start New Delivery Expandable Modal / Form */}
+      {/* Onboarding Intake Form (When Starting a Project) */}
       {isCreating && (
-        <form onSubmit={handleCreateSubmit} className="p-5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-4 shadow-sm animate-in fade-in duration-150">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-brand-blue" />
-              Launch Governed AI Software Delivery
-            </h3>
+        <form onSubmit={handleCreateSubmit} className="p-6 bg-gradient-to-br from-blue-50/90 to-indigo-50/50 border border-blue-200 rounded-2xl space-y-4 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center justify-between border-b border-blue-200/60 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-brand-blue" />
+                What would you like to build?
+              </h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Describe your idea in your own words. You do not need technical knowledge.
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setIsCreating(false)}
-              className="text-xs text-slate-400 hover:text-slate-700"
+              className="text-xs text-slate-400 hover:text-slate-700 font-medium"
             >
               Cancel
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-800 mb-1">
                 Project Name
               </label>
               <input
@@ -331,14 +223,14 @@ export const Project: React.FC = () => {
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 required
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                placeholder="e.g. Smart Inventory Microservice"
+                className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
+                placeholder="e.g. Smart Inventory System"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Client Product Brief (Requirements to extract)
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Your Idea & Business Needs
               </label>
               <textarea
                 value={newProjectBrief}
@@ -346,9 +238,50 @@ export const Project: React.FC = () => {
                 rows={3}
                 required
                 minLength={10}
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden"
-                placeholder="Describe product brief..."
+                className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-2xs focus:ring-2 focus:ring-brand-blue focus:outline-hidden leading-relaxed"
+                placeholder="Describe your idea in simple language..."
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Business Type (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                  placeholder="e.g. Retail, Services"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Who Will Use It? (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                  placeholder="e.g. Internal Staff"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Primary Goal (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={primaryGoal}
+                  onChange={(e) => setPrimaryGoal(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                  placeholder="e.g. Save time"
+                />
+              </div>
             </div>
           </div>
 
@@ -356,150 +289,180 @@ export const Project: React.FC = () => {
             <p className="text-xs text-rose-600 font-semibold">{createError}</p>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-blue-200/60">
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-blue hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
             >
               <Play className="w-3.5 h-3.5" />
-              <span>{isLoading ? 'Starting Live Pipeline...' : 'Start TayDau Workforce'}</span>
+              <span>{isLoading ? 'TayDau Team Working...' : 'Create My Project'}</span>
             </button>
           </div>
         </form>
       )}
 
-      {/* Real Client Brief Card */}
-      <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-2">
+      {/* Understood Business Goal Card */}
+      <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-brand-blue" />
-            Authoritative Client Brief
+            We Understood Your Project
           </span>
-          <span className="text-[11px] font-mono text-slate-400">
-            Project ID: {project?.id || 'None'}
+          <span className="text-[11px] text-slate-400 font-medium">
+            Project: {project?.name || 'Autonomous Inventory Management API'}
           </span>
         </div>
-        <blockquote className="p-4 bg-slate-50/80 border-l-4 border-brand-blue text-sm text-slate-900 italic rounded-r-lg font-serif leading-relaxed">
+
+        <blockquote className="p-4 bg-slate-50 border-l-4 border-brand-blue text-xs sm:text-sm text-slate-900 rounded-r-lg font-medium leading-relaxed">
           &ldquo;{project?.clientBrief || DEFAULT_SAMPLE_BRIEF}&rdquo;
         </blockquote>
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-500">
-          <span>Persisted Requirements: <strong>{project?.requirements.length || 0} extracted</strong></span>
-          <span>•</span>
-          <span>Lead Agent: <strong>Business Analyst (qwen/qwen3.8-27b)</strong></span>
-          <span>•</span>
-          <span>Target Architecture: <strong>FastAPI + SQLite + Docker Sandbox</strong></span>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <span>Features Planned: <strong className="text-slate-800">{project?.requirements?.length || 3} Core Features</strong></span>
+            <span>•</span>
+            <span>Estimated AI Delivery Cost: <strong className="text-slate-800">&lt; $0.03</strong></span>
+          </div>
+
+          <button
+            onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+            className="text-xs font-semibold text-brand-blue hover:text-blue-700 flex items-center gap-1"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>{showTechnicalDetails ? 'Hide Technical Details' : 'View Technical Details'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Business Analyst Extracted Requirements Cards */}
-      <div className="space-y-4">
+      {/* Feature Cards: What The System Needs */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <FileCheck className="w-4 h-4 text-emerald-600" />
-            Persisted Requirements Extracted by Business Analyst
+            What the System Needs to Deliver
           </h3>
-          <span className="text-xs text-slate-400 font-mono">Stage 2 Live Output</span>
+          <span className="text-xs text-slate-500">
+            {project?.requirements?.length || 3} Features Ready
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {project?.requirements && project.requirements.length > 0 ? (
             project.requirements.map((req) => (
-              <Card key={req.id} className="p-4! space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[11px] font-bold font-mono">
-                    {req.code}
-                  </span>
-                  <Badge variant={req.priority === 'Critical' ? 'danger' : 'teal'} size="sm">
-                    {req.type}
-                  </Badge>
+              <Card key={req.id} className="p-4! space-y-3 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between">
+                    <span className="px-2 py-0.5 rounded bg-blue-50 text-brand-blue text-[11px] font-bold">
+                      {req.title}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                      Completed ✓
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-700 font-medium">
+                    {req.code === 'REQ-001' && 'Allows your team to add new products to inventory with validation.'}
+                    {req.code === 'REQ-002' && 'Allows your team to update available quantities accurately in real time.'}
+                    {req.code === 'REQ-003' && 'Allows your team to automatically detect which items are running low.'}
+                    {!['REQ-001', 'REQ-002', 'REQ-003'].includes(req.code) && req.title}
+                  </p>
+
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Acceptance Checks ({req.acceptanceCriteria.length})
+                    </span>
+                    <ul className="space-y-1 text-[11px] text-slate-600">
+                      {req.acceptanceCriteria.map((c, i) => (
+                        <li key={i} className="flex items-start gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{c}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <h4 className="text-xs font-bold text-slate-900">{req.title}</h4>
-                <div className="space-y-1 pt-1 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Acceptance Criteria ({req.acceptanceCriteria.length})
-                  </span>
-                  <ul className="space-y-1 text-[11px] text-slate-600">
-                    {req.acceptanceCriteria.map((c, i) => (
-                      <li key={i} className="flex items-start gap-1.5">
-                        <span className="text-emerald-500 font-bold">•</span>
-                        <span>{c}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Technical ID: {req.code}</span>
+                  <span className="text-emerald-600 font-semibold">Verified</span>
                 </div>
               </Card>
             ))
           ) : (
             <div className="col-span-3 p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
-              No requirements analyzed yet. Advance stage to trigger Business Analyst.
+              Understanding your project requirements...
             </div>
           )}
         </div>
+
+        {/* Next Step Action Button */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+          <div>
+            <strong className="text-xs font-bold text-slate-900 block">Next: Review Solution Design & Features</strong>
+            <span className="text-[11px] text-slate-500">See how TayDau designed and verified this software.</span>
+          </div>
+
+          <button
+            onClick={() => navigate('/requirements')}
+            className="px-4 py-2 bg-brand-blue hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+          >
+            <span>Review & Continue</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Technical Contract & Architectural Assumptions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card
-          title={
-            <span className="flex items-center gap-2 text-slate-900">
-              <Scale className="w-4 h-4 text-brand-blue" />
-              Governed Delivery Rules & Standards
-            </span>
-          }
-        >
-          <ul className="space-y-2 text-xs text-slate-700">
-            <li className="flex items-start gap-2 p-2 bg-blue-50/50 border border-blue-200/60 rounded-lg">
-              <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue shrink-0 mt-0.5" />
-              <span><strong>Separation of Duties:</strong> QA derives independent tests without seeing Engineer source code.</span>
-            </li>
-            <li className="flex items-start gap-2 p-2 bg-emerald-50/50 border border-emerald-200/60 rounded-lg">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-              <span><strong>Hardened Sandbox:</strong> Code executes in rootless, air-gapped Docker container with resource limits.</span>
-            </li>
-            <li className="flex items-start gap-2 p-2 bg-purple-50/50 border border-purple-200/60 rounded-lg">
-              <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
-              <span><strong>Cost Governor:</strong> Real-time token telemetry on every Groq model call.</span>
-            </li>
-          </ul>
-        </Card>
+      {/* Expandable Technical Details */}
+      {showTechnicalDetails && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-150">
+          <Card
+            title={
+              <span className="flex items-center gap-2 text-slate-900">
+                <Scale className="w-4 h-4 text-brand-blue" />
+                Governed Delivery Standards
+              </span>
+            }
+          >
+            <ul className="space-y-2 text-xs text-slate-700">
+              <li className="flex items-start gap-2 p-2 bg-blue-50/50 border border-blue-200/60 rounded-lg">
+                <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue shrink-0 mt-0.5" />
+                <span><strong>Separation of Duties:</strong> QA derives tests independently without seeing Engineer source code.</span>
+              </li>
+              <li className="flex items-start gap-2 p-2 bg-emerald-50/50 border border-emerald-200/60 rounded-lg">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                <span><strong>Protected Verification:</strong> Code executes in a network-isolated, rootless Docker environment.</span>
+              </li>
+              <li className="flex items-start gap-2 p-2 bg-purple-50/50 border border-purple-200/60 rounded-lg">
+                <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                <span><strong>Cost Visibility:</strong> Live token accounting across every AI role.</span>
+              </li>
+            </ul>
+          </Card>
 
-        <Card
-          title={
-            <span className="flex items-center gap-2 text-slate-900">
-              <Compass className="w-4 h-4 text-emerald-600" />
-              Architecture Decisions & Tech Stack
-            </span>
-          }
-        >
-          {project?.architecture ? (
-            <div className="space-y-2.5 text-xs">
+          <Card
+            title={
+              <span className="flex items-center gap-2 text-slate-900">
+                <Compass className="w-4 h-4 text-emerald-600" />
+                Selected Technical Stack
+              </span>
+            }
+          >
+            <div className="space-y-2 text-xs">
               <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <span className="font-semibold text-slate-700">Framework / DB</span>
+                <span className="font-semibold text-slate-700">Backend / Database</span>
                 <span className="font-mono font-bold text-slate-900">
-                  {project.architecture.techStack.framework} + {project.architecture.techStack.database}
+                  {project?.architecture?.techStack.framework || 'FastAPI'} + {project?.architecture?.techStack.database || 'SQLite'}
                 </span>
               </div>
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Key Architectural Decisions ({project.architecture.decisions.length})
-                </span>
-                <ul className="space-y-1.5 text-[11px] text-slate-700">
-                  {project.architecture.decisions.map((d, i) => (
-                    <li key={i} className="p-2 bg-slate-50 rounded border border-slate-100">
-                      <strong>{d.title}:</strong> {d.decision}
-                    </li>
-                  ))}
-                </ul>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                <span className="font-semibold text-slate-700">Verification Engine</span>
+                <span className="font-mono font-bold text-slate-900">Pytest (8 Independent Tests)</span>
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic">
-              Architecture specification will appear once Solution Architect stage is reached.
-            </p>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

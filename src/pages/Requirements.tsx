@@ -115,15 +115,15 @@ export const Requirements: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <ListChecks className="w-5 h-5 text-brand-blue" />
-            Requirements & Traceability Matrix {mode === 'live' ? '(Live Mode)' : ''}
+            Features & Requirements {mode === 'live' ? '(Live Mode)' : ''}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Accountable verification matrix linking business requirements directly to acceptance criteria, assigned tasks, code artifacts, test suites, and QA sign-offs.
+            Review the capabilities planned for your software, their acceptance checks, and verification results.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="success" size="md">
-            {verifiedCount} / {requirements.length} Verified
+            {verifiedCount} of {requirements.length} Features Ready
           </Badge>
           <Badge variant="teal" size="md">
             100% Requirement Coverage

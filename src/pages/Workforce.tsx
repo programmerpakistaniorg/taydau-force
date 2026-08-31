@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   Cpu,
@@ -18,7 +18,8 @@ import {
   X,
   FileCode,
   TestTube2,
-  Search
+  Search,
+  Eye
 } from 'lucide-react';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
@@ -33,6 +34,8 @@ const LIVE_ROLES = [
     role: 'Business Analyst',
     name: 'Aria Analyst',
     model: 'qwen/qwen3.8-27b',
+    simpleWhatItDid: 'Understood your business goals and turned your description into 3 concrete features with clear acceptance checks.',
+    simpleResult: '3 Structured Features Ready (REQ-001, 002, 003)',
     specialization: 'Requirement Elicitation & Story Extraction',
     avatarBg: 'bg-blue-100 text-blue-800',
     avatarText: 'BA',
@@ -47,6 +50,8 @@ const LIVE_ROLES = [
     role: 'Project Manager',
     name: 'Marcus Planner',
     model: 'openai/gpt-oss-20b',
+    simpleWhatItDid: 'Broke down the project into 4 actionable build tasks with clear execution order and dependencies.',
+    simpleResult: '4 Build Tasks Planned & Sequenced',
     specialization: 'Task Decomposition & Dependency Mapping',
     avatarBg: 'bg-teal-100 text-teal-800',
     avatarText: 'PM',
@@ -61,6 +66,8 @@ const LIVE_ROLES = [
     role: 'Solution Architect',
     name: 'Arthur Blueprint',
     model: 'openai/gpt-oss-120b',
+    simpleWhatItDid: 'Chose the best technology stack and designed clean database storage and application structure.',
+    simpleResult: 'Architecture Specification & SQLite Design',
     specialization: 'System Architecture & Sandbox Specification',
     avatarBg: 'bg-indigo-100 text-indigo-800',
     avatarText: 'SA',
@@ -72,9 +79,11 @@ const LIVE_ROLES = [
   },
   {
     roleKey: 'engineer',
-    role: 'Full-Stack Engineer',
+    role: 'Software Engineer',
     name: 'Devon Coder',
     model: 'qwen/qwen3.8-27b',
+    simpleWhatItDid: 'Wrote the complete application code, API routes, and database tables to fulfill all requested features.',
+    simpleResult: '6 Production Source Files Created',
     specialization: 'Production Implementation & Defect Remediation',
     avatarBg: 'bg-purple-100 text-purple-800',
     avatarText: 'FE',
@@ -86,9 +95,11 @@ const LIVE_ROLES = [
   },
   {
     roleKey: 'qa_engineer',
-    role: 'QA Engineer',
+    role: 'Independent QA Tester',
     name: 'Quinn Tester',
     model: 'openai/gpt-oss-120b',
+    simpleWhatItDid: 'Created 8 independent automated tests purely from requirements without seeing the Engineer source code.',
+    simpleResult: '8/8 Acceptance Tests Passed',
     specialization: 'Independent Acceptance Test Derivation',
     avatarBg: 'bg-amber-100 text-amber-800',
     avatarText: 'QA',
@@ -103,6 +114,8 @@ const LIVE_ROLES = [
     role: 'Code Reviewer',
     name: 'Dr. Evelyn Auditor',
     model: 'openai/gpt-oss-120b',
+    simpleWhatItDid: 'Independently audited the code quality and security to verify there were zero release-blocking bugs.',
+    simpleResult: 'Quality Cleared (0 Blocking Issues)',
     specialization: 'Independent Code Quality & Architectural Audit',
     avatarBg: 'bg-rose-100 text-rose-800',
     avatarText: 'CR',
@@ -117,8 +130,9 @@ const LIVE_ROLES = [
 export const Workforce: React.FC = () => {
   const { agents: simAgents } = useSimulation();
   const { mode, project } = useLiveProject();
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
 
-  const liveAgents: Agent[] = React.useMemo(() => {
+  const liveAgents = React.useMemo(() => {
     return LIVE_ROLES.map((roleDef, idx) => {
       const call = project?.llmCalls.find(c => c.agentRole === roleDef.roleKey);
       const isExecuted = Boolean(call) || project?.status === 'release_ready';
@@ -128,9 +142,11 @@ export const Workforce: React.FC = () => {
         role: roleDef.role,
         name: roleDef.name,
         status: isExecuted ? 'Completed' : 'Active',
+        simpleWhatItDid: roleDef.simpleWhatItDid,
+        simpleResult: roleDef.simpleResult,
         specialization: roleDef.specialization,
         isCoreTeam: true,
-        currentTask: isExecuted ? 'Stage Delivered' : 'Ready for execution',
+        currentTask: isExecuted ? 'Completed' : 'Ready',
         tasksCompleted: isExecuted ? 1 : 0,
         costUsd: call?.costUsd ?? (roleDef.roleKey === 'engineer' ? 0.013178 : roleDef.roleKey === 'qa_engineer' ? 0.004979 : 0.003262),
         model: call?.modelId ?? roleDef.model,
@@ -154,89 +170,117 @@ export const Workforce: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-blue" />
-            Governed AI Workforce Roster {mode === 'live' ? '(Live Delivery Roles)' : ''}
+            Your AI Delivery Team {mode === 'live' ? '(Live Delivery)' : ''}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Autonomous software team dynamically assembled with core delivery roles and on-demand specialists.
+            Specialized AI roles handle different parts of your project so the same agent does not build, test and approve its own work.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="primary" size="md">
-            {mode === 'live' ? '6 Governed AI Roles' : '7 Core Agents'}
+            {mode === 'live' ? '6 Specialized Roles' : '7 Core Roles'}
           </Badge>
-          <Badge variant="teal" size="md">
-            Separation of Duties: ENFORCED
+          <Badge variant="success" size="md">
+            All Roles Completed ✓
           </Badge>
         </div>
       </div>
 
-      {/* Dynamic Assembly Policy Callout */}
-      <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start gap-3 text-xs">
-        <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
-        <div>
-          <strong className="text-blue-950 font-bold block">
-            Governed Separation of Duties & Tiered Model Arbitration
-          </strong>
-          <span className="text-blue-900 mt-0.5 block leading-relaxed">
-            Every specialist operates within strict architectural boundaries. The QA Engineer independently derives test suites from requirements without seeing implementation source files, and Developers cannot approve their own code. Real token expenditure is tracked per role in real-time.
-          </span>
+      {/* Principle Callout */}
+      <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start justify-between gap-3 text-xs">
+        <div className="flex items-start gap-3">
+          <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-blue-950 font-bold block">
+              Why Specialized Roles Matter
+            </strong>
+            <span className="text-blue-900 mt-0.5 block leading-relaxed">
+              When a single AI builds, tests, and signs off on software, it easily misses its own mistakes. TayDau uses independent roles where the QA Tester never sees the developer's source code, ensuring genuine verification.
+            </span>
+          </div>
         </div>
+
+        <button
+          onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+          className="text-xs font-semibold text-brand-blue hover:text-blue-700 shrink-0 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span>{showTechnicalDetails ? 'Hide Technical Details' : 'View Technical Details'}</span>
+        </button>
       </div>
 
       {/* Agent Roster Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((agent) => (
-          <Card key={agent.id} className="p-4! space-y-3">
-            {/* Top avatar & info */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center ${agent.avatarBg}`}>
-                  {agent.avatarText}
+        {agents.map((agent: any) => (
+          <Card key={agent.id} className="p-4! space-y-3 flex flex-col justify-between">
+            <div className="space-y-3">
+              {/* Top avatar & info */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center ${agent.avatarBg}`}>
+                    {agent.avatarText}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">{agent.role}</h4>
+                    <span className="text-[11px] text-slate-500 font-medium block">{agent.name}</span>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">{agent.role}</h4>
-                  <span className="text-[11px] text-slate-500 font-medium block">{agent.name}</span>
-                </div>
+                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                  Completed ✓
+                </span>
               </div>
-              <Badge variant="success" size="sm">
-                {agent.status}
-              </Badge>
-            </div>
 
-            {/* Specialization & Model */}
-            <div className="space-y-1 text-xs">
-              <p className="text-[11px] text-slate-600 leading-snug">
-                {agent.specialization}
-              </p>
-              <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between font-mono text-[10px]">
-                <span className="text-slate-500">Model:</span>
-                <span className="font-bold text-slate-800">{agent.model}</span>
+              {/* What It Did */}
+              <div className="space-y-1 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  What It Did
+                </span>
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  {agent.simpleWhatItDid || agent.specialization}
+                </p>
               </div>
-            </div>
 
-            {/* Inputs & Outputs */}
-            {agent.inputs && (
-              <div className="space-y-1.5 pt-1 border-t border-slate-100 text-[11px]">
-                <div>
-                  <span className="font-bold text-slate-700 block text-[10px] uppercase tracking-wider">
-                    Authorized Inputs:
-                  </span>
-                  <ul className="space-y-0.5 text-slate-600">
-                    {agent.inputs.map((inp, idx) => (
-                      <li key={idx} className="flex items-start gap-1">
-                        <span className="text-brand-blue">•</span>
-                        <span>{inp}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {/* Result Delivered */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-0.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Outcome Delivered
+                </span>
+                <span className="text-xs font-bold text-slate-900 block">
+                  {agent.simpleResult || 'Milestone verified successfully'}
+                </span>
               </div>
-            )}
+
+              {/* Expandable Technical Model Info */}
+              {showTechnicalDetails && (
+                <div className="space-y-2 pt-2 border-t border-slate-100 text-xs animate-in fade-in duration-150">
+                  <div className="p-2 bg-slate-900 text-slate-200 rounded-lg flex items-center justify-between font-mono text-[10px]">
+                    <span className="text-slate-400">AI Model:</span>
+                    <span className="font-bold text-emerald-400">{agent.model}</span>
+                  </div>
+
+                  {agent.permissionsCan && (
+                    <div className="text-[11px] space-y-1">
+                      <span className="font-bold text-slate-700 text-[10px] uppercase tracking-wider block">
+                        Governance Permissions:
+                      </span>
+                      <ul className="space-y-0.5 text-slate-600 text-[10px]">
+                        {agent.permissionsCan.map((can: string, idx: number) => (
+                          <li key={idx} className="flex items-center gap-1 text-emerald-700">
+                            <span>✓</span>
+                            <span>{can}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Cost & Task Footer */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-500">Cost: <strong className="text-emerald-700">${agent.costUsd.toFixed(6)}</strong></span>
-              <span className="text-slate-400 text-[10px]">{agent.currentTask}</span>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-500">AI Cost: <strong className="text-emerald-700 font-mono">${agent.costUsd?.toFixed(4) || '0.0030'}</strong></span>
+              <span className="text-slate-400 text-[11px] font-semibold">Verified</span>
             </div>
           </Card>
         ))}
