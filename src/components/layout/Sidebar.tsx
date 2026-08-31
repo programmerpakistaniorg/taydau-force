@@ -50,17 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenDocModal }) => {
           }}
         />
         <div className="flex flex-col">
-          <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
+          <span className="text-base font-bold tracking-tight text-white">
             TayDau Force
-            {mode === 'demo' ? (
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.2 bg-blue-500/30 text-blue-300 border border-blue-400/30 rounded">
-                Sim
-              </span>
-            ) : (
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.2 bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 rounded">
-                Live
-              </span>
-            )}
           </span>
           <span className="text-[11px] text-slate-400 font-normal">
             Autonomous Software Delivery
