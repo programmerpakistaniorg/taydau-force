@@ -105,5 +105,18 @@ export async function runEngineerAgent(
     }
   );
 
+  const validTaskCodes = new Set(tasks.map((t) => t.code));
+  const defaultTaskCode = tasks[0]?.code || 'TASK-001';
+  for (const file of result.files) {
+    file.relatedTaskCodes = (file.relatedTaskCodes || [])
+      .filter((tc) => validTaskCodes.has(tc));
+    if (file.relatedTaskCodes.length === 0) {
+      file.relatedTaskCodes = [defaultTaskCode];
+    }
+  }
+  if (result.taskCoverage) {
+    result.taskCoverage = result.taskCoverage.filter((tc) => validTaskCodes.has(tc.taskCode));
+  }
+
   return result;
 }

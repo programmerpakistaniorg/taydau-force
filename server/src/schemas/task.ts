@@ -1,15 +1,24 @@
 import { z } from 'zod';
 import { ClarificationQuestionSchema } from './design-spec.js';
 
+const normalizeCode = (prefix: string) => (val: string): string => {
+  const match = val.match(new RegExp(`^${prefix}[-_]?(\\d+)$`, 'i'));
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return `${prefix}-${String(num).padStart(3, '0')}`;
+  }
+  return val;
+};
+
 export const TaskOutputSchema = z.object({
-  code: z.string().regex(/^TASK-\d{3}$/, 'Must be TASK-XXX format'),
-  title: z.string().min(5).max(200),
-  description: z.string().min(10).max(1000),
-  requirementCode: z.string().regex(/^REQ-\d{3}$/, 'Must reference REQ-XXX format'),
+  code: z.string().min(3).max(50).transform(normalizeCode('TASK')),
+  title: z.string().min(3).max(200),
+  description: z.string().min(5).max(1000),
+  requirementCode: z.string().min(3).max(50).transform(normalizeCode('REQ')),
   assignedRole: z.string().min(3).max(100),
   priority: z.enum(['Critical', 'High', 'Medium', 'Low']),
   dependencies: z.array(z.string()),
-  acceptanceIntent: z.string().min(10).max(500),
+  acceptanceIntent: z.string().min(5).max(500),
 });
 
 export const PMDeliveryPlanSchema = z.object({
