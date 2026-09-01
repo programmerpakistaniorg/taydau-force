@@ -144,24 +144,23 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []);
 
-  // Poll while stage_status is 'running' or 'pending'
+  // Continuous polling while live project is active and not completed/failed
   useEffect(() => {
-    if (mode !== 'live' || !activeProjectId || !project) {
+    if (mode !== 'live' || !activeProjectId) {
       setIsPolling(false);
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
       return;
     }
 
-    const isRunning =
-      project.workflow?.stageStatus === 'running' ||
-      project.workflow?.stageStatus === 'pending' ||
-      project.status === 'analyzing' ||
-      project.status === 'planning' ||
-      project.status === 'architecting' ||
-      project.status === 'implementing' ||
-      project.status === 'verifying';
+    const isProjectActive =
+      project?.workflow?.stageStatus !== 'completed' &&
+      project?.workflow?.stageStatus !== 'failed' &&
+      project?.workflow?.stage !== 'completed';
 
-    if (isRunning) {
+    if (isProjectActive) {
       setIsPolling(true);
       if (!pollTimerRef.current) {
         pollTimerRef.current = setInterval(async () => {
@@ -169,20 +168,23 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
             const data = await api.fetchProject(activeProjectId);
             setProject(data);
 
-            const stillRunning =
-              data.workflow?.stageStatus === 'running' ||
-              data.workflow?.stageStatus === 'pending';
+            const stillActive =
+              data.workflow?.stageStatus !== 'completed' &&
+              data.workflow?.stageStatus !== 'failed' &&
+              data.workflow?.stage !== 'completed';
 
-            if (!stillRunning) {
-              clearInterval(pollTimerRef.current);
-              pollTimerRef.current = null;
+            if (!stillActive) {
+              if (pollTimerRef.current) {
+                clearInterval(pollTimerRef.current);
+                pollTimerRef.current = null;
+              }
               setIsPolling(false);
               loadProjectsList();
             }
           } catch (err) {
             console.error('Polling error:', err);
           }
-        }, 2500);
+        }, 2000);
       }
     } else {
       setIsPolling(false);
@@ -198,7 +200,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         pollTimerRef.current = null;
       }
     };
-  }, [mode, activeProjectId, project?.workflow?.stageStatus, project?.status, loadProjectsList]);
+  }, [mode, activeProjectId, project?.workflow?.stageStatus, project?.workflow?.stage, loadProjectsList]);
 
   // Initial load
   useEffect(() => {
