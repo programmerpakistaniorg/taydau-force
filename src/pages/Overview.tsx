@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Sparkles,
   CheckCircle2,
@@ -25,7 +25,16 @@ import {
   FileText,
   Clock,
   Terminal,
-  Activity
+  Activity,
+  ChevronDown,
+  Menu,
+  PlusCircle,
+  CheckCircle,
+  FileCode,
+  ShieldAlert,
+  Boxes,
+  Workflow as WorkflowIcon,
+  Play
 } from 'lucide-react';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { useSimulation } from '../context/SimulationContext';
@@ -53,10 +62,16 @@ export const Overview: React.FC = () => {
 
   const { resetSimulation } = useSimulation();
 
-  // Local form state
+  // Local form state & project creation mode
   const [projectName, setProjectName] = useState<string>('');
   const [projectBrief, setProjectBrief] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isCreatingNewProject, setIsCreatingNewProject] = useState<boolean>(false);
+
+  // Workspace dropdown & mobile menu state
+  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const workspaceDropdownRef = useRef<HTMLDivElement>(null);
 
   // Question modal state & auto-open tracking
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
@@ -72,6 +87,20 @@ export const Overview: React.FC = () => {
   const progress = workflow?.progress ?? 0;
   const pendingInteractions = project?.pendingInteractions || [];
   const pendingApproval = project?.pendingApproval || null;
+
+  // Close workspace dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        workspaceDropdownRef.current &&
+        !workspaceDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsWorkspaceDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Auto-open question modal ONCE per new batch of interaction IDs
   useEffect(() => {
@@ -97,6 +126,7 @@ export const Overview: React.FC = () => {
       await createProject(name, projectBrief.trim());
       setProjectBrief('');
       setProjectName('');
+      setIsCreatingNewProject(false);
     } catch (err) {
       console.error('Failed to create project:', err);
     } finally {
@@ -104,329 +134,770 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Cost and Token metrics
-  const costUsed = hasProject ? (project?.costSummary?.totalCostUsed ?? 0) : 0;
-  const budgetLimit = 50.0;
-  const totalTokens = hasProject
-    ? ((project?.costSummary?.totalInputTokens ?? 0) + (project?.costSummary?.totalOutputTokens ?? 0))
-    : 0;
-  const tokenLimit = 500000;
-
-  // Specialists workforce mapping
-  const requiredRoles = workflow?.requiredRoles || [
-    'business_analyst',
-    'project_manager',
-    'ui_ux_designer',
-    'solution_architect',
-    'engineer',
-    'code_reviewer',
-    'qa_engineer'
-  ];
-
-  const getRoleStatus = (roleKey: RoleKey): { label: string; bg: string; text: string; dot: string } => {
-    if (!hasProject) {
-      return { label: 'Available', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-    }
-
-    if (!requiredRoles.includes(roleKey)) {
-      return { label: 'Not Required', bg: 'bg-zinc-100', text: 'text-zinc-500', dot: 'bg-zinc-400' };
-    }
-
-    if (stageStatus === 'failed' && workflow?.activeRole === roleKey) {
-      return { label: 'Needs Attention', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' };
-    }
-
-    // Role specific completion & working status mapping
-    switch (roleKey) {
-      case 'business_analyst':
-        if (['project_planning', 'ui_ux_design', 'technical_architecture', 'implementation', 'code_review', 'independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'business_analysis' || stage === 'requirements_review') {
-          if (stageStatus === 'waiting_for_client') return { label: 'Waiting for You', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' };
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Ready', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'project_manager':
-        if (['ui_ux_design', 'technical_architecture', 'implementation', 'code_review', 'independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'project_planning') {
-          if (stageStatus === 'waiting_for_client') return { label: 'Waiting for You', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' };
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'ui_ux_designer':
-        if (['technical_architecture', 'implementation', 'code_review', 'independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'ui_ux_design' || stage === 'design_review') {
-          if (stageStatus === 'waiting_for_client') return { label: 'Waiting for You', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' };
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'solution_architect':
-        if (['implementation', 'code_review', 'independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'technical_architecture') {
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'engineer':
-        if (['code_review', 'independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'implementation') {
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'code_reviewer':
-        if (['independent_qa', 'release_evaluation', 'completed'].includes(stage)) {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'code_review') {
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      case 'qa_engineer':
-        if (stage === 'release_evaluation' || stage === 'completed') {
-          return { label: 'Completed ✓', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' };
-        }
-        if (stage === 'independent_qa') {
-          return { label: 'Working', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
-        }
-        return { label: 'Waiting', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
-
-      default:
-        return { label: 'Ready', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
+  // Submit decision for a specific interaction
+  const handleAnswerInteraction = async (interactionId: string, answer: any) => {
+    try {
+      await answerInteraction(interactionId, answer);
+    } catch (err) {
+      console.error('Failed to answer interaction:', err);
     }
   };
 
-  // Progression Milestones
-  const PROGRESSION_MILESTONES = [
-    { key: 'understand', label: 'Understand', targetProgress: 15, isApproval: false },
-    { key: 'req_gate', label: 'Req Approval', targetProgress: 25, isApproval: true },
-    { key: 'plan', label: 'Plan', targetProgress: 35, isApproval: false },
-    { key: 'design', label: 'Design', targetProgress: 45, isApproval: false },
-    { key: 'design_gate', label: 'Design Approval', targetProgress: 50, isApproval: true },
-    { key: 'build', label: 'Build', targetProgress: 70, isApproval: false },
-    { key: 'review', label: 'Review & QA', targetProgress: 85, isApproval: false },
-    { key: 'deliver', label: 'Deliver', targetProgress: 100, isApproval: true }
+  // Approve pending baseline or design spec
+  const handleApprove = async () => {
+    if (!pendingApproval) return;
+    try {
+      await approveRequest(pendingApproval.id);
+      setIsApprovalModalOpen(false);
+    } catch (err) {
+      console.error('Failed to approve request:', err);
+    }
+  };
+
+  // Request changes with feedback
+  const handleRequestChanges = async (feedback: string) => {
+    if (!pendingApproval) return;
+    try {
+      await requestChanges(pendingApproval.id, feedback);
+      setIsApprovalModalOpen(false);
+    } catch (err) {
+      console.error('Failed to request changes:', err);
+    }
+  };
+
+  // Handle retry on failure
+  const handleRetry = async () => {
+    try {
+      await retryStage();
+    } catch (err) {
+      console.error('Failed to retry stage:', err);
+    }
+  };
+
+  // Telemetry: sum real tokens & cost from current project
+  const totalCost = Number(project?.costSummary?.totalCostUsed ?? 0);
+  const totalTokens =
+    project?.llmCalls && project.llmCalls.length > 0
+      ? project.llmCalls.reduce(
+          (acc: number, call: any) =>
+            acc + (Number(call.inputTokens) || 0) + (Number(call.outputTokens) || 0),
+          0
+        )
+      : (Number(project?.costSummary?.totalInputTokens ?? 0) + Number(project?.costSummary?.totalOutputTokens ?? 0));
+
+  // Latest design wireframe artifact
+  const latestDesignSpec = project?.designSpecs?.[0] || null;
+  const latestDesignArtifact = project?.designArtifacts?.[0] || null;
+
+  // Workspace Navigation Items
+  const workspaceLinks = [
+    { label: 'My Project', path: '/project', desc: 'Project Overview & Team Coordination' },
+    { label: 'Features', path: '/requirements', desc: 'Requirements Baseline & User Stories' },
+    { label: 'Solution Design', path: '/architecture', desc: 'System Architecture & Schema Specs' },
+    { label: 'AI Team', path: '/workforce', desc: 'Autonomous Specialists & Activity Log' },
+    { label: 'Build Progress', path: '/execution', desc: 'Task Execution & Code Artifacts' },
+    { label: 'Testing & Safety', path: '/qa-security', desc: 'Automated QA & Threat Scans' },
+    { label: 'Cost & Budget', path: '/cost-governor', desc: 'Token Telemetry & Cost Governor' },
+    { label: 'Final Delivery', path: '/delivery', desc: 'Release Readiness & Verification' },
   ];
 
-  const latestDesign = project?.designSpecs?.[0];
-  const isCompleted = progress === 100 || stage === 'completed' || stageStatus === 'completed';
+  // Derive Canonical Stage Information
+  const getStageDisplay = () => {
+    if (!hasProject) {
+      return {
+        title: 'Ready for Project Brief',
+        subtitle: 'Enter your idea above to initiate autonomous team execution.',
+        activeAgent: 'Aria Analyst',
+        badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
+      };
+    }
+    switch (stage) {
+      case 'business_analysis':
+        return {
+          title: 'Understanding Your Business Needs',
+          subtitle: 'Aria Analyst is extracting testable functional requirements and clarifying boundaries.',
+          activeAgent: 'Aria Analyst',
+          badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        };
+      case 'requirements_review':
+        return {
+          title: 'Requirements Baseline Ready for Approval',
+          subtitle: 'Aria has synthesized your functional requirements into testable acceptance criteria.',
+          activeAgent: 'Aria Analyst',
+          badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
+        };
+      case 'project_planning':
+        return {
+          title: 'Planning Delivery Roadmap',
+          subtitle: 'Marcus Planner is sequencing milestones, dependency tasks, and delivery phases.',
+          activeAgent: 'Marcus Planner',
+          badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+        };
+      case 'ui_ux_design':
+        return {
+          title: 'Designing User Experience & Wireframes',
+          subtitle: 'Sofia Designer is generating interactive screen layouts, component tokens, and user journeys.',
+          activeAgent: 'Sofia Designer',
+          badgeColor: 'bg-pink-50 text-pink-700 border-pink-200',
+        };
+      case 'design_review':
+        return {
+          title: 'Interactive Design Wireframes Ready for Review',
+          subtitle: 'Sofia has crafted your screen designs and visual token system. Review to proceed.',
+          activeAgent: 'Sofia Designer',
+          badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
+        };
+      case 'architecture':
+        return {
+          title: 'Preparing Technical Solution & Schema',
+          subtitle: 'Arthur Blueprint is generating database schemas, API contracts, and security boundaries.',
+          activeAgent: 'Arthur Blueprint',
+          badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+        };
+      case 'engineering':
+        return {
+          title: 'Building Your Application',
+          subtitle: 'Devon Coder is generating verified implementation modules and frontend components.',
+          activeAgent: 'Devon Coder',
+          badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        };
+      case 'code_review':
+        return {
+          title: 'Auditing Architectural Compliance',
+          subtitle: 'Dr. Evelyn Vance is reviewing code quality, type correctness, and maintainability.',
+          activeAgent: 'Dr. Evelyn Vance',
+          badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+        };
+      case 'testing':
+        return {
+          title: 'Independently Testing Software',
+          subtitle: 'Quinn Quality is running isolated test suites in Docker and verifying acceptance criteria.',
+          activeAgent: 'Quinn Quality',
+          badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+        };
+      case 'completed':
+        return {
+          title: 'Software Verified & Ready for Delivery',
+          subtitle: 'All milestones, code modules, and independent tests have completed with 100% verification.',
+          activeAgent: 'TayDau Delivery Organization',
+          badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        };
+      default:
+        return {
+          title: `Autonomous Execution (${stage.replace(/_/g, ' ')})`,
+          subtitle: 'The delivery team is executing workstreams autonomously.',
+          activeAgent: 'TayDau Force Team',
+          badgeColor: 'bg-slate-50 text-slate-700 border-slate-200',
+        };
+    }
+  };
+
+  const currentStageInfo = getStageDisplay();
+
+  // Dynamic Specialist Role Status Calculation (100% Evidence-Driven)
+  const getRoleStatus = (roleKey: RoleKey) => {
+    if (!hasProject) {
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    const currentActiveRole = workflow?.activeRole;
+
+    if (stageStatus === 'failed') {
+      if (currentActiveRole === roleKey) {
+        return { label: 'Needs Attention', state: 'failed', color: 'red' };
+      }
+    }
+
+    if (stageStatus === 'waiting_for_client') {
+      if (roleKey === 'business_analyst' && (stage === 'business_analysis' || stage === 'requirements_review')) {
+        return { label: pendingApproval ? 'Review Ready' : 'Waiting for You', state: 'waiting_for_client', color: 'amber' };
+      }
+      if (roleKey === 'ui_ux_designer' && (stage === 'ui_ux_design' || stage === 'design_review')) {
+        return { label: pendingApproval ? 'Review Ready' : 'Waiting for You', state: 'waiting_for_client', color: 'amber' };
+      }
+      if (roleKey === 'project_manager' && stage === 'project_planning' && pendingInteractions.length > 0) {
+        return { label: 'Waiting for You', state: 'waiting_for_client', color: 'amber' };
+      }
+    }
+
+    // Role specific completion checks based on real persisted data
+    if (roleKey === 'business_analyst') {
+      if (project?.requirementBaselines && project.requirementBaselines.length > 0) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'business_analysis' || stage === 'requirements_review') {
+        return { label: 'Working', state: 'running', color: 'indigo' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'project_manager') {
+      if (project?.tasks && project.tasks.length > 0) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'project_planning') {
+        return { label: 'Working', state: 'running', color: 'blue' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'ui_ux_designer') {
+      if (project?.designSpecs && project.designSpecs.length > 0) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'ui_ux_design' || stage === 'design_review') {
+        return { label: 'Working', state: 'running', color: 'pink' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'solution_architect') {
+      if (project?.architecture) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'architecture') {
+        return { label: 'Working', state: 'running', color: 'cyan' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'engineer') {
+      if (project?.codeArtifacts && project.codeArtifacts.length > 0) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'engineering') {
+        return { label: 'Working', state: 'running', color: 'emerald' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'code_reviewer') {
+      if (project?.codeReview) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'code_review') {
+        return { label: 'Working', state: 'running', color: 'amber' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    if (roleKey === 'qa_engineer') {
+      if (project?.qaSuite || (project?.qaTestArtifacts && project.qaTestArtifacts.length > 0)) {
+        return { label: 'Completed ✓', state: 'completed', color: 'emerald' };
+      }
+      if (stage === 'testing') {
+        return { label: 'Working', state: 'running', color: 'purple' };
+      }
+      return { label: 'Available', state: 'available', color: 'slate' };
+    }
+
+    return { label: 'Available', state: 'available', color: 'slate' };
+  };
+
+  // Coordinated Team Specialist Definitions
+  const teamSpecialists: {
+    key: RoleKey;
+    name: string;
+    roleName: string;
+    roleDesc: string;
+    initials: string;
+    accentColor: string;
+  }[] = [
+    {
+      key: 'ui_ux_designer',
+      name: 'Sofia Designer',
+      roleName: 'UI/UX Designer',
+      roleDesc: 'Design System & Wireframes',
+      initials: 'SD',
+      accentColor: 'from-pink-500 to-rose-500',
+    },
+    {
+      key: 'project_manager',
+      name: 'Marcus Planner',
+      roleName: 'Project Manager',
+      roleDesc: 'Roadmap & Task Sequencing',
+      initials: 'MP',
+      accentColor: 'from-blue-500 to-indigo-500',
+    },
+    {
+      key: 'solution_architect',
+      name: 'Arthur Blueprint',
+      roleName: 'Solution Architect',
+      roleDesc: 'System Architecture & Schema',
+      initials: 'AB',
+      accentColor: 'from-cyan-500 to-teal-500',
+    },
+    {
+      key: 'business_analyst',
+      name: 'Aria Analyst',
+      roleName: 'Business Analyst',
+      roleDesc: 'Requirements & User Stories',
+      initials: 'AA',
+      accentColor: 'from-violet-500 to-purple-500',
+    },
+    {
+      key: 'engineer',
+      name: 'Devon Coder',
+      roleName: 'Full-Stack Engineer',
+      roleDesc: 'Code Implementation',
+      initials: 'DC',
+      accentColor: 'from-emerald-500 to-teal-600',
+    },
+    {
+      key: 'code_reviewer',
+      name: 'Dr. Evelyn Vance',
+      roleName: 'Code Reviewer',
+      roleDesc: 'Quality & Security Audit',
+      initials: 'EV',
+      accentColor: 'from-amber-500 to-orange-500',
+    },
+    {
+      key: 'qa_engineer',
+      name: 'Quinn Quality',
+      roleName: 'Independent QA',
+      roleDesc: 'Automated Docker Verification',
+      initials: 'QQ',
+      accentColor: 'from-purple-500 to-indigo-600',
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] text-[#172033] flex flex-col font-sans">
-      {/* SECTION 1 — TOP HEADER */}
-      <header className="h-[72px] px-6 lg:px-12 bg-gradient-to-r from-[#07152D] via-[#0A1D3B] to-[#07152D] text-white flex items-center justify-between border-b border-slate-800 sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center shadow-inner">
-            <ShieldCheck className="w-5 h-5 text-blue-400" />
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      {/* ========================================================================= */}
+      {/* 1. TOP DARK NAVY HEADER (Single Header with Workspace Navigation) */}
+      {/* ========================================================================= */}
+      <header className="bg-[#07152D] text-white border-b border-slate-800/80 sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3.5 shadow-md">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {/* Brand Logo & Tagline */}
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-400 p-[1.5px] shadow-sm">
+                <div className="w-full h-full bg-[#07152D] rounded-[7px] flex items-center justify-center font-black text-white text-xs tracking-tighter group-hover:bg-opacity-90 transition-all">
+                  TD
+                </div>
+              </div>
+              <div>
+                <div className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
+                  TayDau Force
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    MVP
+                  </span>
+                </div>
+              </div>
+            </Link>
+            <span className="hidden md:inline-block text-slate-500 text-xs pl-2 border-l border-slate-700">
+              Autonomous Software Delivery Organization
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-base tracking-tight text-white">TayDau Force</span>
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                hasProject
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-              }`}>
-                ● {hasProject ? 'LIVE PROJECT' : 'LIVE MODE'}
-              </span>
+
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-6 text-xs font-medium text-slate-300">
+            <a href="#how-it-works" className="hover:text-white transition-colors">
+              How It Works
+            </a>
+            <a href="#ai-team" className="hover:text-white transition-colors">
+              AI Team
+            </a>
+            <a href="#why-taydau" className="hover:text-white transition-colors">
+              Why TayDau
+            </a>
+          </nav>
+
+          {/* Header Action CTAs & Workspace Bridge */}
+          <div className="flex items-center gap-2.5">
+            {/* Simulation Switcher */}
+            <button
+              type="button"
+              onClick={() => {
+                if (mode === 'live') {
+                  setMode('demo');
+                } else {
+                  setMode('live');
+                }
+              }}
+              className="text-xs px-2.5 py-1.5 rounded-lg font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-700/60 transition-all cursor-pointer"
+            >
+              {mode === 'live' ? 'Switch to Simulation' : 'Switch to Live'}
+            </button>
+
+            {/* Open Workspace Dropdown */}
+            <div className="relative" ref={workspaceDropdownRef}>
+              <button
+                type="button"
+                data-testid="open-workspace-dropdown-btn"
+                onClick={() => setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all cursor-pointer"
+              >
+                <span>Open Workspace</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isWorkspaceDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Workspace Dropdown Menu */}
+              {isWorkspaceDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 animate-in fade-in-50 zoom-in-95">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
+                    Project Workspace Navigation
+                  </div>
+                  {workspaceLinks.map((link) => (
+                    <button
+                      key={link.path}
+                      type="button"
+                      onClick={() => {
+                        setIsWorkspaceDropdownOpen(false);
+                        navigate(link.path);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-indigo-50/80 transition-colors flex flex-col group cursor-pointer"
+                    >
+                      <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600">
+                        {link.label}
+                      </span>
+                      <span className="text-[11px] text-slate-500 truncate">
+                        {link.desc}
+                      </span>
+                    </button>
+                  ))}
+                  <div className="border-t border-slate-100 mt-1 pt-1 px-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsWorkspaceDropdownOpen(false);
+                        navigate('/project');
+                      }}
+                      className="w-full text-center py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Go to Project Overview →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">
-              Governed AI software delivery with independent verification.
-            </p>
+
+            {/* Mobile Hamburger Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              aria-label="Toggle navigation menu"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>System Status: All Systems Operational</span>
+        {/* Mobile Slide-Down Menu */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden mt-3 pt-3 border-t border-slate-800 space-y-1">
+            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Workspace Routes
+            </div>
+            {workspaceLinks.map((link) => (
+              <button
+                key={link.path}
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  navigate(link.path);
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white flex items-center justify-between"
+              >
+                <span>{link.label}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+            ))}
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (mode === 'live') {
-                setMode('demo');
-                resetSimulation();
-              } else {
-                setMode('live');
-              }
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-300" />
-            <span>{mode === 'live' ? 'Switch to Simulation' : 'Switch to Live'}</span>
-          </button>
-        </div>
+        )}
       </header>
 
-      {/* SECTION 2 & 3 & 4 — HERO SECTION */}
-      <section className="bg-gradient-to-b from-[#07152D] via-[#0A1D3B] to-[#0E2648] text-white px-6 lg:px-12 pt-10 pb-16 relative overflow-hidden">
-        {/* Subtle radial light effect */}
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative z-10">
-          {/* Left: Headline & Copy */}
-          <div className="lg:col-span-4 space-y-4 pt-2">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.08] text-white">
-              Turn your idea into{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-teal-300">
-                working software.
-              </span>
-            </h1>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-md">
-              Describe what your business needs. TayDau's AI software team understands it, plans it, designs it, builds it and independently verifies the result.
-            </p>
-
-            {hasProject && project && (
-              <div className="pt-2 flex items-center gap-2 text-xs text-emerald-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Active Project: <strong>{project.name}</strong></span>
-              </div>
-            )}
+      {/* ========================================================================= */}
+      {/* 2. HERO SECTION (Active Project vs No-Project Prompt Card) */}
+      {/* ========================================================================= */}
+      <section className="bg-gradient-to-b from-[#07152D] via-[#091C3E] to-slate-900 text-white pt-10 pb-16 px-4 sm:px-6 lg:px-8 border-b border-slate-800">
+        <div className="max-w-5xl mx-auto text-center space-y-6">
+          {/* Main Value Proposition Headline */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-400/20 text-indigo-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Autonomous Software Delivery</span>
           </div>
 
-          {/* Center: Real Project Prompt Card */}
-          <div className="lg:col-span-5">
-            <div className="bg-white text-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200/90 relative">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-slate-900">
-                  Describe what you want to build
-                </h2>
-                {hasProject && (
-                  <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                    Project Active
-                  </span>
-                )}
-              </div>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white max-w-3xl mx-auto leading-tight">
+            Turn your idea into{' '}
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-teal-300 bg-clip-text text-transparent">
+              working software
+            </span>
+          </h1>
 
-              <form onSubmit={handleStartProject} className="space-y-3">
-                <div>
-                  <input
-                    type="text"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    placeholder="Project Name (e.g. Prestige Auto Detail Studio)"
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-slate-50/50"
-                  />
-                </div>
+          <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            Provide a business idea. TayDau’s orchestrated AI specialists handle business analysis,
+            planning, UI/UX design, architecture, implementation, and independent QA.
+          </p>
 
-                <div>
-                  <textarea
-                    value={projectBrief}
-                    onChange={(e) => setProjectBrief(e.target.value)}
-                    placeholder="Example: I run a car detailing business and need a booking, customer and service management application."
-                    rows={4}
-                    className="w-full text-xs sm:text-sm p-3.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 resize-none bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Real AI Software Team Handoff</span>
+          {/* Central Hero Card: Conditional on Active Project vs Clean Prompt */}
+          <div className="max-w-2xl mx-auto mt-8">
+            {hasProject && !isCreatingNewProject ? (
+              /* ACTIVE PROJECT HERO CARD */
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/20 text-left text-slate-900 transition-all">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                      Your Active Project
+                    </span>
+                    <span className="text-xs text-slate-500 font-mono">
+                      ● {stageStatus.replace(/_/g, ' ')}
+                    </span>
                   </div>
 
                   <button
-                    type="submit"
-                    disabled={isSubmitting || !projectBrief.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                    type="button"
+                    onClick={() => setIsCreatingNewProject(true)}
+                    className="text-xs font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1 transition-colors cursor-pointer"
                   >
-                    <span>{isSubmitting ? 'Starting Delivery...' : 'Start a Project'}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Start Another Project</span>
                   </button>
                 </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-xl font-bold text-slate-950 tracking-tight">
+                    {project?.name || 'Untitled Software Project'}
+                  </h3>
+
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs text-slate-700 italic leading-relaxed">
+                    “{project?.clientBrief || 'Autonomous software brief.'}”
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                        Current Stage
+                      </div>
+                      <div className="text-xs font-bold text-indigo-950 mt-0.5">
+                        {currentStageInfo.title}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-100/80 p-3 rounded-xl border border-slate-200">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Next Action
+                      </div>
+                      <div className="text-xs font-semibold text-slate-800 mt-0.5 truncate">
+                        {workflow?.nextActionPayload?.label || currentStageInfo.subtitle}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/project')}
+                      className="flex-1 min-w-[160px] py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Open Workspace</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingNewProject(true)}
+                      className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                    >
+                      + New Project
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* CLEAN PROMPT CREATION CARD */
+              <form
+                onSubmit={handleStartProject}
+                className="bg-white/95 backdrop-blur-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/20 text-left text-slate-900 transition-all"
+              >
+                {isCreatingNewProject && hasProject && (
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100 text-xs">
+                    <span className="font-bold text-indigo-600">Start New Autonomous Project</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingNewProject(false)}
+                      className="text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
+                    >
+                      Return to Active Project
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <div>
+                    <label
+                      htmlFor="project-name-input"
+                      className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1"
+                    >
+                      Project Name
+                    </label>
+                    <input
+                      id="project-name-input"
+                      type="text"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      placeholder="e.g. Soltrade B2B Marketplace Portal"
+                      className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="project-brief-input"
+                      className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1"
+                    >
+                      Business Brief / Project Idea
+                    </label>
+                    <textarea
+                      id="project-brief-input"
+                      rows={3}
+                      value={projectBrief}
+                      onChange={(e) => setProjectBrief(e.target.value)}
+                      placeholder="Describe what you want to build (e.g. An online ordering portal with customer accounts, inventory tracking, Stripe payments, and automated invoice PDF generation)..."
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none font-normal"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Includes QA test verification</span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !projectBrief.trim()}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 shadow-md hover:shadow-indigo-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Initiating Delivery...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Start a Project</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </form>
-            </div>
+            )}
           </div>
 
-          {/* Right: Top Live Metrics */}
-          <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3.5">
-            {/* Metric 1: Cost */}
-            <div className="bg-white text-slate-900 rounded-2xl p-5 shadow-lg border border-slate-200/90">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Estimated AI Cost</span>
-                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Coins className="w-4 h-4" />
-                </div>
+          {/* Current Project Telemetry Cards (Derived 100% from live project) */}
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+            <div className="bg-slate-800/80 backdrop-blur border border-slate-700/70 rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                <Coins className="w-4 h-4" />
               </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <div>
-                  <span className="text-2xl font-black text-slate-900">${costUsed.toFixed(2)}</span>
-                  <span className="text-xs text-slate-400 ml-1">/ ${budgetLimit.toFixed(2)} limit</span>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                  Estimated AI Cost
                 </div>
-                {hasProject && costUsed <= budgetLimit && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                    On Track
+                <div className="text-xs font-bold text-white">
+                  ${totalCost.toFixed(2)}{' '}
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    / $50.00 Limit
                   </span>
-                )}
-                {!hasProject && (
-                  <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
-                    Not Started
-                  </span>
-                )}
+                </div>
               </div>
             </div>
 
-            {/* Metric 2: Tokens */}
-            <div className="bg-white text-slate-900 rounded-2xl p-5 shadow-lg border border-slate-200/90">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Tokens Used</span>
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Cpu className="w-4 h-4" />
+            <div className="bg-slate-800/80 backdrop-blur border border-slate-700/70 rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs">
+                <Cpu className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                  Tokens Used
+                </div>
+                <div className="text-xs font-bold text-white">
+                  {totalTokens.toLocaleString()}{' '}
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    / 500K Limit
+                  </span>
                 </div>
               </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <div>
-                  <span className="text-2xl font-black text-slate-900">{totalTokens.toLocaleString()}</span>
-                  <span className="text-xs text-slate-400 ml-1">/ 500K limit</span>
+            </div>
+
+            <div className="bg-slate-800/80 backdrop-blur border border-slate-700/70 rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                  Delivery Team
                 </div>
-                {hasProject && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                    On Track
+                <div className="text-xs font-bold text-white">
+                  7 Specialists{' '}
+                  <span className="text-[10px] text-emerald-400 font-semibold">
+                    ● Coordinated
                   </span>
-                )}
-                {!hasProject && (
-                  <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
-                    Not Started
-                  </span>
-                )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 5 — MAIN WORKFLOW EXPERIENCE */}
-      <section className="px-6 lg:px-12 -mt-8 relative z-20">
-        <div className="max-w-[1440px] mx-auto bg-white rounded-3xl p-6 lg:p-8 shadow-xl border border-slate-200 space-y-8">
-          {/* Active Action Notification Bar (if decision or approval required) */}
+      {/* ========================================================================= */}
+      {/* 3. THREE-COLUMN WORKFLOW EXPERIENCE (Coordinated System Center) */}
+      {/* ========================================================================= */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 -mt-6">
+        {/* Main White Workflow Shell Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200/90 space-y-8">
+          {/* Top Workflow Header & Mode Badge */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold tracking-wider uppercase text-indigo-600">
+                  Live Autonomous Pipeline
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                  {progress}% Verified
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+                Software Delivery Workflow
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <div className="text-[11px] font-bold text-slate-500">Current Phase</div>
+                <div className="text-xs font-bold text-slate-900">{currentStageInfo.title}</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate('/project')}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Workspace Details</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Persistent Amber Banner: Waiting for Question Decisions */}
           {stageStatus === 'waiting_for_client' && pendingInteractions.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
-                  !
+                  <HelpCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-amber-900">
-                    Decision Required: {pendingInteractions.length} question(s) from your AI Team
+                  <h4 className="text-sm font-bold text-amber-950">
+                    Aria Analyst needs your input ({pendingInteractions.length} question
+                    {pendingInteractions.length > 1 ? 's' : ''})
                   </h4>
-                  <p className="text-xs text-amber-700">
-                    {ROLE_REGISTRY[pendingInteractions[0].agentRole as RoleKey]?.personaName || 'Your Specialist'} is waiting for your input before continuing.
+                  <p className="text-xs text-amber-800">
+                    Your answers will guide the functional requirements baseline and scope boundaries.
                   </p>
                 </div>
               </div>
@@ -436,13 +907,15 @@ export const Overview: React.FC = () => {
                 onClick={() => setIsQuestionModalOpen(true)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-sm transition-all cursor-pointer"
               >
-                Answer {pendingInteractions.length} Questions →
+                Answer {pendingInteractions.length} Question
+                {pendingInteractions.length > 1 ? 's' : ''} →
               </button>
             </div>
           )}
 
+          {/* Persistent Indigo/Pink Banner: Waiting for Client Approval */}
           {stageStatus === 'waiting_for_client' && pendingApproval && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
                   ◆
@@ -466,562 +939,746 @@ export const Overview: React.FC = () => {
                 onClick={() => setIsApprovalModalOpen(true)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all cursor-pointer"
               >
-                {pendingApproval.artifactType === 'requirements' ? 'Review Requirements →' : 'Review Design Screens →'}
+                {pendingApproval.artifactType === 'requirements'
+                  ? 'Review Requirements →'
+                  : 'Review Design Screens →'}
               </button>
             </div>
           )}
 
+          {/* Failure Alert Banner */}
           {stageStatus === 'failed' && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center font-bold">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-red-900">
-                    Development Needs Attention
-                  </h4>
-                  <p className="text-xs text-red-700">
-                    {workflow?.lastErrorSummary || 'TayDau could not safely complete this stage. Progress is securely preserved.'}
+                  <h4 className="text-sm font-bold text-red-950">Development Needs Attention</h4>
+                  <p className="text-xs text-red-800">
+                    {workflow?.lastErrorSummary || 'A verification check failed. Upstream artifacts remain safely preserved.'}
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => retryStage()}
-                disabled={isActionInProgress}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                onClick={handleRetry}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-all cursor-pointer"
               >
                 Retry Development
               </button>
             </div>
           )}
 
-          {/* 3 Core Workflow Columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            {/* COLUMN A — YOUR IDEA */}
-            <div className="lg:col-span-3 border border-slate-200 rounded-2xl p-5 bg-slate-50/50 flex flex-col justify-between">
+          {/* 3-COLUMN WORKFLOW GRID */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* ------------------------------------------------------------- */}
+            {/* COLUMN 1: YOUR IDEA (3 Cols) */}
+            {/* ------------------------------------------------------------- */}
+            <div className="lg:col-span-3 bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
                     1
                   </div>
-                  <h3 className="text-sm font-bold text-slate-900">Your Idea</h3>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                    Your Idea
+                  </h3>
                 </div>
 
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                  Your Prompt / Input
-                </span>
-
-                <div className="bg-blue-50/60 border border-blue-200/80 rounded-xl p-4 text-xs text-slate-800 leading-relaxed min-h-[160px] flex flex-col justify-between">
-                  <p className="italic text-slate-700">
-                    {hasProject && project
-                      ? `"${project.clientBrief}"`
-                      : '"Describe your idea in the box above. Your project brief will appear here."'}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2">
+                  <div className="font-bold text-slate-900">
+                    {hasProject ? project?.name : 'Project Prompt'}
+                  </div>
+                  <p className="italic leading-relaxed text-slate-600">
+                    {hasProject
+                      ? `“${project?.clientBrief}”`
+                      : 'No active project submitted yet. Use the prompt card above to start delivery.'}
                   </p>
-
-                  {hasProject && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 mt-4">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Input received</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-200/80 text-[11px] text-slate-500">
-                <span>Domain: <strong>{hasProject && project ? project.name : 'Awaiting input'}</strong></span>
+              <div className="pt-2 border-t border-slate-200/60">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{hasProject ? 'Input Received & Seeded' : 'Waiting for Input'}</span>
+                </div>
               </div>
             </div>
 
-            {/* COLUMN B — TAYDAU AI DELIVERY TEAM */}
-            <div className="lg:col-span-5 border border-slate-200 rounded-2xl p-5 bg-white flex flex-col justify-between">
+            {/* ------------------------------------------------------------- */}
+            {/* COLUMN 2: TAYDAU AI DELIVERY TEAM (COORDINATED SYSTEM) (5 Cols) */}
+            {/* ------------------------------------------------------------- */}
+            <div id="ai-team" className="lg:col-span-5 bg-gradient-to-b from-slate-900 to-[#07152D] text-white rounded-2xl p-5 border border-slate-800 flex flex-col justify-between space-y-5">
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/30 text-indigo-300 flex items-center justify-center text-xs font-bold border border-indigo-400/30">
                       2
                     </div>
-                    <h3 className="text-sm font-bold text-slate-900">TayDau AI Delivery Team</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                      TayDau Coordinated Team
+                    </h3>
                   </div>
-
-                  <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                    ● {hasProject ? `${requiredRoles.length} Specialists Required` : '7 Specialists Available'}
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    ● Autonomous Coordination
                   </span>
                 </div>
 
-                {/* Grid of 7 Specialist Role Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-4">
-                  {(
-                    [
-                      'business_analyst',
-                      'project_manager',
-                      'ui_ux_designer',
-                      'solution_architect',
-                      'engineer',
-                      'code_reviewer',
-                      'qa_engineer'
-                    ] as RoleKey[]
-                  ).map((roleKey) => {
-                    const roleDef = ROLE_REGISTRY[roleKey];
-                    const status = getRoleStatus(roleKey);
+                {/* Central Hub & Orchestrated Specialists */}
+                <div className="space-y-3">
+                  {/* Central Coordinator Badge */}
+                  <div className="bg-indigo-950/60 border border-indigo-500/40 rounded-xl p-3 text-center">
+                    <div className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-200">
+                      <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                      <span>TAYDAU FORCE ORCHESTRATOR</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Autonomous stage progression, task dispatch & telemetry
+                    </div>
+                  </div>
 
-                    return (
-                      <div
-                        key={roleKey}
-                        className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 flex flex-col justify-between min-h-[92px]"
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <span className="text-xs font-bold text-slate-900 leading-tight">
-                            {roleDef.displayName}
-                          </span>
-                          <div className={`w-5 h-5 rounded-md ${roleDef.avatarBg} text-[10px] font-bold flex items-center justify-center text-slate-700 shrink-0`}>
-                            {roleDef.avatarText}
+                  {/* 7 Coordinated Specialist Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {teamSpecialists.map((spec) => {
+                      const status = getRoleStatus(spec.key);
+                      const isWorking = status.state === 'running';
+                      const isWaitingClient = status.state === 'waiting_for_client';
+                      const isCompleted = status.state === 'completed';
+
+                      return (
+                        <div
+                          key={spec.key}
+                          className={`p-2.5 rounded-xl border transition-all flex items-center justify-between ${
+                            isWorking
+                              ? 'bg-indigo-900/40 border-indigo-500 shadow-md shadow-indigo-500/20'
+                              : isWaitingClient
+                              ? 'bg-amber-950/30 border-amber-500/70'
+                              : isCompleted
+                              ? 'bg-slate-800/60 border-emerald-500/40'
+                              : 'bg-slate-800/40 border-slate-700/60 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-7 h-7 rounded-lg bg-gradient-to-br ${spec.accentColor} text-white font-bold flex items-center justify-center text-[10px] shrink-0 shadow-sm`}
+                            >
+                              {spec.initials}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-white truncate">
+                                {spec.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {spec.roleName}
+                              </div>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${status.bg} ${status.text}`}>
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                              isCompleted
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : isWorking
+                                ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 animate-pulse'
+                                : isWaitingClient
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : 'bg-slate-700/50 text-slate-400'
+                            }`}
+                          >
                             {status.label}
                           </span>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              {/* Real Overall Project Progress Rail */}
-              <div className="mt-6 pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-semibold text-slate-700">Project Progress</span>
-                  <span className="font-mono font-bold text-slate-900">{progress}%</span>
+              {/* Explicit Human Approval Milestone Diamonds */}
+              <div className="pt-3 border-t border-slate-800 space-y-2">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center justify-between">
+                  <span>Human Decision Gates</span>
+                  <span className="text-indigo-400 font-mono">◆ Mandatory Approvals</span>
                 </div>
 
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-3 border border-slate-200">
+                <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                   <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
+                    className={`p-1.5 rounded-lg border flex flex-col items-center gap-0.5 ${
+                      workflow?.approvedRequirementBaselineId || (project?.requirementBaselines && project.requirementBaselines.length > 0)
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : pendingApproval?.artifactType === 'requirements'
+                        ? 'bg-amber-950/40 border-amber-500 text-amber-300 animate-pulse'
+                        : 'bg-slate-800/40 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <span className="font-bold">◆ Requirements</span>
+                    <span>
+                      {workflow?.approvedRequirementBaselineId || (project?.requirementBaselines && project.requirementBaselines.length > 0)
+                        ? 'Approved ✓'
+                        : pendingApproval?.artifactType === 'requirements'
+                        ? 'Needs Approval'
+                        : 'Pending'}
+                    </span>
+                  </div>
 
-                {/* Milestone Labels */}
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1 text-[10px] text-center text-slate-500">
-                  {PROGRESSION_MILESTONES.map((m) => {
-                    const isPassed = progress >= m.targetProgress;
-                    return (
-                      <div key={m.key} className="flex flex-col items-center">
-                        <span className={`w-2 h-2 rounded-full mb-1 ${
-                          isPassed ? (m.isApproval ? 'bg-indigo-600 ring-2 ring-indigo-200' : 'bg-blue-600') : 'bg-slate-300'
-                        }`} />
-                        <span className={`${isPassed ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
-                          {m.label}
-                        </span>
-                      </div>
-                    );
-                  })}
+                  <div
+                    className={`p-1.5 rounded-lg border flex flex-col items-center gap-0.5 ${
+                      workflow?.approvedDesignSpecId || (project?.designSpecs && project.designSpecs.length > 0)
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : pendingApproval?.artifactType === 'design'
+                        ? 'bg-amber-950/40 border-amber-500 text-amber-300 animate-pulse'
+                        : 'bg-slate-800/40 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <span className="font-bold">◆ Design Wireframes</span>
+                    <span>
+                      {workflow?.approvedDesignSpecId || (project?.designSpecs && project.designSpecs.length > 0)
+                        ? 'Approved ✓'
+                        : pendingApproval?.artifactType === 'design'
+                        ? 'Needs Approval'
+                        : 'Pending'}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`p-1.5 rounded-lg border flex flex-col items-center gap-0.5 ${
+                      stage === 'completed'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : 'bg-slate-800/40 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <span className="font-bold">◆ Final Release</span>
+                    <span>{stage === 'completed' ? 'Verified ✓' : 'Pending'}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* COLUMN C — YOUR SOFTWARE PREVIEW */}
-            <div className="lg:col-span-4 border border-slate-200 rounded-2xl p-5 bg-slate-50/50 flex flex-col justify-between">
+            {/* ------------------------------------------------------------- */}
+            {/* COLUMN 3: STAGE-AWARE SOFTWARE PREVIEW (4 Cols) */}
+            {/* ------------------------------------------------------------- */}
+            <div className="lg:col-span-4 bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
                       3
                     </div>
-                    <h3 className="text-sm font-bold text-slate-900">Your Software Preview</h3>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Software Preview
+                    </h3>
                   </div>
-
-                  {latestDesign && (
-                    <span className="text-[10px] font-bold text-pink-700 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full">
-                      Wireframe v{latestDesign.version}
-                    </span>
-                  )}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                    {stage === 'completed' ? '100% Release Ready' : 'Stage Output'}
+                  </span>
                 </div>
 
-                {/* Evolving Preview Body */}
-                {!hasProject && (
-                  <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 min-h-[220px] flex flex-col items-center justify-center">
-                    <Eye className="w-8 h-8 text-slate-300 mb-2" />
-                    <strong className="text-xs font-bold text-slate-700">Your Software Will Appear Here</strong>
-                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
-                      TayDau will first understand your project, then prepare visual screens before engineering begins.
-                    </p>
-                  </div>
-                )}
-
-                {hasProject && !latestDesign && (
-                  <div className="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-500 min-h-[220px] flex flex-col items-center justify-center space-y-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center animate-spin">
-                      <RefreshCw className="w-4 h-4" />
-                    </div>
-                    <strong className="text-xs font-bold text-slate-800">
-                      {stage === 'business_analysis' ? 'Aria is Analyzing Scope' : 'Marcus is Sequencing Plan'}
-                    </strong>
-                    <p className="text-[11px] text-slate-500 max-w-xs">
-                      Visual screens will be synthesized by Sofia Designer as soon as requirements are baseline-approved.
-                    </p>
-                  </div>
-                )}
-
-                {hasProject && latestDesign && (
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    {/* Wireframe Mockup Frame */}
-                    <div className="bg-slate-900 px-3 py-2 text-white flex items-center justify-between text-[11px]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-400" />
-                        <span className="w-2 h-2 rounded-full bg-amber-400" />
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span className="text-slate-400 font-mono text-[10px] ml-2">/dashboard</span>
+                {/* Stage Evolving Output Content */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 min-h-[220px] flex flex-col justify-center">
+                  {!hasProject ? (
+                    <div className="text-center py-6 space-y-2">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                        <Code2 className="w-5 h-5" />
                       </div>
-                      <span className="text-[10px] text-pink-300 font-bold">Interactive Preview</span>
+                      <div className="text-xs font-bold text-slate-800">
+                        Your Software Will Appear Here
+                      </div>
+                      <p className="text-[11px] text-slate-500 max-w-[200px] mx-auto">
+                        Start a project to see interactive wireframes, code modules, and test results.
+                      </p>
                     </div>
-
-                    <div className="p-4 space-y-3 bg-slate-50/50">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                          <span className="text-[9px] text-slate-400 block">Bookings</span>
-                          <strong className="text-xs text-slate-900">120</strong>
+                  ) : stage === 'business_analysis' || stage === 'requirements_review' ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-violet-700">
+                        <FileText className="w-4 h-4 text-violet-600" />
+                        <span>Aria Analyst — Business Analysis</span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Synthesizing core product features, testable acceptance criteria, and user stories.
+                      </p>
+                      {project?.requirementBaselines && project.requirementBaselines.length > 0 && (
+                        <div className="p-2.5 bg-violet-50 rounded-lg border border-violet-100 text-[11px] text-violet-900">
+                          ✓ {project.requirementBaselines[0]?.snapshot?.features?.length || 4} requirements baseline generated.
                         </div>
-                        <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                          <span className="text-[9px] text-slate-400 block">Revenue</span>
-                          <strong className="text-xs text-slate-900">$24,680</strong>
+                      )}
+                    </div>
+                  ) : stage === 'project_planning' ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
+                        <FolderKanban className="w-4 h-4 text-blue-600" />
+                        <span>Marcus Planner — Delivery Roadmap</span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Sequencing task dependencies and milestone delivery phases.
+                      </p>
+                      {project?.tasks && project.tasks.length > 0 && (
+                        <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-100 text-[11px] text-blue-900 font-medium">
+                          ✓ {project.tasks.length} planned workstream tasks ready.
                         </div>
-                        <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                          <span className="text-[9px] text-slate-400 block">Customers</span>
-                          <strong className="text-xs text-slate-900">320</strong>
+                      )}
+                    </div>
+                  ) : stage === 'ui_ux_design' || stage === 'design_review' || latestDesignArtifact ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-pink-700 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Sofia UI/UX Wireframe</span>
                         </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-800">
+                          Interactive
+                        </span>
                       </div>
 
-                      <div className="bg-white p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">
-                        <div className="flex items-center justify-between font-bold text-slate-900 text-xs">
-                          <span>{latestDesign.summary || 'Custom Booking Experience'}</span>
+                      {latestDesignArtifact ? (
+                        <div className="rounded-lg overflow-hidden border border-slate-200 max-h-[140px] relative bg-slate-950 text-white p-3 text-[11px]">
+                          <div className="font-bold text-slate-200 truncate">
+                            {latestDesignArtifact.screenKey || 'Dashboard Screen'}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1 line-clamp-3">
+                            {latestDesignArtifact.content?.slice(0, 150) || 'Visual screen components with tokens and KPI cards.'}
+                          </div>
                         </div>
-                        <p className="text-[10px] text-slate-500">
-                          Theme: {latestDesign.design?.designSystem?.styleDirection || 'Clean Professional'}
+                      ) : (
+                        <div className="p-3 bg-pink-50 rounded-lg border border-pink-100 text-xs text-pink-900">
+                          Sofia is crafting component tokens and layout hierarchy.
+                        </div>
+                      )}
+
+                      {pendingApproval?.artifactType === 'design' && (
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleApprove}
+                            className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer"
+                          >
+                            ✓ Approve Design
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsApprovalModalOpen(true)}
+                            className="py-1.5 px-3 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                          >
+                            Review Details
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : stage === 'architecture' ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-cyan-700">
+                        <Boxes className="w-4 h-4 text-cyan-600" />
+                        <span>Arthur Blueprint — Architecture</span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Designing database schemas, API contracts, and service boundaries.
+                      </p>
+                      {project?.architecture && (
+                        <div className="p-2.5 bg-cyan-50 rounded-lg border border-cyan-100 text-[11px] text-cyan-900">
+                          ✓ Technical architecture specification defined.
+                        </div>
+                      )}
+                    </div>
+                  ) : stage === 'engineering' || stage === 'code_review' || stage === 'testing' ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span>Implementation in Progress</span>
+                        <span className="text-indigo-600">{progress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-600 h-full transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="text-[11px] text-slate-600 space-y-1">
+                        <div>
+                          • Code Artifacts:{' '}
+                          <span className="font-semibold text-slate-900">
+                            {project?.codeArtifacts?.length || 0} modules
+                          </span>
+                        </div>
+                        <div>
+                          • QA Suites:{' '}
+                          <span className="font-semibold text-slate-900">
+                            {project?.qaTestArtifacts?.length || 0} test cases
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 100% Verified Release Output */
+                    <div className="space-y-3 text-center py-2">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                        <CheckCircle className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">
+                          Verified Software Release
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          100% tests passed in isolated execution container.
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/delivery')}
+                        className="w-full py-2 px-3 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors cursor-pointer"
+                      >
+                        Inspect Full Delivery Package →
+                      </button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* Action Buttons in Column C */}
-              <div className="mt-4 pt-3 border-t border-slate-200/80">
-                {hasProject && pendingApproval?.artifactType === 'design' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => approveRequest(pendingApproval.id)}
-                      disabled={isActionInProgress}
-                      className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-50 cursor-pointer text-center"
-                    >
-                      ✓ Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsApprovalModalOpen(true)}
-                      disabled={isActionInProgress}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 shadow-sm transition-all disabled:opacity-50 cursor-pointer text-center"
-                    >
-                      Request Changes
-                    </button>
-                  </div>
-                )}
-
-                {hasProject && isCompleted && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/delivery')}
-                    className="w-full px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition-all text-center cursor-pointer"
-                  >
-                    Review Final Delivery (100% Ready) →
-                  </button>
-                )}
-
-                {(!hasProject || (!pendingApproval && !isCompleted)) && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/architecture')}
-                    disabled={!hasProject}
-                    className="w-full px-3 py-2 rounded-xl text-xs font-semibold text-blue-600 hover:bg-blue-50 border border-blue-200 transition-all disabled:opacity-40 cursor-pointer text-center"
-                  >
-                    View Full Interactive Preview →
-                  </button>
-                )}
+              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                <span className="text-slate-500">Autonomous Status</span>
+                <span className="font-bold text-slate-800">
+                  {stageStatus === 'waiting_for_client' ? 'Awaiting Human Input' : 'Active Execution'}
+                </span>
               </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* SECTION 6 — WORKSTREAM SUMMARY CARDS */}
-      <section className="px-6 lg:px-12 py-8">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Code & Implementation */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between min-h-[220px]">
+          {/* Explicit Workspace Bridge CTA at bottom of main shell */}
+          <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Code2 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Code & Implementation
-                </h3>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Want deep project telemetry & artifacts?
+              </h4>
+              <p className="text-sm font-bold text-slate-900">
+                Inspect architecture schemas, QA execution logs, and full source code modules.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              data-testid="open-project-workspace-cta"
+              onClick={() => navigate('/project')}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#07152D] hover:bg-slate-800 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>Open Project Workspace</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 4. FOUR WORKSTREAM SUMMARY CARDS (100% Live Evidence Driven) */}
+        {/* ========================================================================= */}
+        <section id="how-it-works" className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1: Code & Implementation */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                    <Code2 className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Implementation
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                  {project?.codeArtifacts?.length || 0} Files
+                </span>
               </div>
 
-              {hasProject && project?.tasks && project.tasks.length > 0 ? (
-                <div className="space-y-2 text-xs">
-                  {project.tasks.slice(0, 4).map((task) => (
-                    <div key={task.id} className="flex items-center justify-between text-slate-700">
-                      <span className="truncate pr-2">{task.title}</span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                        task.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'
-                      }`}>
-                        {task.status === 'completed' ? 'Completed' : 'In Progress'}
-                      </span>
+              {project?.tasks && project.tasks.length > 0 ? (
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  {project.tasks.slice(0, 3).map((t: any) => (
+                    <div key={t.id} className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-100">
+                      <span className="truncate max-w-[150px] font-medium">{t.title}</span>
+                      <span className="text-[10px] text-slate-500">{t.status}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 italic">
+                <p className="text-xs text-slate-500 italic">
                   Development has not started yet.
                 </p>
               )}
             </div>
 
-            <div className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-              <span>{hasProject ? `${project?.codeArtifacts?.length || 0} code files generated` : 'Awaiting start'}</span>
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+              Generated by Devon Coder
             </div>
           </div>
 
-          {/* Card 2: Planning */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between min-h-[220px]">
+          {/* Card 2: Planning & Workstreams */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Planning
-                </h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <FolderKanban className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Planning
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                  {project?.tasks?.length || 0} Tasks
+                </span>
+              </div>
+
+              {project?.tasks && project.tasks.length > 0 ? (
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  {project.tasks.slice(0, 3).map((t: any) => (
+                    <div key={t.id} className="flex items-center gap-1.5 text-slate-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      <span className="truncate">{t.title}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Roadmap will be generated after requirements baseline approval.
+                </p>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+              Planned by Marcus Planner
+            </div>
+          </div>
+
+          {/* Card 3: Canonical Phases */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                    <WorkflowIcon className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Phases
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                  Canonical Loop
+                </span>
               </div>
 
               <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Requirements Analysis</span>
-                  <span className="text-[10px] text-slate-500 font-medium">Aria (BA)</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Delivery Roadmap</span>
-                  <span className="text-[10px] text-slate-500 font-medium">Marcus (PM)</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Solution Architecture</span>
-                  <span className="text-[10px] text-slate-500 font-medium">Arthur (Architect)</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>QA Verification Plan</span>
-                  <span className="text-[10px] text-slate-500 font-medium">Quinn (QA)</span>
-                </div>
+                {[
+                  { name: 'Requirements', pct: progress >= 25 ? 100 : Math.round((progress / 25) * 100) },
+                  { name: 'Visual Design', pct: progress >= 40 ? 100 : progress >= 25 ? Math.round(((progress - 25) / 15) * 100) : 0 },
+                  { name: 'Development', pct: progress >= 75 ? 100 : progress >= 40 ? Math.round(((progress - 40) / 35) * 100) : 0 },
+                  { name: 'Testing & QA', pct: progress >= 100 ? 100 : progress >= 75 ? Math.round(((progress - 75) / 25) * 100) : 0 },
+                ].map((ph) => (
+                  <div key={ph.name} className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                      <span>{ph.name}</span>
+                      <span>{ph.pct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                      <div className="bg-purple-600 h-full transition-all" style={{ width: `${ph.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-              <span>{hasProject ? 'Autonomous Governance Active' : 'Not started'}</span>
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+              Verified Sequential Loop
             </div>
           </div>
 
-          {/* Card 3: Phases */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between min-h-[220px]">
+          {/* Card 4: Deliverables Checklist */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Phases
-                </h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center font-bold">
+                    <FileCheck2 className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Deliverables
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-50 text-cyan-700">
+                  Evidence Check
+                </span>
               </div>
 
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>1. Requirements</span>
-                  <span className="font-bold text-slate-900">{progress >= 25 ? '100%' : `${Math.min(100, progress * 4)}%`}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>2. Visual Design</span>
-                  <span className="font-bold text-slate-900">{progress >= 50 ? '100%' : progress >= 35 ? '50%' : '0%'}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>3. Development</span>
-                  <span className="font-bold text-slate-900">{progress >= 70 ? '100%' : progress >= 50 ? '50%' : '0%'}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>4. Testing & Review</span>
-                  <span className="font-bold text-slate-900">{progress >= 85 ? '100%' : progress >= 70 ? '50%' : '0%'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-              <span>Current Status: <strong>{stage.replace('_', ' ')}</strong></span>
-            </div>
-          </div>
-
-          {/* Card 4: Deliverables */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between min-h-[220px]">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <FileCheck2 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Deliverables
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>UI/UX Design</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${latestDesign ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {latestDesign ? 'Approved' : 'Pending'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Technical Specification</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${project?.architecture ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {project?.architecture ? 'Completed' : 'Pending'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Source Code</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${project?.codeArtifacts?.length ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {project?.codeArtifacts?.length ? 'Completed' : 'Pending'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span>Test Plan & Cases</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${project?.qaTestArtifacts?.length ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {project?.qaTestArtifacts?.length ? 'Passed (8/8)' : 'Pending'}
-                  </span>
-                </div>
+              <div className="space-y-1.5 text-xs text-slate-700">
+                {[
+                  {
+                    name: 'Requirements Baseline',
+                    done: Boolean(workflow?.approvedRequirementBaselineId || (project?.requirementBaselines && project.requirementBaselines.length > 0)),
+                  },
+                  {
+                    name: 'Delivery Roadmap',
+                    done: Boolean(project?.tasks && project.tasks.length > 0),
+                  },
+                  {
+                    name: 'UI/UX Wireframes',
+                    done: Boolean(workflow?.approvedDesignSpecId || (project?.designSpecs && project.designSpecs.length > 0)),
+                  },
+                  {
+                    name: 'Technical Architecture',
+                    done: Boolean(project?.architecture),
+                  },
+                  {
+                    name: 'Source Code Modules',
+                    done: Boolean(project?.codeArtifacts && project.codeArtifacts.length > 0),
+                  },
+                  {
+                    name: 'QA Test Artifacts',
+                    done: Boolean(project?.qaSuite || (project?.qaTestArtifacts && project.qaTestArtifacts.length > 0)),
+                  },
+                ].map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-700 truncate">{d.name}</span>
+                    <span className={`font-semibold ${d.done ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {d.done ? '✓ Ready' : 'Pending'}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-              <span>{isCompleted ? 'All Deliverables Verified' : 'In Progress'}</span>
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+              Cryptographically Fingerprinted
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* SECTION 7 — TRUST / VALUE STRIP */}
-      <section className="px-6 lg:px-12 pb-16">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <ShieldCheck className="w-5 h-5 text-blue-600 mx-auto mb-1" />
-            <h4 className="text-xs font-bold text-slate-900">Independent Testing</h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Acceptance tests created and executed independently from engineers.
+        {/* ========================================================================= */}
+        {/* 5. TRUST & VALUE STRIP (5 Cards) */}
+        {/* ========================================================================= */}
+        <section id="why-taydau" className="mt-10 pt-6 border-t border-slate-200">
+          <div className="text-center mb-6">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Why TayDau Force
+            </h3>
+            <p className="text-base font-bold text-slate-900 mt-0.5">
+              Deterministic Quality & Full Transparency
             </p>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <Coins className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-            <h4 className="text-xs font-bold text-slate-900">Cost Visibility</h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Transparent AI usage and predictable costs from start to finish.
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xs">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h5 className="text-xs font-bold text-slate-900">Independent QA</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Developers cannot approve their own code. Quinn Quality writes and executes frozen tests.
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                <Coins className="w-4 h-4" />
+              </div>
+              <h5 className="text-xs font-bold text-slate-900">Cost Governor</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Every LLM invocation is logged with exact tokens, latency, and budget threshold caps.
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                <Boxes className="w-4 h-4" />
+              </div>
+              <h5 className="text-xs font-bold text-slate-900">Container Isolation</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Code execution and unit testing run inside sandboxed Docker environments.
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs">
+                <Lock className="w-4 h-4" />
+              </div>
+              <h5 className="text-xs font-bold text-slate-900">Human Checkpoints</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                You retain ultimate authority to approve functional requirements and visual wireframes.
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+                <FileCheck2 className="w-4 h-4" />
+              </div>
+              <h5 className="text-xs font-bold text-slate-900">Full Traceability</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Every requirement maps directly to tasks, code files, and verified QA test assertions.
+              </p>
+            </div>
           </div>
+        </section>
+      </main>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <Lock className="w-5 h-5 text-indigo-600 mx-auto mb-1" />
-            <h4 className="text-xs font-bold text-slate-900">Safe Verification</h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Work happens in isolated environments with multiple safety layers.
-            </p>
-          </div>
+      {/* ========================================================================= */}
+      {/* 6. SPECIALIST QUESTION MODAL (Aria / Marcus / Sofia Interruption Dialog) */}
+      {/* ========================================================================= */}
+      {isQuestionModalOpen && pendingInteractions.length > 0 && (
+        <SpecialistQuestionModal
+          isOpen={isQuestionModalOpen}
+          interactions={pendingInteractions}
+          onClose={() => setIsQuestionModalOpen(false)}
+          onSubmitAnswer={handleAnswerInteraction}
+          isLoading={isActionInProgress}
+        />
+      )}
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <Users className="w-5 h-5 text-purple-600 mx-auto mb-1" />
-            <h4 className="text-xs font-bold text-slate-900">Human Approval Gates</h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              You review and approve at key milestones. You're always in control.
-            </p>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <Compass className="w-5 h-5 text-teal-600 mx-auto mb-1" />
-            <h4 className="text-xs font-bold text-slate-900">Traceable Delivery</h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Requirements connect to design, implementation and verification.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* SPECIALIST QUESTION MODAL (Auto-opened & Reopenable) */}
-      <SpecialistQuestionModal
-        isOpen={isQuestionModalOpen && pendingInteractions.length > 0}
-        onClose={() => setIsQuestionModalOpen(false)}
-        interactions={pendingInteractions}
-        onSubmitAnswer={async (id, ans) => {
-          await answerInteraction(id, ans);
-        }}
-        isLoading={isActionInProgress}
-      />
-
-      {/* REQUIREMENTS / DESIGN APPROVAL OVERLAY MODAL */}
+      {/* ========================================================================= */}
+      {/* 7. APPROVAL MODAL OVERLAYS (Requirements & Design Specs) */}
+      {/* ========================================================================= */}
       {isApprovalModalOpen && pendingApproval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 relative">
-            <button
-              type="button"
-              onClick={() => setIsApprovalModalOpen(false)}
-              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+          <div className="max-w-4xl w-full my-8">
+            {pendingApproval.artifactType === 'requirements' &&
+              project?.requirementBaselines?.[0] &&
+              project && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsApprovalModalOpen(false)}
+                    className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white text-slate-600 hover:text-slate-900 shadow-md flex items-center justify-center border border-slate-200 font-bold"
+                  >
+                    ✕
+                  </button>
+                  <RequirementsReviewCard
+                    baseline={project.requirementBaselines[0]}
+                    project={project}
+                    onApprove={handleApprove}
+                    onRequestChanges={handleRequestChanges}
+                    isLoading={isActionInProgress}
+                  />
+                </div>
+              )}
 
-            {pendingApproval.artifactType === 'requirements' && project?.requirementBaselines?.[0] && project && (
-              <RequirementsReviewCard
-                baseline={project.requirementBaselines[0]}
-                project={project}
-                isLoading={isActionInProgress}
-                onApprove={async () => {
-                  if (pendingApproval) {
-                    await approveRequest(pendingApproval.id);
-                    setIsApprovalModalOpen(false);
-                  }
-                }}
-                onRequestChanges={async (fb) => {
-                  if (pendingApproval) {
-                    await requestChanges(pendingApproval.id, fb);
-                    setIsApprovalModalOpen(false);
-                  }
-                }}
-              />
-            )}
-
-            {pendingApproval.artifactType === 'design' && latestDesign && project && (
-              <DesignReviewCard
-                designSpec={latestDesign}
-                project={project}
-                isLoading={isActionInProgress}
-                onApprove={async () => {
-                  if (pendingApproval) {
-                    await approveRequest(pendingApproval.id);
-                    setIsApprovalModalOpen(false);
-                  }
-                }}
-                onRequestChanges={async (fb) => {
-                  if (pendingApproval) {
-                    await requestChanges(pendingApproval.id, fb);
-                    setIsApprovalModalOpen(false);
-                  }
-                }}
-              />
-            )}
+            {pendingApproval.artifactType === 'design' &&
+              project?.designSpecs?.[0] &&
+              project && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsApprovalModalOpen(false)}
+                    className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white text-slate-600 hover:text-slate-900 shadow-md flex items-center justify-center border border-slate-200 font-bold"
+                  >
+                    ✕
+                  </button>
+                  <DesignReviewCard
+                    designSpec={project.designSpecs[0]}
+                    project={project}
+                    onApprove={handleApprove}
+                    onRequestChanges={handleRequestChanges}
+                    isLoading={isActionInProgress}
+                  />
+                </div>
+              )}
           </div>
         </div>
       )}
     </div>
   );
 };
+
+export default Overview;
