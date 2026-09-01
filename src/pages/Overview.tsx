@@ -17,7 +17,13 @@ import {
   Layers,
   Flag,
   RotateCcw,
-  CheckCircle2
+  CheckCircle2,
+  FileCode,
+  FolderKanban,
+  Shield,
+  Clock,
+  Terminal,
+  Activity
 } from 'lucide-react';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { SpecialistQuestionModal } from '../components/workflow/SpecialistQuestionModal';
@@ -37,17 +43,20 @@ export const Overview: React.FC = () => {
     retryStage
   } = useLiveProject();
 
-  // Local form state & project creation mode
+  // Form states
   const [projectName, setProjectName] = useState<string>('');
   const [projectBrief, setProjectBrief] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false);
 
-  // Question modal state & auto-open tracking
+  // Bottom section active tab: 'code' | 'documents' | 'phases'
+  const [activeBottomTab, setActiveBottomTab] = useState<'code' | 'documents' | 'phases'>('code');
+
+  // Question modal state & tracking
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
   const presentedInteractionIdsRef = useRef<Set<string>>(new Set());
 
-  // Requirements & Design approval modal state
+  // Approval modal state
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState<boolean>(false);
 
   const hasProject = Boolean(project && project.id);
@@ -58,7 +67,7 @@ export const Overview: React.FC = () => {
   const pendingInteractions = project?.pendingInteractions || [];
   const pendingApproval = project?.pendingApproval || null;
 
-  // Auto-open question modal ONCE per new batch of interaction IDs
+  // Auto-open question modal ONCE per new batch
   useEffect(() => {
     if (stageStatus === 'waiting_for_client' && pendingInteractions.length > 0) {
       const interactionIds = pendingInteractions.map((i) => i.id);
@@ -71,7 +80,7 @@ export const Overview: React.FC = () => {
     }
   }, [stageStatus, pendingInteractions]);
 
-  // Handle new project submission
+  // Handle project start
   const handleStartProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectBrief.trim() || isSubmitting) return;
@@ -90,7 +99,6 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Submit decision for a specific interaction
   const handleAnswerInteraction = async (interactionId: string, answer: any) => {
     try {
       await answerInteraction(interactionId, answer);
@@ -99,7 +107,6 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Approve pending baseline or design spec
   const handleApprove = async () => {
     if (!pendingApproval) return;
     try {
@@ -110,7 +117,6 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Request changes with feedback
   const handleRequestChanges = async (feedback: string) => {
     if (!pendingApproval) return;
     try {
@@ -121,7 +127,6 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Handle retry on failure
   const handleRetry = async () => {
     try {
       await retryStage();
@@ -130,7 +135,7 @@ export const Overview: React.FC = () => {
     }
   };
 
-  // Specialist Rails Definition (5 Core Specialist Rails Matching Wireframe)
+  // Full 7 Specialists + DevOps System Stage Definition
   const rails = [
     {
       index: 1,
@@ -139,12 +144,18 @@ export const Overview: React.FC = () => {
       personName: 'Aria Johnson',
       avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       initials: 'AJ',
-      stageKeys: ['business_analysis', 'requirements_review'],
-      pctComplete: progress >= 25 ? 100 : Math.round((progress / 25) * 100),
+      yPos: 25,
       isCompleted: Boolean(workflow?.approvedRequirementBaselineId || (project?.requirementBaselines && project.requirementBaselines.length > 0)),
       isWorking: stage === 'business_analysis' || (stage === 'requirements_review' && stageStatus === 'running'),
       isWaiting: stageStatus === 'waiting_for_client' && (stage === 'business_analysis' || stage === 'requirements_review'),
-      thinkingMsg: 'Thinking and analyzing client business requirements.',
+      evidencePct: workflow?.approvedRequirementBaselineId ? 100 : stage === 'requirements_review' ? 75 : (project?.requirementBaselines && project.requirementBaselines.length > 0) ? 50 : stage === 'business_analysis' ? 25 : 0,
+      activities: [
+        'Reviewing your business brief',
+        'Identifying user roles & boundaries',
+        'Checking requirement ambiguity',
+        'Synthesizing testable baseline'
+      ],
+      outputName: 'Requirements Baseline v1'
     },
     {
       index: 2,
@@ -153,12 +164,18 @@ export const Overview: React.FC = () => {
       personName: 'Marcus Lee',
       avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
       initials: 'ML',
-      stageKeys: ['project_planning'],
-      pctComplete: progress >= 40 ? 100 : progress >= 25 ? Math.round(((progress - 25) / 15) * 100) : 0,
-      isCompleted: Boolean(project?.tasks && project.tasks.length > 0 && progress >= 40),
+      yPos: 75,
+      isCompleted: Boolean(project?.tasks && project.tasks.length > 0 && progress >= 35),
       isWorking: stage === 'project_planning' && stageStatus === 'running',
       isWaiting: stageStatus === 'waiting_for_client' && stage === 'project_planning',
-      thinkingMsg: 'Thinking and structuring technical delivery roadmap.',
+      evidencePct: (project?.tasks && project.tasks.length > 0 && progress >= 35) ? 100 : stage === 'project_planning' ? 50 : 0,
+      activities: [
+        'Reviewing approved requirements',
+        'Sequencing task dependencies',
+        'Planning delivery roadmap',
+        'Assessing delivery risk matrix'
+      ],
+      outputName: 'Delivery Plan & Workstreams'
     },
     {
       index: 3,
@@ -167,102 +184,172 @@ export const Overview: React.FC = () => {
       personName: 'Sofia Martinez',
       avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
       initials: 'SM',
-      stageKeys: ['ui_ux_design', 'design_review'],
-      pctComplete: progress >= 50 ? 100 : progress >= 40 ? Math.round(((progress - 40) / 10) * 100) : 0,
+      yPos: 125,
       isCompleted: Boolean(workflow?.approvedDesignSpecId || (project?.designSpecs && project.designSpecs.length > 0 && progress >= 50)),
       isWorking: stage === 'ui_ux_design' || (stage === 'design_review' && stageStatus === 'running'),
       isWaiting: stageStatus === 'waiting_for_client' && (stage === 'ui_ux_design' || stage === 'design_review'),
-      thinkingMsg: 'Thinking and crafting the best user experience.',
+      evidencePct: workflow?.approvedDesignSpecId ? 100 : (project?.designSpecs && project.designSpecs.length > 0) ? 75 : stage === 'ui_ux_design' ? 50 : 0,
+      activities: [
+        'Mapping user journeys',
+        'Structuring component tokens',
+        'Preparing visual layout hierarchy',
+        'Generating interactive screen designs'
+      ],
+      outputName: 'Interactive UI/UX Wireframe'
     },
     {
       index: 4,
-      roleKey: 'engineer' as RoleKey,
-      roleName: 'Full Stack Developer',
-      personName: 'Devon Brown',
-      avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      initials: 'DB',
-      stageKeys: ['architecture', 'engineering', 'code_review'],
-      pctComplete: progress >= 75 ? 100 : progress >= 50 ? Math.round(((progress - 50) / 25) * 100) : 0,
-      isCompleted: Boolean(project?.codeArtifacts && project.codeArtifacts.length > 0 && progress >= 75),
-      isWorking: (stage === 'architecture' || stage === 'engineering' || stage === 'code_review') && stageStatus === 'running',
-      isWaiting: stageStatus === 'waiting_for_client' && (stage === 'architecture' || stage === 'engineering'),
-      thinkingMsg: 'Thinking and generating production-ready code modules.',
+      roleKey: 'architect' as RoleKey,
+      roleName: 'Solution Architect',
+      personName: 'Arthur Pendelton',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      initials: 'AP',
+      yPos: 175,
+      isCompleted: Boolean(project?.architecture && progress >= 60),
+      isWorking: stage === 'architecture' && stageStatus === 'running',
+      isWaiting: stageStatus === 'waiting_for_client' && stage === 'architecture',
+      evidencePct: project?.architecture ? 100 : stage === 'architecture' ? 50 : 0,
+      activities: [
+        'Analyzing schema boundaries',
+        'Defining REST & DB contracts',
+        'Establishing security constraints',
+        'Generating architecture specification'
+      ],
+      outputName: 'System Architecture Specification'
     },
     {
       index: 5,
-      roleKey: 'qa_engineer' as RoleKey,
-      roleName: 'DevOps Engineer',
-      personName: 'Evelyn Davis',
+      roleKey: 'engineer' as RoleKey,
+      roleName: 'Full-Stack Developer',
+      personName: 'Devon Brown',
+      avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+      initials: 'DB',
+      yPos: 225,
+      isCompleted: Boolean(project?.codeArtifacts && project.codeArtifacts.length > 0 && progress >= 75),
+      isWorking: stage === 'engineering' && stageStatus === 'running',
+      isWaiting: stageStatus === 'waiting_for_client' && stage === 'engineering',
+      evidencePct: (project?.codeArtifacts && project.codeArtifacts.length > 0 && progress >= 75) ? 100 : stage === 'engineering' ? 50 : 0,
+      activities: [
+        'Scaffolding project structure',
+        'Implementing API endpoints',
+        'Generating database schemas',
+        'Building client views & controllers'
+      ],
+      outputName: 'Production Source Code'
+    },
+    {
+      index: 6,
+      roleKey: 'reviewer' as RoleKey,
+      roleName: 'Code Reviewer',
+      personName: 'Dr. Evelyn Vance',
       avatarUrl: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
-      initials: 'ED',
-      stageKeys: ['testing', 'completed'],
-      pctComplete: progress >= 100 ? 100 : progress >= 75 ? Math.round(((progress - 75) / 25) * 100) : 0,
+      initials: 'EV',
+      yPos: 275,
+      isCompleted: Boolean(progress >= 85),
+      isWorking: stage === 'code_review' && stageStatus === 'running',
+      isWaiting: false,
+      evidencePct: progress >= 85 ? 100 : stage === 'code_review' ? 50 : 0,
+      activities: [
+        'Auditing code against architectural rules',
+        'Inspecting security threat vulnerabilities',
+        'Checking secret leakage & env safety',
+        'Issuing independent sign-off'
+      ],
+      outputName: 'Code Review & Security Audit'
+    },
+    {
+      index: 7,
+      roleKey: 'qa_engineer' as RoleKey,
+      roleName: 'Independent QA',
+      personName: 'Quinn Quality',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      initials: 'QQ',
+      yPos: 325,
       isCompleted: stage === 'completed' || Boolean(project?.qaTestArtifacts && project.qaTestArtifacts.length > 0 && progress >= 100),
       isWorking: stage === 'testing' && stageStatus === 'running',
       isWaiting: stageStatus === 'failed',
-      thinkingMsg: 'Thinking and executing container tests in isolated sandbox.',
+      evidencePct: (stage === 'completed' || (project?.qaTestArtifacts && project.qaTestArtifacts.length > 0 && progress >= 100)) ? 100 : stage === 'testing' ? 50 : 0,
+      activities: [
+        'Running isolated container tests',
+        'Verifying acceptance criteria',
+        'Checking boundary edge cases',
+        'Issuing independent QA release verdict'
+      ],
+      outputName: 'Automated QA Test Suite'
     },
   ];
 
   // Active rail indicator
   const activeRail = rails.find((r) => r.isWorking || r.isWaiting) || rails[0];
 
-  // Right Preview Card Dynamic Stage Output Title & Details
-  const getRightPreviewState = () => {
+  // Derive Top Mission-Control Current Stage & Next Action
+  const getCurrentStageSummary = () => {
     if (!hasProject) {
-      return {
-        title: 'UI/UX Design',
-        statusTitle: 'Ready for prompt',
-        thinkingText: 'Submit your prompt on the left to start the autonomous delivery workflow.',
-      };
+      return { stageText: 'Awaiting project prompt', nextText: 'Enter your business idea to begin delivery loop' };
     }
-    if (stage === 'business_analysis' || stage === 'requirements_review') {
-      return {
-        title: 'Business Analysis',
-        statusTitle: 'Analysis in progress...',
-        thinkingText: 'Aria is extracting testable requirements and business logic boundaries.',
-      };
+    if (stage === 'business_analysis') {
+      return { stageText: 'Aria is analyzing business requirements', nextText: 'Requirements Baseline Approval' };
+    }
+    if (stage === 'requirements_review') {
+      return { stageText: 'Requirements Baseline ready for client review', nextText: 'Review and approve requirements' };
     }
     if (stage === 'project_planning') {
-      return {
-        title: 'Project Roadmap',
-        statusTitle: 'Planning in progress...',
-        thinkingText: 'Marcus is sequencing milestone tasks and workstream dependencies.',
-      };
+      return { stageText: 'Marcus is planning delivery roadmap & tasks', nextText: 'UI/UX Visual Design' };
     }
-    if (stage === 'ui_ux_design' || stage === 'design_review') {
-      return {
-        title: 'UI/UX Design',
-        statusTitle: 'Design in progress...',
-        thinkingText: 'Thinking and crafting the best user experience.',
-      };
+    if (stage === 'ui_ux_design') {
+      return { stageText: 'Sofia is synthesizing interactive UI/UX design', nextText: 'Design Screen Approval' };
     }
-    if (stage === 'architecture' || stage === 'engineering' || stage === 'code_review') {
-      return {
-        title: 'Full Stack Development',
-        statusTitle: 'Implementation in progress...',
-        thinkingText: 'Devon is writing clean modular code and database schemas.',
-      };
+    if (stage === 'design_review') {
+      return { stageText: 'Sofia is waiting for design screen approval', nextText: 'Review and approve design wireframes' };
+    }
+    if (stage === 'architecture') {
+      return { stageText: 'Arthur is generating system architecture & schema', nextText: 'Full Stack Engineering' };
+    }
+    if (stage === 'engineering') {
+      return { stageText: 'Devon is coding backend services and APIs', nextText: 'Code Review & Security Audit' };
+    }
+    if (stage === 'code_review') {
+      return { stageText: 'Dr. Evelyn is conducting independent code review', nextText: 'Automated QA Verification' };
     }
     if (stage === 'testing') {
-      return {
-        title: 'DevOps & Verification',
-        statusTitle: 'Testing in progress...',
-        thinkingText: 'Evelyn is running unit assertions and security sandbox checks.',
-      };
+      return { stageText: 'Quinn is executing automated QA in isolated sandbox', nextText: 'Final Release Delivery' };
     }
-    return {
-      title: 'Verified Release',
-      statusTitle: '100% Release Ready ✓',
-      thinkingText: 'All client requirements verified and ready for deployment.',
-    };
+    return { stageText: '100% Release Ready & Verified', nextText: 'Deployment & Client Handover' };
   };
 
-  const previewState = getRightPreviewState();
+  const stageSummary = getCurrentStageSummary();
   const latestDesignArtifact = project?.designArtifacts?.[0] || null;
 
   return (
-    <div className="p-6 md:p-8 max-w-[1550px] mx-auto space-y-8 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 max-w-[1650px] mx-auto space-y-6 font-sans">
+      {/* CSS Animation Keyframes for Laser Flow */}
+      <style>{`
+        @keyframes laserBeam {
+          0% { stroke-dashoffset: 120; }
+          100% { stroke-dashoffset: 0; }
+        }
+        .laser-glow {
+          filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.85));
+        }
+      `}</style>
+
+      {/* ------------------------------------------------------------- */}
+      {/* TOP MISSION CONTROL STATUS BAR */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white rounded-2xl px-5 py-3 border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+          <span className="font-bold text-slate-800">Current Stage:</span>
+          <span className="text-slate-600">{stageSummary.stageText}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400">Next:</span>
+          <span className="font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60">
+            {stageSummary.nextText}
+          </span>
+        </div>
+      </div>
+
       {/* Persistent Amber Banner: Waiting for Question Decisions */}
       {stageStatus === 'waiting_for_client' && pendingInteractions.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
@@ -350,16 +437,16 @@ export const Overview: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* 1. VISUAL DELIVERY PIPELINE (Matching Exact Layout in media_1788281208212.png) */}
+      {/* 1. VISUAL DELIVERY PIPELINE SYSTEM (Connected with Animated SVG Curved Cables) */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm relative overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-0 relative">
           {/* ------------------------------------------------------------- */}
-          {/* 1A. LEFT: PROMPT CARD (3 Cols) */}
+          {/* 1A. LEFT: PROMPT CARD */}
           {/* ------------------------------------------------------------- */}
-          <div className="lg:col-span-3 flex flex-col justify-center">
+          <div className="w-full lg:w-[260px] xl:w-[290px] shrink-0 relative z-10">
             <div
-              className={`bg-white rounded-2xl p-4 sm:p-5 border-2 transition-all shadow-md relative ${
+              className={`bg-white rounded-2xl p-5 border-2 transition-all shadow-md relative ${
                 hasProject
                   ? 'border-blue-500/80 shadow-blue-500/10'
                   : 'border-blue-400/80 hover:border-blue-500'
@@ -389,7 +476,7 @@ export const Overview: React.FC = () => {
                   <div className="text-xs font-bold text-slate-900 truncate">
                     {project?.name}
                   </div>
-                  <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 line-clamp-3 leading-relaxed">
+                  <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 line-clamp-4 leading-relaxed">
                     “{project?.clientBrief}”
                   </p>
                   <div className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 pt-1">
@@ -405,7 +492,7 @@ export const Overview: React.FC = () => {
                       type="text"
                       value={projectName}
                       onChange={(e) => setProjectName(e.target.value)}
-                      placeholder="Project Name"
+                      placeholder="Project Name (e.g. Soltrade)"
                       className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
@@ -416,7 +503,7 @@ export const Overview: React.FC = () => {
                       rows={3}
                       value={projectBrief}
                       onChange={(e) => setProjectBrief(e.target.value)}
-                      placeholder="Describe what software you want to build..."
+                      placeholder="Describe what software to build..."
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-normal"
                       required
                     />
@@ -441,28 +528,70 @@ export const Overview: React.FC = () => {
                   </button>
                 </form>
               )}
+
+              {/* Right Connector Node Dot */}
+              <div className="hidden lg:block absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-blue-600 border-4 border-white shadow-md z-20" />
             </div>
           </div>
 
           {/* ------------------------------------------------------------- */}
-          {/* 1B. CENTER: 5 SPECIALIST PROGRESS RAILS (5 Cols) */}
+          {/* 1B. LEFT SVG CURVED BRANCHING CABLES (Prompt -> Rails) */}
           {/* ------------------------------------------------------------- */}
-          <div className="lg:col-span-5 relative flex flex-col justify-center space-y-4 py-2">
+          <div className="hidden lg:block w-12 xl:w-16 h-[350px] shrink-0 pointer-events-none">
+            <svg className="w-full h-full" viewBox="0 0 60 350" fill="none" preserveAspectRatio="none">
+              {rails.map((rail) => {
+                const isRailActive = rail.isWorking || rail.isWaiting;
+                const pathD = `M 0,175 C 25,175 35,${rail.yPos} 60,${rail.yPos}`;
+
+                return (
+                  <g key={`left-curve-${rail.index}`}>
+                    {/* Background faint guide curve */}
+                    <path
+                      d={pathD}
+                      stroke={rail.isCompleted ? '#3b82f6' : '#e2e8f0'}
+                      strokeWidth={rail.isCompleted ? 2.5 : 1.8}
+                      strokeLinecap="round"
+                    />
+
+                    {/* Active glowing laser flow animation */}
+                    {isRailActive && (
+                      <path
+                        d={pathD}
+                        stroke="#2563eb"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        className="laser-glow"
+                        strokeDasharray="16 8"
+                        style={{
+                          animation: 'laserBeam 1.2s linear infinite'
+                        }}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* 1C. CENTER: 7 SPECIALIST HORIZONTAL RAILS */}
+          {/* ------------------------------------------------------------- */}
+          <div className="flex-1 w-full max-w-[560px] flex flex-col justify-center space-y-2.5 py-1 z-10">
             {rails.map((rail) => {
               const isRailActive = rail.isWorking || rail.isWaiting;
 
               return (
                 <div
                   key={rail.index}
-                  className="flex items-center gap-3 relative group"
+                  className="flex items-center gap-2 relative group"
                 >
-                  {/* Step Index Badge (1) to (5) */}
+                  {/* Step Index Badge (1) to (7) */}
                   <div
-                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors ${
                       rail.isCompleted
                         ? 'bg-blue-50 border-blue-600 text-blue-600'
                         : isRailActive
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/30'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-100'
                         : 'bg-white border-slate-200 text-slate-400'
                     }`}
                   >
@@ -474,71 +603,78 @@ export const Overview: React.FC = () => {
                     {/* Background track line */}
                     <div className="absolute left-0 right-0 h-[2px] bg-slate-200" />
 
-                    {/* Active colored progress fill */}
+                    {/* Active colored progress fill based on real evidence */}
                     <div
                       className={`absolute left-0 h-[2px] transition-all duration-700 ${
                         rail.isCompleted ? 'bg-blue-600' : isRailActive ? 'bg-blue-500' : 'bg-transparent'
                       }`}
-                      style={{ width: `${rail.pctComplete}%` }}
+                      style={{ width: `${rail.evidencePct}%` }}
                     />
 
-                    {/* Animated glowing beam along active rail */}
+                    {/* Glowing animated laser pulse along active rail */}
                     {isRailActive && (
-                      <div className="absolute left-0 right-0 h-3 pointer-events-none overflow-hidden">
-                        <div className="w-20 h-full bg-gradient-to-r from-transparent via-blue-400/80 to-transparent blur-[3px] animate-[pulse_1.5s_infinite]" />
+                      <div className="absolute left-0 right-0 h-4 pointer-events-none overflow-hidden -top-1">
+                        <div className="w-16 h-full bg-gradient-to-r from-transparent via-blue-400/90 to-transparent blur-[2px] animate-[pulse_1.5s_infinite]" />
                       </div>
                     )}
 
                     {/* Step Milestone Dots */}
-                    <div className="relative w-full flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                    <div className="relative w-full flex items-center justify-between text-[8px] font-semibold text-slate-400">
                       {[
                         { label: '25%', val: 25 },
                         { label: '50%', val: 50 },
                         { label: '75%', val: 75 },
                         { label: '100%', val: 100 },
-                      ].map((step) => (
-                        <div key={step.label} className="flex flex-col items-center -mt-3.5">
-                          <span className="text-[9px] text-slate-400 font-medium mb-1">
-                            {step.label}
-                          </span>
-                          <div
-                            className={`w-2 h-2 rounded-full transition-all ${
-                              rail.pctComplete >= step.val
-                                ? 'bg-blue-600 ring-2 ring-blue-100'
-                                : 'bg-slate-300'
-                            }`}
-                          />
-                        </div>
-                      ))}
+                      ].map((step) => {
+                        const isWaitingHere = rail.isWaiting && step.val === 50;
+                        return (
+                          <div key={step.label} className="flex flex-col items-center -mt-3">
+                            <span className="text-[8px] text-slate-400 font-medium mb-0.5">
+                              {step.label}
+                            </span>
+                            {isWaitingHere ? (
+                              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-200 animate-ping" />
+                            ) : (
+                              <div
+                                className={`w-2 h-2 rounded-full transition-all ${
+                                  rail.evidencePct >= step.val
+                                    ? 'bg-blue-600 ring-2 ring-blue-100'
+                                    : 'bg-slate-300'
+                                }`}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* Status Checkbox [✓] or Active Indicator */}
                   <div className="shrink-0">
                     {rail.isCompleted ? (
-                      <div className="w-6 h-6 rounded-lg bg-blue-50 border-2 border-blue-600 text-blue-600 flex items-center justify-center font-bold">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <div className="w-5 h-5 rounded-md bg-blue-50 border-2 border-blue-600 text-blue-600 flex items-center justify-center font-bold">
+                        <Check className="w-3 h-3 stroke-[3]" />
                       </div>
                     ) : isRailActive ? (
-                      <div className="w-6 h-6 rounded-lg border-2 border-dashed border-blue-500 bg-blue-50/50 flex items-center justify-center text-blue-600">
-                        <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                      <div className="w-5 h-5 rounded-md border-2 border-dashed border-blue-500 bg-blue-50/50 flex items-center justify-center text-blue-600">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
                       </div>
                     ) : (
-                      <div className="w-6 h-6 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center" />
+                      <div className="w-5 h-5 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center" />
                     )}
                   </div>
 
                   {/* Specialist Card (Avatar, Role, Name) */}
                   <div
-                    className={`min-w-[160px] p-2 rounded-xl border flex items-center gap-2.5 transition-all ${
+                    className={`min-w-[145px] xl:min-w-[160px] p-1.5 px-2 rounded-xl border flex items-center gap-2 transition-all ${
                       isRailActive
-                        ? 'bg-blue-50/60 border-blue-300 shadow-sm'
+                        ? 'bg-blue-50/70 border-blue-300 shadow-sm ring-1 ring-blue-200'
                         : rail.isCompleted
                         ? 'bg-white border-slate-200'
-                        : 'bg-white border-slate-100 opacity-70'
+                        : 'bg-white border-slate-100 opacity-60'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center font-bold text-xs text-slate-600">
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center font-bold text-[9px] text-slate-600">
                       {rail.avatarUrl ? (
                         <img
                           src={rail.avatarUrl}
@@ -553,10 +689,10 @@ export const Overview: React.FC = () => {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 truncate">
+                      <div className="text-[11px] font-bold text-slate-900 truncate">
                         {rail.roleName}
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate font-normal">
+                      <div className="text-[9px] text-slate-500 truncate font-normal">
                         {rail.personName}
                       </div>
                     </div>
@@ -567,63 +703,136 @@ export const Overview: React.FC = () => {
           </div>
 
           {/* ------------------------------------------------------------- */}
-          {/* 1C. RIGHT: LIVE OUTPUT & THINKING PREVIEW PANEL (4 Cols) */}
+          {/* 1D. RIGHT SVG CURVED CONVERGING CABLES (Rails -> Live Workbench) */}
           {/* ------------------------------------------------------------- */}
-          <div className="lg:col-span-4 flex flex-col justify-center">
+          <div className="hidden lg:block w-12 xl:w-16 h-[350px] shrink-0 pointer-events-none">
+            <svg className="w-full h-full" viewBox="0 0 60 350" fill="none" preserveAspectRatio="none">
+              {rails.map((rail) => {
+                const isRailActive = rail.isWorking || rail.isWaiting;
+                const pathD = `M 0,${rail.yPos} C 25,${rail.yPos} 35,175 52,175`;
+
+                return (
+                  <g key={`right-curve-${rail.index}`}>
+                    <path
+                      d={pathD}
+                      stroke={rail.isCompleted ? '#3b82f6' : '#e2e8f0'}
+                      strokeWidth={rail.isCompleted ? 2.5 : 1.8}
+                      strokeLinecap="round"
+                    />
+
+                    {isRailActive && (
+                      <path
+                        d={pathD}
+                        stroke="#2563eb"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        className="laser-glow"
+                        strokeDasharray="16 8"
+                        style={{
+                          animation: 'laserBeam 1.2s linear infinite'
+                        }}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* Converged Arrowhead pointing into Live Workbench */}
+              <polygon
+                points="52,170 60,175 52,180"
+                fill="#2563eb"
+              />
+            </svg>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* 1E. RIGHT: LIVE WORKBENCH */}
+          {/* ------------------------------------------------------------- */}
+          <div className="w-full lg:w-[280px] xl:w-[320px] shrink-0 z-10">
             <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md space-y-4 relative">
-              {/* Header Title & Sparkle Icon */}
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-                  {previewState.title}
-                </h3>
-                <Sparkles className="w-4 h-4 text-blue-500" />
+              {/* Header Title & Active Sparkle */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-600" />
+                  <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+                    Live Workbench
+                  </h3>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  {activeRail.roleName}
+                </span>
               </div>
 
-              {/* Wireframe Mockup Canvas */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 min-h-[160px] flex flex-col justify-center items-center text-center space-y-2 relative overflow-hidden">
-                {latestDesignArtifact ? (
-                  <div className="w-full text-left bg-white p-3 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
-                    <div className="text-[11px] font-bold text-blue-700 truncate">
-                      {latestDesignArtifact.screenKey || 'Dashboard Screen'}
+              {/* Dynamic Workbench Content Based on Active Specialist */}
+              <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-200/80 min-h-[170px] flex flex-col justify-between space-y-3">
+                {stage === 'ui_ux_design' || stage === 'design_review' ? (
+                  latestDesignArtifact ? (
+                    <div className="space-y-2 text-left">
+                      <div className="text-[11px] font-bold text-blue-700 flex items-center justify-between">
+                        <span>{latestDesignArtifact.screenKey || 'Interactive Wireframe'}</span>
+                        <span className="text-[9px] text-slate-400 font-mono">Stitch v1</span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-[10px] text-slate-600 line-clamp-3 leading-relaxed">
+                        {latestDesignArtifact.content?.slice(0, 140) || 'Visual layout tokens and component specifications.'}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 line-clamp-3">
-                      {latestDesignArtifact.content?.slice(0, 120) || 'Visual layout tokens and component specifications.'}
+                  ) : (
+                    <div className="space-y-2 py-2 text-center">
+                      <div className="w-full h-16 bg-blue-100/50 rounded-xl border border-blue-200/50 flex items-center justify-center text-blue-500">
+                        <Layers className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-700">Synthesizing Screen Layouts...</span>
+                    </div>
+                  )
+                ) : stage === 'engineering' ? (
+                  <div className="space-y-2 text-left font-mono text-[10px]">
+                    <div className="text-slate-800 font-bold font-sans text-xs">Generating Project Structure:</div>
+                    <div className="bg-slate-900 text-slate-200 p-2.5 rounded-xl space-y-1 font-mono text-[10px]">
+                      <div className="text-emerald-400">✓ app/main.py</div>
+                      <div className="text-emerald-400">✓ app/models/schema.py</div>
+                      <div className="text-cyan-300">● app/routes/api.py (generating)</div>
+                    </div>
+                  </div>
+                ) : stage === 'testing' ? (
+                  <div className="space-y-2 text-left text-[11px]">
+                    <div className="font-bold text-slate-800">QA Assertion Matrix:</div>
+                    <div className="space-y-1 text-slate-600 text-[10px]">
+                      <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Unit test contracts verified</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Security & secret leak audit passed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-blue-600 font-medium">
+                        <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+                        <span>Running isolated Docker container tests...</span>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2 w-full">
-                    {/* Placeholder Wireframe Blocks matching image */}
-                    <div className="w-full h-16 bg-blue-100/50 rounded-xl border border-blue-200/50 flex items-center justify-center text-blue-400">
-                      <Layers className="w-6 h-6" />
+                  <div className="space-y-2 text-left">
+                    <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                      <span>{activeRail.personName} is working...</span>
                     </div>
-                    <div className="space-y-1 px-4">
-                      <div className="w-3/4 h-2 bg-slate-200 rounded mx-auto" />
-                      <div className="w-1/2 h-2 bg-slate-200 rounded mx-auto" />
-                    </div>
+                    <ul className="space-y-1 text-[11px] text-slate-600">
+                      {activeRail.activities.slice(0, 3).map((act, i) => (
+                        <li key={i} className="flex items-center gap-1.5">
+                          <span className="text-blue-500">•</span>
+                          <span>{act}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-              </div>
 
-              {/* Live Thinking Status & Active Pulse */}
-              <div className="space-y-2 text-left pt-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                  <span className="text-xs font-bold text-slate-900">
-                    {previewState.statusTitle}
+                {/* Working Status Footer */}
+                <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
+                  <span className="font-medium truncate max-w-[160px]">
+                    Output: {activeRail.outputName}
                   </span>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  {previewState.thinkingText}
-                </p>
-
-                {/* Progress bar slider & Carousel pagination dots */}
-                <div className="pt-2 flex items-center justify-between gap-3">
-                  <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full transition-all duration-500"
-                      style={{ width: `${progress || 15}%` }}
-                    />
-                  </div>
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
@@ -631,17 +840,15 @@ export const Overview: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Action CTA when design ready */}
+                {/* Approve Design Button if Design Ready */}
                 {pendingApproval?.artifactType === 'design' && (
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleApprove}
-                      className="w-full py-2 px-3 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
-                    >
-                      ✓ Approve Design & Continue
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApprove}
+                    className="w-full py-2 px-3 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
+                  >
+                    ✓ Approve Design & Continue
+                  </button>
                 )}
               </div>
             </div>
@@ -650,131 +857,221 @@ export const Overview: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. BOTTOM SECTION: CODE & IMPLEMENTATION, PLANNING (3 Columns) */}
+      {/* 2. BOTTOM SECTION: TABBED WORKBENCH (Code | Documents & Planning | Phases) */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
-        <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-          Code & Implementation, planning
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Column 1: </> Code */}
-          <div className="bg-slate-50/70 rounded-2xl p-5 border border-slate-200/70 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <Code2 className="w-4 h-4 text-blue-600" />
-                <span>Code</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
-                {project?.codeArtifacts?.length || 0} Files
+        {/* Clean Navigation Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
+          <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setActiveBottomTab('code')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeBottomTab === 'code'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Code2 className="w-4 h-4" />
+              <span>Code</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-blue-50 text-[10px] text-blue-700 border border-blue-200 font-bold">
+                {project?.codeArtifacts?.length || 0}
               </span>
-            </div>
+            </button>
 
+            <button
+              type="button"
+              onClick={() => setActiveBottomTab('documents')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeBottomTab === 'documents'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Documents & Planning</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveBottomTab('phases')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeBottomTab === 'phases'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <WorkflowIcon className="w-4 h-4" />
+              <span>Phases</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-blue-50 text-[10px] text-blue-700 border border-blue-200 font-bold">
+                {progress}%
+              </span>
+            </button>
+          </div>
+
+          <span className="text-xs text-slate-400 hidden sm:inline font-medium">
+            Evidence-governed delivery artifacts
+          </span>
+        </div>
+
+        {/* Tab 1 Content: Code Files Tree */}
+        {activeBottomTab === 'code' && (
+          <div className="space-y-3">
             {project?.codeArtifacts && project.codeArtifacts.length > 0 ? (
-              <div className="space-y-1.5 text-xs">
-                {project.codeArtifacts.slice(0, 5).map((ca) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs font-mono">
+                {project.codeArtifacts.map((ca) => (
                   <div
                     key={ca.id}
-                    className="p-2 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between text-slate-700 font-mono text-[11px]"
+                    className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/80 flex items-center justify-between transition-colors"
                   >
-                    <span className="truncate max-w-[170px]">{ca.filePath}</span>
-                    <span className="text-[10px] text-blue-600 uppercase font-sans font-bold">
+                    <div className="flex items-center gap-2 truncate">
+                      <FileCode className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="truncate text-slate-800">{ca.filePath}</span>
+                    </div>
+                    <span className="text-[10px] text-blue-600 uppercase font-sans font-bold px-2 py-0.5 rounded bg-white border border-slate-200">
                       {ca.language}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="space-y-2 pt-1">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-4 bg-slate-200/70 rounded-md w-full animate-pulse" />
-                ))}
-                <p className="text-[11px] text-slate-400 italic pt-1">
-                  Source files will populate during the Full Stack Developer stage.
+              <div className="p-8 text-center bg-slate-50/60 rounded-2xl border border-slate-200/60 space-y-2">
+                <Code2 className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">Source files have not been generated yet</p>
+                <p className="text-xs text-slate-400">
+                  Devon Coder will generate modular application files during the Full-Stack Developer stage.
                 </p>
               </div>
             )}
           </div>
+        )}
 
-          {/* Column 2: Implementation & planning */}
-          <div className="bg-slate-50/70 rounded-2xl p-5 border border-slate-200/70 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <FileText className="w-4 h-4 text-indigo-600" />
-                <span>Implementation & planning</span>
+        {/* Tab 2 Content: Documents & Planning */}
+        {activeBottomTab === 'documents' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">Requirements Baseline v1</div>
+                <div className="text-[11px] text-slate-500">Business Analyst Scope & Stories</div>
               </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
-                Specs & Reports
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                project?.requirementBaselines?.length ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {project?.requirementBaselines?.length ? '✓ Approved' : 'Pending'}
               </span>
             </div>
 
-            {project?.requirementBaselines && project.requirementBaselines.length > 0 ? (
-              <div className="space-y-1.5 text-xs text-slate-700">
-                <div className="p-2 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
-                  <span className="font-medium truncate">Requirements Baseline v1</span>
-                  <span className="text-[10px] font-bold text-emerald-600">✓ Ready</span>
-                </div>
-                {project?.architecture && (
-                  <div className="p-2 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
-                    <span className="font-medium truncate">Solution Architecture Spec</span>
-                    <span className="text-[10px] font-bold text-emerald-600">✓ Ready</span>
-                  </div>
-                )}
-                {project?.qaTestArtifacts && project.qaTestArtifacts.length > 0 && (
-                  <div className="p-2 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
-                    <span className="font-medium truncate">Independent QA Test Suite</span>
-                    <span className="text-[10px] font-bold text-emerald-600">✓ Verified</span>
-                  </div>
-                )}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">UI/UX Design Specification</div>
+                <div className="text-[11px] text-slate-500">Interactive Screens & Design Tokens</div>
               </div>
-            ) : (
-              <div className="space-y-2 pt-1">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-4 bg-slate-200/70 rounded-md w-full animate-pulse" />
-                ))}
-                <p className="text-[11px] text-slate-400 italic pt-1">
-                  Architecture documents and verification reports will appear here.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Column 3: Phases */}
-          <div className="bg-slate-50/70 rounded-2xl p-5 border border-slate-200/70 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                <Flag className="w-4 h-4 text-cyan-600" />
-                <span>Phases</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
-                {progress}% Complete
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                workflow?.approvedDesignSpecId ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {workflow?.approvedDesignSpecId ? '✓ Approved' : 'Pending'}
               </span>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              {[
-                { name: '1. Business Analysis', pct: progress >= 25 ? 100 : Math.round((progress / 25) * 100) },
-                { name: '2. Delivery Planning', pct: progress >= 40 ? 100 : progress >= 25 ? Math.round(((progress - 25) / 15) * 100) : 0 },
-                { name: '3. UI/UX Design', pct: progress >= 50 ? 100 : progress >= 40 ? Math.round(((progress - 40) / 10) * 100) : 0 },
-                { name: '4. Full Stack Build', pct: progress >= 75 ? 100 : progress >= 50 ? Math.round(((progress - 50) / 25) * 100) : 0 },
-                { name: '5. DevOps & QA Verification', pct: progress >= 100 ? 100 : progress >= 75 ? Math.round(((progress - 75) / 25) * 100) : 0 },
-              ].map((phase) => (
-                <div key={phase.name} className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-medium text-slate-700">
-                    <span>{phase.name}</span>
-                    <span className="font-bold text-slate-900">{phase.pct}%</span>
-                  </div>
-                  <div className="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full transition-all duration-500"
-                      style={{ width: `${phase.pct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">Solution Architecture Spec</div>
+                <div className="text-[11px] text-slate-500">System Contracts & DB Schemas</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                project?.architecture ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {project?.architecture ? '✓ Ready' : 'Pending'}
+              </span>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">Independent QA Test Suite</div>
+                <div className="text-[11px] text-slate-500">Automated Docker Sandbox Assertions</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                project?.qaTestArtifacts?.length ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {project?.qaTestArtifacts?.length ? '✓ Verified' : 'Pending'}
+              </span>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">Code Review & Security Audit</div>
+                <div className="text-[11px] text-slate-500">Independent Code Quality Inspection</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                progress >= 85 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {progress >= 85 ? '✓ Signed Off' : 'Pending'}
+              </span>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900">Delivery Package & DevOps</div>
+                <div className="text-[11px] text-slate-500">Production Deployment Artifacts</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                stage === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {stage === 'completed' ? '✓ Ready' : 'Pending'}
+              </span>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Tab 3 Content: Phases Roadmap */}
+        {activeBottomTab === 'phases' && (
+          <div className="space-y-3 text-xs">
+            {[
+              { num: '01', name: 'Business Analysis', agent: 'Aria Analyst', isDone: Boolean(workflow?.approvedRequirementBaselineId), isCurr: stage === 'business_analysis' },
+              { num: '02', name: 'Delivery Planning', agent: 'Marcus Planner', isDone: Boolean(project?.tasks?.length && progress >= 35), isCurr: stage === 'project_planning' },
+              { num: '03', name: 'Experience Design', agent: 'Sofia Designer', isDone: Boolean(workflow?.approvedDesignSpecId), isCurr: stage === 'ui_ux_design' || stage === 'design_review' },
+              { num: '04', name: 'Solution Architecture', agent: 'Arthur Architect', isDone: Boolean(project?.architecture), isCurr: stage === 'architecture' },
+              { num: '05', name: 'Full-Stack Development', agent: 'Devon Coder', isDone: Boolean(project?.codeArtifacts?.length && progress >= 75), isCurr: stage === 'engineering' },
+              { num: '06', name: 'Independent Review', agent: 'Dr. Evelyn Vance', isDone: progress >= 85, isCurr: stage === 'code_review' },
+              { num: '07', name: 'Automated QA & Security', agent: 'Quinn QA', isDone: stage === 'completed' || Boolean(project?.qaTestArtifacts?.length), isCurr: stage === 'testing' },
+              { num: '08', name: 'Deployment & Delivery', agent: 'System DevOps', isDone: stage === 'completed', isCurr: stage === 'completed' },
+            ].map((p) => (
+              <div
+                key={p.num}
+                className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
+                  p.isCurr
+                    ? 'bg-blue-50/80 border-blue-300 shadow-xs'
+                    : p.isDone
+                    ? 'bg-white border-slate-200'
+                    : 'bg-slate-50 border-slate-100 opacity-60'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-bold text-slate-400">{p.num}</span>
+                  <div>
+                    <span className="font-bold text-slate-900">{p.name}</span>
+                    <span className="text-slate-400 ml-2">({p.agent})</span>
+                  </div>
+                </div>
+                <div>
+                  {p.isDone ? (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      ✓ Complete
+                    </span>
+                  ) : p.isCurr ? (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
+                      ● In Progress
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      ○ Waiting
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
