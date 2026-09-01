@@ -187,6 +187,36 @@ export class WorkflowService {
     const isTerminal = nextStage === 'completed';
     const progress = isTerminal ? 100 : (STAGE_PROGRESS_MAP[completedStage] || 0);
 
+    const queryParams: any[] = [
+      nextStage,
+      isTerminal ? 'completed' : 'pending',
+      progress,
+      payload.approvedRequirementBaselineId || null,
+      payload.approvedDesignSpecId || null,
+      isTerminal ? 'delivery' : null,
+      isTerminal
+        ? JSON.stringify({
+            type: 'delivery',
+            label: 'View Verified Delivery',
+            description: 'All 7 verification gates completed.',
+            requiresUser: false,
+            targetRoute: '/delivery',
+          })
+        : '{}',
+    ];
+
+    let rolesSql = '';
+    if (payload.requiresUIUX !== undefined) {
+      const roles = payload.requiresUIUX === false
+        ? ['business_analyst', 'project_manager', 'solution_architect', 'engineer', 'qa_engineer', 'code_reviewer']
+        : ['business_analyst', 'project_manager', 'ui_ux_designer', 'solution_architect', 'engineer', 'qa_engineer', 'code_reviewer'];
+      queryParams.push(JSON.stringify(roles));
+      rolesSql = `, required_roles = $${queryParams.length}::jsonb`;
+    }
+
+    queryParams.push(projectId);
+    const pidIdx = queryParams.length;
+
     await query(
       `UPDATE project_workflows
        SET 
@@ -197,29 +227,12 @@ export class WorkflowService {
         approved_requirement_baseline_id = COALESCE($4, approved_requirement_baseline_id),
         approved_design_spec_id = COALESCE($5, approved_design_spec_id),
         next_action_type = $6,
-        next_action_payload = $7,
+        next_action_payload = $7${rolesSql},
         runner_id = null,
         run_started_at = null,
         updated_at = now()
-       WHERE project_id = $8`,
-      [
-        nextStage,
-        isTerminal ? 'completed' : 'pending',
-        progress,
-        payload.approvedRequirementBaselineId || null,
-        payload.approvedDesignSpecId || null,
-        isTerminal ? 'delivery' : null,
-        isTerminal
-          ? JSON.stringify({
-              type: 'delivery',
-              label: 'View Verified Delivery',
-              description: 'All 7 verification gates completed.',
-              requiresUser: false,
-              targetRoute: '/delivery',
-            })
-          : '{}',
-        projectId,
-      ]
+       WHERE project_id = $${pidIdx}`,
+      queryParams
     );
 
     await query(`UPDATE projects SET status = $1, updated_at = now() WHERE id = $2`, [

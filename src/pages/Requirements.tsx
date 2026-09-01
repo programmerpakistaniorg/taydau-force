@@ -23,10 +23,11 @@ import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { Requirement } from '../types';
 import { NoProjectState } from '../components/common/NoProjectState';
+import { RequirementsReviewCard } from '../components/workflow/RequirementsReviewCard';
 
 export const Requirements: React.FC = () => {
   const { requirements: simRequirements } = useSimulation();
-  const { mode, project } = useLiveProject();
+  const { mode, project, approveRequest, requestChanges, isActionInProgress } = useLiveProject();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -120,6 +121,27 @@ export const Requirements: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Requirements Review Gate Banner */}
+      {mode === 'live' && project && project.requirementBaselines?.[0] && project.pendingApproval?.artifactType === 'requirements' && (
+        <div className="mb-4">
+          <RequirementsReviewCard
+            baseline={project.requirementBaselines[0]}
+            project={project}
+            isLoading={isActionInProgress}
+            onApprove={async () => {
+              if (project.pendingApproval) {
+                await approveRequest(project.pendingApproval.id);
+              }
+            }}
+            onRequestChanges={async (fb) => {
+              if (project.pendingApproval) {
+                await requestChanges(project.pendingApproval.id, fb);
+              }
+            }}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

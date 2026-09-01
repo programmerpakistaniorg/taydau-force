@@ -21,6 +21,12 @@ export const DesignScreenSchema = z.object({
   sections: z.array(z.string()),
   primaryActions: z.array(z.string()),
   wireframeElements: z.array(z.string()),
+  imageUrl: z.string().optional(),
+  htmlContent: z.string().optional(),
+  provider: z.string().optional(),
+  providerProjectId: z.string().optional(),
+  providerScreenId: z.string().optional(),
+  sha256: z.string().optional(),
 });
 
 export const NavigationItemSchema = z.object({
@@ -50,6 +56,40 @@ export const DesignSystemSchema = z.object({
   componentPrinciples: z.array(z.string()),
 });
 
+export const DesignBriefSchema = z.object({
+  projectSummary: z.string(),
+  businessGoal: z.string(),
+  primaryUsers: z.array(z.string()),
+  uxGoals: z.array(z.string()),
+  brand: z.object({
+    existingBrand: z.boolean().optional(),
+    visualDirection: z.string(),
+    primaryColor: z.string(),
+    secondaryColor: z.string(),
+    typographyDirection: z.string(),
+  }),
+  screens: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    purpose: z.string(),
+    primaryUser: z.string(),
+    keyContent: z.array(z.string()),
+    primaryActions: z.array(z.string()),
+  })),
+  navigation: z.object({
+    type: z.string(),
+    items: z.array(NavigationItemSchema),
+  }),
+  userFlows: z.array(UserFlowSchema),
+  responsiveRequirements: z.string(),
+  accessibilityRequirements: z.array(z.string()),
+  loadingStates: z.array(z.string()),
+  emptyStates: z.array(z.string()),
+  errorStates: z.array(z.string()),
+  contentTone: z.string(),
+  assumptions: z.array(z.string()),
+});
+
 export const DesignSpecSchema = z.object({
   productExperienceSummary: z.string(),
   uxGoals: z.array(z.string()),
@@ -65,6 +105,7 @@ export const DesignSpecSchema = z.object({
   emptyStates: z.array(z.string()),
   errorStates: z.array(z.string()),
   assumptions: z.array(z.string()),
+  designBrief: DesignBriefSchema.optional(),
 });
 
 export const UIUXDesignerOutputSchema = z.object({
@@ -76,5 +117,7 @@ export const UIUXDesignerOutputSchema = z.object({
 
 export type ClarificationQuestion = z.infer<typeof ClarificationQuestionSchema>;
 export type DesignScreen = z.infer<typeof DesignScreenSchema>;
+export type DesignSystem = z.infer<typeof DesignSystemSchema>;
+export type DesignBrief = z.infer<typeof DesignBriefSchema>;
 export type DesignSpec = z.infer<typeof DesignSpecSchema>;
 export type UIUXDesignerOutput = z.infer<typeof UIUXDesignerOutputSchema>;

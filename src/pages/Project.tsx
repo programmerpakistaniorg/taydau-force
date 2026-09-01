@@ -30,6 +30,7 @@ import { DEMO_PROJECT_INFO } from '../data/mockData';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { InteractionCard } from '../components/workflow/InteractionCard';
 import { ApprovalCard } from '../components/workflow/ApprovalCard';
+import { DeliveryPlanCard } from '../components/workflow/DeliveryPlanCard';
 
 const PROJECT_STARTER_TEMPLATES = [
   {
@@ -80,6 +81,11 @@ export const Project: React.FC = () => {
     approveRequest,
     requestChanges,
   } = useLiveProject();
+
+  React.useEffect(() => {
+    (window as any).__approveRequest = approveRequest;
+    (window as any).__requestChanges = requestChanges;
+  }, [approveRequest, requestChanges]);
 
   const [isCreating, setIsCreating] = useState<boolean>(!project);
   const [newProjectName, setNewProjectName] = useState<string>('');
@@ -227,6 +233,13 @@ export const Project: React.FC = () => {
             </form>
           </div>
         </Card>
+      )}
+
+      {/* Active PM Delivery Plan Card */}
+      {mode === 'live' && project && project.tasks.length > 0 && !pendingInteraction && !pendingApproval && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <DeliveryPlanCard project={project} />
+        </div>
       )}
 
       {/* Project Overview Cards */}

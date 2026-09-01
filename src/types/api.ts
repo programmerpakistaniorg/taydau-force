@@ -104,6 +104,27 @@ export interface DesignScreen {
   sections: string[];
   primaryActions: string[];
   wireframeElements: string[];
+  imageUrl?: string;
+  htmlContent?: string;
+  provider?: string;
+  providerProjectId?: string;
+  providerScreenId?: string;
+  sha256?: string;
+}
+
+export interface DesignArtifact {
+  id: string;
+  designSpecId: string;
+  provider: string;
+  providerProjectId?: string;
+  providerScreenId?: string;
+  screenKey: string;
+  artifactType: 'preview_image' | 'html' | 'design_system';
+  providerUrl?: string;
+  content?: string;
+  contentSha256: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
 }
 
 export interface DesignSpec {
@@ -379,6 +400,7 @@ export interface FullProjectResponse {
   pendingApproval: ApprovalRequest | null;
   requirementBaselines: RequirementBaseline[];
   designSpecs: DesignSpec[];
+  designArtifacts?: DesignArtifact[];
   requirements: BackendRequirement[];
   tasks: BackendTask[];
   architecture: BackendArchitecture | null;

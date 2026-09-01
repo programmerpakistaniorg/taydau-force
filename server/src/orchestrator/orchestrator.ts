@@ -1,3 +1,4 @@
+import { designGateway } from '../design/design-gateway.js';
 import crypto from 'crypto';
 import { withTransaction, query } from '../db/pool.js';
 import type { ModelGateway } from '../gateway/model-gateway.js';
@@ -389,7 +390,10 @@ async function executePMStep(
       }
     }
 
-    const requiresUIUX = deliveryPlan.requiresUIUX !== false;
+    const briefText = (clientBrief || '').toLowerCase();
+    const isExplicitNoUI = briefText.includes('no ui') || briefText.includes('pure backend') || briefText.includes('no user interface') || briefText.includes('cli only') || briefText.includes('rest api only');
+    const isExplicitUI = briefText.includes('web application') || briefText.includes('web app') || briefText.includes('portal') || briefText.includes('screens') || briefText.includes('user interface') || briefText.includes('booking') || briefText.includes('dashboard');
+    const requiresUIUX = isExplicitNoUI ? false : (isExplicitUI ? true : (deliveryPlan.requiresUIUX !== false));
     const nextStage: WorkflowStage = requiresUIUX ? 'ui_ux_design' : 'technical_architecture';
 
     await WorkflowService.completeStage(projectId, 'project_planning', nextStage, { requiresUIUX });
@@ -514,6 +518,27 @@ async function executeUIUXDesignerStep(
       throw new Error('UI/UX Designer did not provide a valid design spec');
     }
 
+    // Generate visual screens using Design Gateway (Stitch or TayDau fallback)
+    for (const screen of designSpec.screens) {
+      try {
+        const screenPrompt = `${screen.name}: ${screen.purpose}. Actions: ${(screen.primaryActions || []).join(', ')}. Sections: ${(screen.sections || []).join(', ')}`;
+        const visualScreen = await designGateway.generateScreen(projectId, screenPrompt, {
+          screenKey: screen.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+          screenName: screen.name,
+          purpose: screen.purpose,
+        });
+
+        screen.imageUrl = visualScreen.imageUrl;
+        screen.htmlContent = visualScreen.htmlContent;
+        screen.provider = visualScreen.provider;
+        screen.providerProjectId = projectId;
+        screen.providerScreenId = visualScreen.screenId;
+        screen.sha256 = visualScreen.sha256;
+      } catch (genErr) {
+        console.warn(`[orchestrator] Visual generation fallback for screen ${screen.name}:`, genErr);
+      }
+    }
+
     await withTransaction(async (client) => {
       const nextVersion = (existingDesignRes.rows[0]?.version || 0) + 1;
       const prevId = existingDesignRes.rows[0]?.id || null;
@@ -535,6 +560,29 @@ async function executeUIUXDesignerStep(
         ]
       );
       const specId = specRes.rows[0].id;
+
+      for (const screen of designSpec.screens) {
+        if (screen.htmlContent) {
+          await client.query(
+            `INSERT INTO design_artifacts (
+              design_spec_id, provider, provider_project_id, provider_screen_id,
+              screen_key, artifact_type, provider_url, content, content_sha256, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [
+              specId,
+              screen.provider || 'taydau-internal',
+              screen.providerProjectId || null,
+              screen.providerScreenId || null,
+              screen.name || screen.id,
+              'html',
+              screen.imageUrl || null,
+              screen.htmlContent,
+              screen.sha256 || null,
+              JSON.stringify({ route: screen.route, purpose: screen.purpose }),
+            ]
+          );
+        }
+      }
 
       const approvalRes = await client.query(
         `INSERT INTO approval_requests (project_id, artifact_type, artifact_id, artifact_version, status)

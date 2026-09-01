@@ -19,9 +19,10 @@ import { ARCHITECTURE_DECISION_RECORDS } from '../data/mockData';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { NoProjectState } from '../components/common/NoProjectState';
 import { PrototypePreview } from '../components/design/PrototypePreview';
+import { DesignReviewCard } from '../components/workflow/DesignReviewCard';
 
 export const Architecture: React.FC = () => {
-  const { mode, project } = useLiveProject();
+  const { mode, project, approveRequest, requestChanges, isActionInProgress } = useLiveProject();
   const [activeTab, setActiveTab] = useState<'preview' | 'architecture'>('preview');
 
   if (mode === 'live' && !project) {
@@ -97,7 +98,23 @@ export const Architecture: React.FC = () => {
       {/* Tab 1: Interactive Product Preview (UI/UX Designer) */}
       {activeTab === 'preview' && (
         <div className="space-y-6">
-          {latestDesign ? (
+          {latestDesign && project && project.pendingApproval?.artifactType === 'design' ? (
+            <DesignReviewCard
+              designSpec={latestDesign}
+              project={project}
+              isLoading={isActionInProgress}
+              onApprove={async () => {
+                if (project.pendingApproval) {
+                  await approveRequest(project.pendingApproval.id);
+                }
+              }}
+              onRequestChanges={async (fb) => {
+                if (project.pendingApproval) {
+                  await requestChanges(project.pendingApproval.id, fb);
+                }
+              }}
+            />
+          ) : latestDesign ? (
             <PrototypePreview designSpec={latestDesign} />
           ) : (
             <Card className="p-10 text-center text-slate-500">

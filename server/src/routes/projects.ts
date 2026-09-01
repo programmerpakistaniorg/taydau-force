@@ -457,6 +457,7 @@ router.get('/:id', async (req, res, next) => {
       securityFindingsResult,
       releaseReadinessResult,
       llmCallsResult,
+      designArtifactsResult,
     ] = await Promise.all([
       WorkflowService.getWorkflow(id),
       WorkflowService.synthesizeNextAction(id),
@@ -499,6 +500,7 @@ router.get('/:id', async (req, res, next) => {
       query('SELECT * FROM security_findings WHERE project_id = $1 ORDER BY created_at ASC', [id]),
       query('SELECT * FROM release_readiness WHERE project_id = $1 ORDER BY evaluated_at DESC LIMIT 1', [id]),
       query('SELECT * FROM llm_calls WHERE project_id = $1 ORDER BY created_at ASC', [id]),
+      query(`SELECT * FROM design_artifacts WHERE design_spec_id IN (SELECT id FROM design_specs WHERE project_id = $1) ORDER BY created_at ASC`, [id]),
     ]);
 
     const costSummary = await getProjectCostSummary(id);
@@ -593,7 +595,21 @@ router.get('/:id', async (req, res, next) => {
         createdAt: a.created_at,
         decidedAt: a.decided_at,
       })),
-      pendingApproval: approvalsRes.rows.find((a) => a.status === 'pending') || null,
+      pendingApproval: (() => {
+        const p = approvalsRes.rows.find((a) => a.status === 'pending');
+        if (!p) return null;
+        return {
+          id: p.id,
+          artifactType: p.artifact_type,
+          artifactId: p.artifact_id,
+          artifactVersion: p.artifact_version,
+          status: p.status,
+          feedback: p.feedback,
+          scopeClassification: p.scope_classification,
+          createdAt: p.created_at,
+          decidedAt: p.decided_at,
+        };
+      })(),
       requirementBaselines: reqBaselinesRes.rows.map((rb) => ({
         id: rb.id,
         version: rb.version,
@@ -613,6 +629,20 @@ router.get('/:id', async (req, res, next) => {
         clientFeedback: ds.client_feedback,
         createdAt: ds.created_at,
         approvedAt: ds.approved_at,
+      })),
+      designArtifacts: (designArtifactsResult?.rows || []).map((da: any) => ({
+        id: da.id,
+        designSpecId: da.design_spec_id,
+        provider: da.provider,
+        providerProjectId: da.provider_project_id,
+        providerScreenId: da.provider_screen_id,
+        screenKey: da.screen_key,
+        artifactType: da.artifact_type,
+        providerUrl: da.provider_url,
+        content: da.content,
+        contentSha256: da.content_sha256,
+        metadata: safeJson(da.metadata, {}),
+        createdAt: da.created_at,
       })),
       requirements: requirementsResult.rows.map((r) => ({
         id: r.id,

@@ -278,7 +278,7 @@ export const Header: React.FC = () => {
                     }
                   }}
                   disabled={isActionInProgress}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all animate-bounce duration-1000"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow transition-all"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{nextAction.label || 'Action Required'}</span>
