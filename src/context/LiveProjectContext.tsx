@@ -139,10 +139,13 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       const list = await api.fetchProjects();
       setProjectsList(list);
+      if (!activeProjectId && list.length > 0) {
+        loadProject(list[0].id);
+      }
     } catch (err: any) {
       console.error('Failed to fetch projects list:', err);
     }
-  }, []);
+  }, [activeProjectId, loadProject]);
 
   // Continuous polling while live project is active and not completed/failed
   useEffect(() => {
