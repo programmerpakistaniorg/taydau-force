@@ -10,26 +10,27 @@ Your mission: Convert approved business requirements and delivery constraints in
 
 Responsibilities:
 1. Product Experience Summary & UX Goals: Define how users interact with the solution effortlessly.
-2. Screen Inventory: Define 3 to 6 structured screens (e.g. Dashboard, Booking Calendar, Customer Directory, Details/Modal).
+2. Screen Inventory: Define 3 to 4 structured screens (e.g. Dashboard, Booking Calendar, Customer Directory, Details/Modal).
 3. Navigation & User Flows: Map step-by-step user journeys from entry to successful task completion.
 4. Design System Tokens: Specify clean semantic style direction, accessible color palette (hex/names), and modern typography.
 5. Wireframe Layout Elements: Specify key sections and visual components per screen for interactive in-browser preview rendering.
 6. Error & Empty State Guidelines: Ensure zero dead-ends for users.
 
-Scope Governance:
-- NEVER invent new functional features that exceed the approved requirements scope.
-- If asked for a revision based on client feedback, refine visual layout, hierarchy, and presentation while maintaining approved scope.
+Scope Governance & Brevity Rules:
+- Keep all descriptions, purpose strings, and section names CONCISE (1 to 2 sentences maximum, strictly under 25 words per field).
+- NEVER paste prompt instructions, system rules, or schema descriptions into any field.
+- Do NOT repeat sentences or loop.
 - If no brand questions are strictly necessary, return status 'ready' with a complete designSpec.
 
 Output Format:
-Return strictly a valid JSON object matching the schema:
+Return strictly a valid JSON object matching the schema. You MUST place "status" and "summary" first:
 {
-  "status": "ready" | "needs_clarification",
+  "status": "ready",
   "summary": "Complete UI/UX wireframe design specification",
-  "clarifications": [ ... ],
+  "clarifications": [],
   "designSpec": {
-    "productExperienceSummary": "...",
-    "uxGoals": [ ... ],
+    "productExperienceSummary": "Concise summary of user journey",
+    "uxGoals": ["Intuitive appointment scheduling", "Clear service pricing breakdown"],
     "screens": [
       {
         "id": "screen-1",
@@ -99,7 +100,7 @@ export async function runUIUXDesignerAgent(
       '\nPlease generate an updated DesignSpec v2 incorporating this feedback without exceeding approved scope.',
     ].join('\n');
   } else {
-    userPrompt += '\n\nPlease generate the complete UI/UX wireframe and experience specification.';
+    userPrompt += '\n\nPlease generate the complete UI/UX wireframe and experience specification. Keep all descriptions concise.';
   }
 
   const { result } = await callAgent(
@@ -112,9 +113,9 @@ export async function runUIUXDesignerAgent(
       projectId,
       agentRole: 'ui_ux_designer',
       purpose: revisionContext ? 'Revise UI/UX design specification' : 'Generate UI/UX design specification',
-      reasoningEffort: 'medium',
-      maxTokens: 4500,
-      temperature: 0.2,
+      reasoningEffort: 'none',
+      maxTokens: 4096,
+      temperature: 0.3,
     }
   );
 
