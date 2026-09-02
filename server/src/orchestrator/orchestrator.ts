@@ -518,11 +518,23 @@ async function executeUIUXDesignerStep(
       throw new Error('UI/UX Designer did not provide a valid design spec');
     }
 
-    // Generate visual screens using Design Gateway (Stitch or TayDau fallback)
+    // Generate visual screens using Design Gateway (Google Stitch MCP with TayDau fallback)
+    let providerProjectId = projectId;
+    try {
+      const designProj = await designGateway.createProject(
+        `TayDau - ${clientBrief.slice(0, 30).trim()}`,
+        clientBrief.slice(0, 200)
+      );
+      providerProjectId = designProj.providerProjectId;
+      console.log(`[orchestrator] Design Gateway active provider: ${designGateway.getActiveProviderName()}, Provider Project ID: ${providerProjectId}`);
+    } catch (projErr) {
+      console.warn('[orchestrator] Could not initialize design project on primary provider, will use fallback:', projErr);
+    }
+
     for (const screen of designSpec.screens) {
       try {
-        const screenPrompt = `${screen.name}: ${screen.purpose}. Actions: ${(screen.primaryActions || []).join(', ')}. Sections: ${(screen.sections || []).join(', ')}`;
-        const visualScreen = await designGateway.generateScreen(projectId, screenPrompt, {
+        const screenPrompt = `${screen.name} Screen: ${screen.purpose}. Key Sections: ${(screen.sections || []).join(', ')}. Primary Actions: ${(screen.primaryActions || []).join(', ')}. Layout Elements: ${(screen.wireframeElements || []).join(', ')}. Style: ${designSpec.designSystem?.styleDirection || 'Modern, clean, and accessible'}.`;
+        const visualScreen = await designGateway.generateScreen(providerProjectId, screenPrompt, {
           screenKey: screen.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
           screenName: screen.name,
           purpose: screen.purpose,
@@ -531,7 +543,7 @@ async function executeUIUXDesignerStep(
         screen.imageUrl = visualScreen.imageUrl;
         screen.htmlContent = visualScreen.htmlContent;
         screen.provider = visualScreen.provider;
-        screen.providerProjectId = projectId;
+        screen.providerProjectId = providerProjectId;
         screen.providerScreenId = visualScreen.screenId;
         screen.sha256 = visualScreen.sha256;
       } catch (genErr) {

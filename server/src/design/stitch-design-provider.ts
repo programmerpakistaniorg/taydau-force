@@ -9,15 +9,49 @@ import type {
 export class StitchDesignProvider implements DesignProvider {
   readonly name = 'stitch';
   private apiKey: string;
-  private baseUrl: string;
+  private mcpUrl: string = 'https://stitch.googleapis.com/mcp';
+  private restBaseUrl: string = 'https://stitch.googleapis.com/v1';
 
   constructor(apiKey?: string, baseUrl?: string) {
     this.apiKey = apiKey || process.env.STITCH_API_KEY || '';
-    this.baseUrl = baseUrl || process.env.STITCH_BASE_URL || 'https://stitch.googleapis.com/v1';
+    if (baseUrl) {
+      this.restBaseUrl = baseUrl;
+    }
   }
 
   async isAvailable(): Promise<boolean> {
     return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+  }
+
+  private async callMcpTool(toolName: string, args: Record<string, any>): Promise<any> {
+    const res = await fetch(this.mcpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': this.apiKey,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: args,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Stitch MCP HTTP ${res.status}: ${errText}`);
+    }
+
+    const data: any = await res.json();
+    if (data.error) {
+      throw new Error(`Stitch MCP Error [${data.error.code}]: ${data.error.message}`);
+    }
+
+    return data.result;
   }
 
   async createProject(projectName: string, description?: string): Promise<DesignProjectResult> {
@@ -26,26 +60,31 @@ export class StitchDesignProvider implements DesignProvider {
     }
 
     try {
-      const resp = await fetch(`${this.baseUrl}/projects`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          displayName: projectName,
-          description: description || 'TayDau Force Autonomous Delivery Project',
-        }),
+      const result = await this.callMcpTool('create_project', {
+        title: projectName,
       });
 
-      if (!resp.ok) {
-        throw new Error(`Stitch API error ${resp.status}: ${await resp.text()}`);
+      let providerProjectId = '';
+      if (result?.structuredContent?.name) {
+        providerProjectId = result.structuredContent.name.replace('projects/', '');
+      } else if (result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(result.content[0].text);
+          if (parsed.name) {
+            providerProjectId = parsed.name.replace('projects/', '');
+          }
+        } catch {
+          // ignore
+        }
       }
 
-      const data: any = await resp.json();
+      if (!providerProjectId) {
+        providerProjectId = `stitch-${crypto.randomUUID().slice(0, 8)}`;
+      }
+
       return {
-        providerProjectId: data.name || data.id || `stitch-${crypto.randomUUID().slice(0, 8)}`,
-        metadata: data,
+        providerProjectId,
+        metadata: result,
       };
     } catch (err: any) {
       console.warn(`[StitchDesignProvider] createProject failed (${err.message}). Falling back.`);
@@ -58,27 +97,18 @@ export class StitchDesignProvider implements DesignProvider {
       throw new Error('STITCH_API_KEY is not configured');
     }
 
+    const cleanId = providerProjectId.replace('projects/', '');
     try {
-      const resp = await fetch(`${this.baseUrl}/${providerProjectId}/designSystems`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          name: `${providerProjectId}-ds`,
-          brandSpec,
-        }),
+      const result = await this.callMcpTool('create_design_system', {
+        projectId: cleanId,
+        displayName: `${brandSpec?.name || 'TayDau'} Design System`,
+        colorMode: brandSpec?.colorMode || 'LIGHT',
+        customColor: brandSpec?.colors?.primary || '#1E40AF',
       });
 
-      if (!resp.ok) {
-        throw new Error(`Stitch API error ${resp.status}: ${await resp.text()}`);
-      }
-
-      const data: any = await resp.json();
       return {
-        designSystemId: data.name || data.id || `stitch-ds-${crypto.randomUUID().slice(0, 8)}`,
-        metadata: data,
+        designSystemId: result?.structuredContent?.name || `stitch-ds-${crypto.randomUUID().slice(0, 8)}`,
+        metadata: result,
       };
     } catch (err: any) {
       console.warn(`[StitchDesignProvider] createDesignSystem failed (${err.message})`);
@@ -101,33 +131,55 @@ export class StitchDesignProvider implements DesignProvider {
       throw new Error('STITCH_API_KEY is not configured');
     }
 
+    const cleanId = providerProjectId.replace('projects/', '');
     const deviceType = options?.deviceType || 'DESKTOP';
     const name = options?.screenName || 'Application Screen';
     const purpose = options?.purpose || screenPrompt.slice(0, 100);
     const screenKey = options?.screenKey || `screen-${crypto.randomUUID().slice(0, 8)}`;
 
     try {
-      const resp = await fetch(`${this.baseUrl}/${providerProjectId}:generateScreenFromText`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          prompt: screenPrompt,
-          deviceType: deviceType === 'DESKTOP' ? 'DESKTOP' : 'MOBILE',
-          designSystem: options?.designSystemId,
-        }),
+      console.log(`[StitchDesignProvider] Synthesizing screen '${name}' with Google Stitch for project ${cleanId}...`);
+
+      await this.callMcpTool('generate_screen_from_text', {
+        projectId: cleanId,
+        prompt: screenPrompt,
+        deviceType: deviceType === 'MOBILE' ? 'MOBILE' : 'DESKTOP',
+        designSystem: options?.designSystemId,
       });
 
-      if (!resp.ok) {
-        throw new Error(`Stitch API error ${resp.status}: ${await resp.text()}`);
+      // Retrieve generated screen details via Stitch REST API
+      const screensRes = await fetch(`${this.restBaseUrl}/projects/${cleanId}/screens`, {
+        headers: {
+          'X-Goog-Api-Key': this.apiKey,
+        },
+      });
+
+      let htmlContent = '';
+      let imageUrl: string | undefined = undefined;
+      let screenId = `stitch-screen-${crypto.randomUUID().slice(0, 8)}`;
+
+      if (screensRes.ok) {
+        const screensData: any = await screensRes.json();
+        const screensList = screensData.screens || [];
+        if (screensList.length > 0) {
+          // Latest screen is at the end or matches title
+          const matched = screensList.find((s: any) => s.title?.toLowerCase().includes(name.toLowerCase())) || screensList[screensList.length - 1];
+          screenId = matched.id || matched.name || screenId;
+          imageUrl = matched.screenshot?.downloadUrl;
+
+          if (matched.htmlCode?.downloadUrl) {
+            try {
+              const htmlResp = await fetch(matched.htmlCode.downloadUrl);
+              if (htmlResp.ok) {
+                htmlContent = await htmlResp.text();
+              }
+            } catch (htmlErr) {
+              console.warn(`[StitchDesignProvider] Could not download HTML from Stitch URL:`, htmlErr);
+            }
+          }
+        }
       }
 
-      const data: any = await resp.json();
-      const screenId = data.screenId || data.id || `stitch-screen-${crypto.randomUUID().slice(0, 8)}`;
-      const htmlContent = data.html || data.htmlContent;
-      const imageUrl = data.imageUrl || data.screenshotUrl;
       const sha256 = crypto.createHash('sha256').update(htmlContent || imageUrl || screenPrompt, 'utf8').digest('hex');
 
       return {
@@ -142,7 +194,7 @@ export class StitchDesignProvider implements DesignProvider {
         sha256,
         metadata: {
           provider: 'stitch',
-          stitchData: data,
+          providerProjectId: cleanId,
         },
       };
     } catch (err: any) {
@@ -161,30 +213,47 @@ export class StitchDesignProvider implements DesignProvider {
       throw new Error('STITCH_API_KEY is not configured');
     }
 
+    const cleanId = providerProjectId.replace('projects/', '');
+    const cleanScreenId = screenId.replace(/^.*screens\//, '');
     const name = options?.screenName || 'Revised Screen';
     const purpose = options?.purpose || editPrompt.slice(0, 100);
     const screenKey = options?.screenKey || screenId;
 
     try {
-      const resp = await fetch(`${this.baseUrl}/${providerProjectId}/screens/${screenId}:edit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          editPrompt,
-        }),
+      await this.callMcpTool('edit_screens', {
+        projectId: cleanId,
+        prompt: editPrompt,
+        selectedScreenIds: [cleanScreenId],
       });
 
-      if (!resp.ok) {
-        throw new Error(`Stitch API error ${resp.status}: ${await resp.text()}`);
+      const screensRes = await fetch(`${this.restBaseUrl}/projects/${cleanId}/screens`, {
+        headers: { 'X-Goog-Api-Key': this.apiKey },
+      });
+
+      let htmlContent = '';
+      let imageUrl: string | undefined = undefined;
+      let newScreenId = cleanScreenId;
+
+      if (screensRes.ok) {
+        const screensData: any = await screensRes.json();
+        const screensList = screensData.screens || [];
+        const latest = screensList[screensList.length - 1];
+        if (latest) {
+          newScreenId = latest.id || newScreenId;
+          imageUrl = latest.screenshot?.downloadUrl;
+          if (latest.htmlCode?.downloadUrl) {
+            try {
+              const htmlResp = await fetch(latest.htmlCode.downloadUrl);
+              if (htmlResp.ok) {
+                htmlContent = await htmlResp.text();
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
       }
 
-      const data: any = await resp.json();
-      const newScreenId = data.screenId || data.id || `stitch-screen-rev-${crypto.randomUUID().slice(0, 8)}`;
-      const htmlContent = data.html || data.htmlContent;
-      const imageUrl = data.imageUrl || data.screenshotUrl;
       const sha256 = crypto.createHash('sha256').update(htmlContent || imageUrl || editPrompt, 'utf8').digest('hex');
 
       return {
@@ -218,35 +287,41 @@ export class StitchDesignProvider implements DesignProvider {
       throw new Error('STITCH_API_KEY is not configured');
     }
 
+    const cleanId = providerProjectId.replace('projects/', '');
+    const cleanScreenId = screenId.replace(/^.*screens\//, '');
+
     try {
-      const resp = await fetch(`${this.baseUrl}/${providerProjectId}/screens/${screenId}:generateVariants`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+      await this.callMcpTool('generate_variants', {
+        projectId: cleanId,
+        prompt: 'Alternative visual style and layout variants',
+        selectedScreenIds: [cleanScreenId],
+        variantOptions: {
+          variantCount: Math.min(count, 3),
+          creativeRange: 'EXPLORE',
         },
-        body: JSON.stringify({
-          variantCount: Math.min(count, 2),
-        }),
       });
 
-      if (!resp.ok) {
-        throw new Error(`Stitch API error ${resp.status}: ${await resp.text()}`);
-      }
+      const screensRes = await fetch(`${this.restBaseUrl}/projects/${cleanId}/screens`, {
+        headers: { 'X-Goog-Api-Key': this.apiKey },
+      });
 
-      const data: any = await resp.json();
-      const screens: any[] = data.screens || data.variants || [];
-      return screens.map((s, idx) => {
+      if (!screensRes.ok) return [];
+
+      const screensData: any = await screensRes.json();
+      const screensList: any[] = screensData.screens || [];
+      const variants = screensList.slice(-count);
+
+      return variants.map((s, idx) => {
         const sId = s.id || `stitch-var-${idx}-${crypto.randomUUID().slice(0, 6)}`;
-        const sha256 = crypto.createHash('sha256').update(s.html || s.imageUrl || sId, 'utf8').digest('hex');
+        const sha256 = crypto.createHash('sha256').update(s.screenshot?.downloadUrl || sId, 'utf8').digest('hex');
         return {
           screenId: sId,
-          screenKey: `${screenId}-var-${idx + 1}`,
-          name: `Variant ${String.fromCharCode(65 + idx)}`,
-          title: `Option ${String.fromCharCode(65 + idx)}`,
-          purpose: `Alternative design variant ${idx + 1}`,
-          imageUrl: s.imageUrl,
-          htmlContent: s.html,
+          screenKey: `${cleanScreenId}-var-${idx + 1}`,
+          name: s.title || `Variant ${String.fromCharCode(65 + idx)}`,
+          title: s.title || `Option ${String.fromCharCode(65 + idx)}`,
+          purpose: s.prompt || `Alternative design variant ${idx + 1}`,
+          imageUrl: s.screenshot?.downloadUrl,
+          htmlContent: '',
           deviceType: 'DESKTOP',
           sha256,
           metadata: { provider: 'stitch', variantIndex: idx + 1 },
