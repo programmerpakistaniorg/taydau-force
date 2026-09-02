@@ -401,7 +401,13 @@ export const Overview: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setIsApprovalModalOpen(true)}
+            onClick={() => {
+              if (pendingApproval.artifactType === 'design') {
+                navigate('/architecture');
+              } else {
+                setIsApprovalModalOpen(true);
+              }
+            }}
             className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
           >
             {pendingApproval.artifactType === 'requirements'
@@ -1176,26 +1182,7 @@ export const Overview: React.FC = () => {
                 </div>
               )}
 
-            {pendingApproval.artifactType === 'design' &&
-              project?.designSpecs?.[0] &&
-              project && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsApprovalModalOpen(false)}
-                    className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white text-slate-600 hover:text-slate-900 shadow-md flex items-center justify-center border border-slate-200 font-bold cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                  <DesignReviewCard
-                    designSpec={project.designSpecs[0]}
-                    project={project}
-                    onApprove={handleApprove}
-                    onRequestChanges={handleRequestChanges}
-                    isLoading={isActionInProgress}
-                  />
-                </div>
-              )}
+
           </div>
         </div>
       )}

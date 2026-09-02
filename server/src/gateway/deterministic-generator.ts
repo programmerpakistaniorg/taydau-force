@@ -156,7 +156,152 @@ export class DeterministicGenerator {
     };
   }
 
-  static generateDesignerOutput(): UIUXDesignerOutput {
+  static generateDesignerOutput(userPrompt?: string): UIUXDesignerOutput {
+    const promptLower = (userPrompt || '').toLowerCase();
+    const isPortfolioOrAgency =
+      promptLower.includes('portfolio') ||
+      promptLower.includes('ui/ux') ||
+      promptLower.includes('designer') ||
+      promptLower.includes('agency') ||
+      promptLower.includes('services website') ||
+      promptLower.includes('showcase');
+
+    if (isPortfolioOrAgency) {
+      return {
+        status: 'ready',
+        summary: 'World-class UI/UX Designer Portfolio and Services website design specification with high-impact case studies, service tiers, and interactive consultation intake.',
+        clarifications: [],
+        designSpec: {
+          productExperienceSummary: 'Elevated, high-conversion designer portfolio and services studio. Features immersive project showcases, clear service deliverables, social proof, and seamless project intake.',
+          uxGoals: [
+            'Immediate visual impact and credibility within 3 seconds',
+            'Interactive case study exploration with verifiable conversion metrics',
+            'Frictionless project inquiry and consultation booking flow',
+          ],
+          screens: [
+            {
+              id: 'scr-001',
+              name: 'Portfolio Hero & Work Showcase',
+              purpose: 'High-impact portfolio showcase presenting core UI/UX capabilities, featured case studies, and instant consultation booking.',
+              route: '/',
+              primaryUser: 'Prospective Clients & Founders',
+              sections: [
+                'Sticky Top Navigation with Brand & CTA',
+                'Hero Value Proposition with Social Proof Badges',
+                'Featured Case Studies Grid with Live Metric Badges',
+                'Client Results & Testimonial Carousel',
+                'Interactive Consultation Booking Banner',
+              ],
+              primaryActions: ['Explore Case Studies', 'Schedule Free Consultation', 'View Live Prototypes'],
+              wireframeElements: [
+                'Interactive Project Cards with Metrics (+140% Conversion)',
+                'Client Logo Wall & Trust Chips',
+                'High-Contrast Hero Headline with Live Demos',
+                'Quick Consultation Intake Drawer',
+              ],
+            },
+            {
+              id: 'scr-002',
+              name: 'Services & Capabilities Matrix',
+              purpose: 'Clear breakdown of design offerings, deliverables, turnaround sprints, and engagement models.',
+              route: '/services',
+              primaryUser: 'Founders & Product Teams',
+              sections: [
+                '3-Tier Core Offerings (Product Discovery, Design Systems, Mobile Apps)',
+                'Deliverables Matrix with Turnaround Timelines',
+                '4-Step Design Sprint Process (Discover, Wireframe, Prototype, Test)',
+                'Transparent Scope & Retainer Calculator',
+              ],
+              primaryActions: ['Select Service Package', 'Request Custom Proposal', 'Download Capabilities Deck'],
+              wireframeElements: [
+                'Tiered Service Cards with Feature Checklists',
+                'Step-by-Step Delivery Timeline',
+                'Interactive Scope & Budget Estimator',
+              ],
+            },
+            {
+              id: 'scr-003',
+              name: 'Case Study Deep-Dive View',
+              purpose: 'Detailed presentation of design methodology, wireframes, user testing outcomes, and measurable business impact.',
+              route: '/work/:slug',
+              primaryUser: 'Prospective Clients',
+              sections: [
+                'Project Context & Client Problem Statement',
+                'UX Research & User Journey Mapping',
+                'Interactive Wireframe to High-Fi Comparison',
+                'Design System Component Tokens',
+                'Business Outcomes (+140% Conversion, $2.4M ARR Impact)',
+              ],
+              primaryActions: ['Launch Interactive Prototype', 'Next Case Study', 'Book Similar Project'],
+              wireframeElements: [
+                'Before & After Interactive View Slider',
+                'Component Swatch Grid',
+                'Key KPI Stat Counters',
+              ],
+            },
+            {
+              id: 'scr-004',
+              name: 'Project Consultation & Booking',
+              purpose: 'Frictionless project intake questionnaire and calendar booking for qualified client inquiries.',
+              route: '/contact',
+              primaryUser: 'Prospective Clients',
+              sections: [
+                'Project Scope Questionnaire',
+                'Timeline & Budget Range Selector',
+                'Direct Calendar Consultation Slot Picker',
+                'Client Inquiry Validation Form',
+              ],
+              primaryActions: ['Submit Project Brief', 'Book Live Video Call', 'Direct Email Inquiry'],
+              wireframeElements: [
+                'Interactive Pill Selectors for Scope & Budget',
+                'Calendar Slot Picker Component',
+                'Real-Time Validation Form with Instant Confirmation',
+              ],
+            },
+          ],
+          navigation: {
+            type: 'Topbar',
+            items: [
+              { label: 'Work', route: '/', iconName: 'Briefcase' },
+              { label: 'Services', route: '/services', iconName: 'Layers' },
+              { label: 'About & Process', route: '/about', iconName: 'User' },
+              { label: 'Contact', route: '/contact', iconName: 'Mail' },
+            ],
+          },
+          userFlows: [
+            {
+              name: 'Portfolio Discovery to Consultation Flow',
+              steps: ['Explore Featured Case Study', 'Review Service Pricing Tiers', 'Select Budget & Timeline', 'Submit Consultation Request'],
+            },
+          ],
+          designSystem: {
+            styleDirection: 'High-End Minimalist Studio Aesthetic',
+            colors: {
+              primary: '#6366F1',
+              secondary: '#EC4899',
+              background: '#0B0F19',
+              surface: '#111827',
+              text: '#F9FAFB',
+            },
+            typography: {
+              headingFont: 'Plus Jakarta Sans, sans-serif',
+              bodyFont: 'Inter, sans-serif',
+            },
+            componentPrinciples: [
+              'Generous whitespace and refined typography hierarchy',
+              'Subtle glassmorphism surfaces with crisp 1px borders',
+              'High-contrast interactive CTA buttons with micro-interactions',
+            ],
+          },
+          responsiveBehavior: 'Responsive fluid desktop & tablet grid with collapsible mobile drawer menu.',
+          loadingStates: ['Subtle skeleton shimmer placeholders for case study media cards'],
+          emptyStates: ['Clean portfolio empty state with direct invitation to request a custom archive'],
+          errorStates: ['Inline form field validation highlights with instant error hints'],
+          assumptions: ['Target viewport ranges from 375px mobile to 2560px ultra-wide desktop'],
+        },
+      };
+    }
+
     return {
       status: 'ready',
       summary: 'Production UI/UX design spec with responsive navigation, state handling, and interactive components.',
@@ -167,41 +312,41 @@ export class DeterministicGenerator {
         screens: [
           {
             id: 'scr-001',
-            name: 'Operational Dashboard',
+            name: 'Application Dashboard',
             purpose: 'Provide daily operational overview, status metrics, and quick actions.',
             route: '/dashboard',
             primaryUser: 'Staff & Manager',
             sections: ['Header Navigation', 'Status KPI Summary', 'Active Tasks Table', 'Activity Feed'],
-            primaryActions: ['Create Booking', 'Update Status', 'Export Summary'],
+            primaryActions: ['Create Item', 'Update Status', 'Export Summary'],
             wireframeElements: ['KPI Card Grid', 'Filterable Data Table', 'Modal Drawer for New Entries'],
           },
           {
             id: 'scr-002',
-            name: 'Customer Portal',
-            purpose: 'Allow customers to view available slots and manage their service requests.',
-            route: '/portal',
-            primaryUser: 'Customer',
-            sections: ['Service Selector', 'Calendar Slot Picker', 'Confirmation Banner'],
-            primaryActions: ['Select Service', 'Confirm Slot', 'Cancel Request'],
-            wireframeElements: ['Date-Time Picker Component', 'Service Card List', 'Summary Receipt Card'],
+            name: 'Details & Management View',
+            purpose: 'Allow users to inspect details, configure parameters, and take actions.',
+            route: '/manage',
+            primaryUser: 'End User',
+            sections: ['Item Overview', 'Configuration Panel', 'Activity Timeline'],
+            primaryActions: ['Save Changes', 'Execute Action', 'Cancel'],
+            wireframeElements: ['Form Controls', 'Timeline List', 'Action Summary Card'],
           },
         ],
         navigation: {
           type: 'Sidebar',
           items: [
             { label: 'Dashboard', route: '/dashboard', iconName: 'LayoutDashboard' },
-            { label: 'Portal', route: '/portal', iconName: 'Users' },
+            { label: 'Management', route: '/manage', iconName: 'Layers' },
             { label: 'Settings', route: '/settings', iconName: 'Settings' },
           ],
         },
         userFlows: [
           {
-            name: 'Booking Creation Flow',
-            steps: ['Open Portal', 'Select Service & Date', 'Submit Details', 'Receive Confirmation ID'],
+            name: 'Primary Task Execution Flow',
+            steps: ['Open Dashboard', 'Select Item', 'Modify Attributes', 'Save and Confirm'],
           },
         ],
         designSystem: {
-          styleDirection: 'Modern Minimalist Dark/Light Mode',
+          styleDirection: 'Modern Minimalist Clean Light/Dark Theme',
           colors: {
             primary: '#3B82F6',
             secondary: '#10B981',
@@ -217,7 +362,7 @@ export class DeterministicGenerator {
         },
         responsiveBehavior: 'Fluid grid with mobile bottom navigation bar and desktop sidebar.',
         loadingStates: ['Skeleton shimmer loaders on KPI cards', 'Spinner on action buttons'],
-        emptyStates: ['No active bookings graphic with direct Call To Action button'],
+        emptyStates: ['No items found graphic with direct action button'],
         errorStates: ['Inline banner with actionable retry button and error code details'],
         assumptions: ['Target viewport ranges from 375px mobile to 1920px desktop'],
       },

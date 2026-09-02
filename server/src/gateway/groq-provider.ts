@@ -561,7 +561,7 @@ export class GroqProvider implements ModelGateway {
       case 'ui_designer':
       case 'ui_ux_designer':
       case 'designer':
-        return DeterministicGenerator.generateDesignerOutput();
+        return DeterministicGenerator.generateDesignerOutput(request.userPrompt);
       case 'solution_architect':
       case 'architect':
         return DeterministicGenerator.generateArchitectureOutput();
