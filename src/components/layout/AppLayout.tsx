@@ -13,8 +13,7 @@ import {
   Sparkles,
   Settings,
   HelpCircle,
-  User,
-  Shield
+  User
 } from 'lucide-react';
 import { DocumentationModal } from '../common/DocumentationModal';
 import { useLiveProject } from '../../context/LiveProjectContext';
@@ -50,8 +49,12 @@ export const AppLayout: React.FC = () => {
             className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 p-[2px] shadow-sm hover:scale-105 transition-transform flex items-center justify-center group"
             title="TayDau Force Home"
           >
-            <div className="w-full h-full bg-white rounded-[9px] flex items-center justify-center font-black text-blue-600 text-xs">
-              <Shield className="w-5 h-5 fill-blue-600 text-blue-600" />
+            <div className="w-full h-full bg-white rounded-[9px] flex items-center justify-center overflow-hidden p-1">
+              <img
+                src="/TayDau-Force-Logo.png"
+                alt="TayDau Force Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
           </Link>
 
