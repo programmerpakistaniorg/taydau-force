@@ -13,13 +13,16 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'tabi',
     modelId: 'qwen-max',
     displayName: 'Qwen Max (Tabi AI)',
-    capabilityTier: 4,
+    capabilityTier: 4, // TayDau internal routing policy classification
     codeTier: 4,
     reasoningTier: 4,
     structuredOutputTier: 4,
+    providerContextLimit: 32768,
+    routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 1.60,
     outputCostPer1M: 6.40,
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     latencyProfileMs: 1400,
   },
@@ -27,13 +30,16 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'tabi',
     modelId: 'qwen-plus',
     displayName: 'Qwen Plus (Tabi AI)',
-    capabilityTier: 3,
+    capabilityTier: 3, // TayDau internal routing policy classification
     codeTier: 3,
     reasoningTier: 3,
     structuredOutputTier: 4,
+    providerContextLimit: 131072, // Underlying Qwen capability
+    routingContextLimit: 32768, // Conservative TayDau policy cap
     maxContextTokens: 32768,
     inputCostPer1M: 0.40,
     outputCostPer1M: 1.20,
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     latencyProfileMs: 900,
   },
@@ -41,13 +47,16 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'groq',
     modelId: 'qwen/qwen3.8-27b',
     displayName: 'Qwen 3.8 27B (Groq)',
-    capabilityTier: 3,
+    capabilityTier: 3, // TayDau internal routing policy classification
     codeTier: 3,
     reasoningTier: 3,
     structuredOutputTier: 4,
+    providerContextLimit: 32768,
+    routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.80,
     outputCostPer1M: 4.00,
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     latencyProfileMs: 650,
   },
@@ -55,28 +64,34 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'groq',
     modelId: 'llama-3.3-70b-versatile',
     displayName: 'Llama 3.3 70B Versatile (Groq)',
-    capabilityTier: 3,
+    capabilityTier: 3, // TayDau internal routing policy classification
     codeTier: 3,
     reasoningTier: 3,
     structuredOutputTier: 4,
+    providerContextLimit: 131072, // Actual Groq context capability
+    routingContextLimit: 32768, // Conservative TayDau policy routing cap
     maxContextTokens: 32768,
     inputCostPer1M: 0.59,
     outputCostPer1M: 0.79,
+    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
     enabled: true,
     latencyProfileMs: 700,
   },
   {
     provider: 'groq',
     modelId: 'deepseek-r1-distill-llama-70b',
-    displayName: 'DeepSeek R1 Distill 70B (Groq Reasoning)',
+    displayName: 'DeepSeek R1 Distill 70B (Groq Reasoning - Deprecated Oct 2, 2025)',
     capabilityTier: 4,
     codeTier: 4,
     reasoningTier: 4,
     structuredOutputTier: 4,
+    providerContextLimit: 131072,
+    routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.75,
     outputCostPer1M: 0.99,
-    enabled: true,
+    pricingProvenance: 'UNKNOWN',
+    enabled: false, // DEPRECATED & DISABLED on Groq
     latencyProfileMs: 1200,
   },
 
@@ -85,13 +100,16 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'tabi',
     modelId: 'qwen-turbo',
     displayName: 'Qwen Turbo (Tabi AI Fast)',
-    capabilityTier: 2,
+    capabilityTier: 2, // TayDau internal routing policy classification
     codeTier: 2,
     reasoningTier: 2,
     structuredOutputTier: 3,
+    providerContextLimit: 131072,
+    routingContextLimit: 16384, // Conservative TayDau policy routing cap
     maxContextTokens: 16384,
     inputCostPer1M: 0.10,
     outputCostPer1M: 0.20,
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     allowedTaskTypes: [
       'requirements_synthesis',
@@ -105,13 +123,16 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'groq',
     modelId: 'llama-3.1-8b-instant',
     displayName: 'Llama 3.1 8B Instant (Groq Fast)',
-    capabilityTier: 2,
+    capabilityTier: 2, // TayDau internal routing policy classification
     codeTier: 2,
     reasoningTier: 2,
     structuredOutputTier: 3,
+    providerContextLimit: 131072, // Actual Groq context capability
+    routingContextLimit: 8192, // Conservative TayDau policy routing cap
     maxContextTokens: 8192,
     inputCostPer1M: 0.05,
     outputCostPer1M: 0.08,
+    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
     enabled: true,
     allowedTaskTypes: [
       'requirements_synthesis',
@@ -127,16 +148,19 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'local',
     modelId: 'deterministic-generator',
     displayName: 'Deterministic Safe Generator',
-    capabilityTier: 1,
+    capabilityTier: 1, // Deterministic Generator
     codeTier: 1,
     reasoningTier: 1,
     structuredOutputTier: 4,
+    providerContextLimit: 100000,
+    routingContextLimit: 100000,
     maxContextTokens: 100000,
     inputCostPer1M: 0,
     outputCostPer1M: 0,
+    pricingProvenance: 'ADAPTER_CONFIGURED_PRICE',
     enabled: true,
     latencyProfileMs: 10,
-  }
+  },
 ];
 
 /**

@@ -1,5 +1,6 @@
 import { query } from '../db/pool.js';
 import { config } from '../config.js';
+import { MODEL_REGISTRY } from '../gateway/routing-registry.js';
 
 /**
  * Cost telemetry service.
@@ -56,32 +57,57 @@ export async function recordLlmCall(record: CostRecord): Promise<void> {
 }
 
 /**
- * Compute the USD cost for a single call using the pricing map from config.
- * Returns 0 (with a console warning) when the model has no pricing entry.
+ * Compute the USD cost for a single call using the pricing map from config or Model Registry.
+ * Deterministic generator and mock return 0.
+ * If truly unknown, logs warning and calculates with conservative rate without assuming free.
  */
 export function calculateCost(
   modelId: string,
   inputTokens: number,
   outputTokens: number
 ): number {
-  const normalizedId = modelId.replace(/[\/\.]/g, '-');
-  const pricing = config.pricing[modelId] ?? config.pricing[normalizedId];
-  if (!pricing) {
-    // Standard list-price fallbacks for known hackathon models if not configured in env
-    if (normalizedId.includes('20b')) {
-      return (inputTokens / 1_000_000) * 0.20 + (outputTokens / 1_000_000) * 0.40;
-    }
-    if (normalizedId.includes('120b')) {
-      return (inputTokens / 1_000_000) * 0.60 + (outputTokens / 1_000_000) * 1.20;
-    }
-    if (normalizedId.includes('27b')) {
-      return (inputTokens / 1_000_000) * 0.80 + (outputTokens / 1_000_000) * 4.00;
-    }
-    console.warn(`[cost-telemetry] No pricing config for model: ${modelId}, using 0`);
+  if (modelId === 'deterministic-generator' || modelId === 'local' || modelId === 'mock') {
     return 0;
   }
-  return (inputTokens / 1_000_000) * pricing.inputPer1M
-       + (outputTokens / 1_000_000) * pricing.outputPer1M;
+
+  const normalizedId = modelId.replace(/[\/\.]/g, '-');
+  const pricing = config.pricing[modelId] ?? config.pricing[normalizedId];
+  if (pricing) {
+    return (
+      (inputTokens / 1_000_000) * pricing.inputPer1M +
+      (outputTokens / 1_000_000) * pricing.outputPer1M
+    );
+  }
+
+  // Check MODEL_REGISTRY
+  const regModel = MODEL_REGISTRY.find(
+    (m) => m.modelId === modelId || m.modelId.replace(/[\/\.]/g, '-') === normalizedId
+  );
+  if (
+    regModel &&
+    regModel.inputCostPer1M !== null &&
+    regModel.outputCostPer1M !== null &&
+    regModel.pricingProvenance !== 'UNKNOWN'
+  ) {
+    return (
+      (inputTokens / 1_000_000) * regModel.inputCostPer1M +
+      (outputTokens / 1_000_000) * regModel.outputCostPer1M
+    );
+  }
+
+  // Standard list-price fallbacks for known hackathon models if not configured in env
+  if (normalizedId.includes('20b')) {
+    return (inputTokens / 1_000_000) * 0.20 + (outputTokens / 1_000_000) * 0.40;
+  }
+  if (normalizedId.includes('120b')) {
+    return (inputTokens / 1_000_000) * 0.60 + (outputTokens / 1_000_000) * 1.20;
+  }
+  if (normalizedId.includes('27b')) {
+    return (inputTokens / 1_000_000) * 0.80 + (outputTokens / 1_000_000) * 4.00;
+  }
+
+  console.warn(`[cost-telemetry] Unknown pricing config for model: ${modelId}, using default conservative estimate`);
+  return (inputTokens / 1_000_000) * 0.50 + (outputTokens / 1_000_000) * 1.00;
 }
 
 /**

@@ -63,8 +63,9 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // Check context token limit
-      if (model.maxContextTokens < taskProfile.contextSizeEstimate) {
+      // Check routing context token limit
+      const contextLimit = model.routingContextLimit || model.maxContextTokens;
+      if (contextLimit < taskProfile.contextSizeEstimate) {
         rejectedCandidates.push({ modelId: model.modelId, reason: 'CONTEXT_LIMIT_EXCEEDED' });
         continue;
       }
@@ -105,13 +106,20 @@ export class DynamicModelRouter {
       // Candidate is eligible
       candidateModels.push(model.modelId);
 
+      const isPriceUnknown =
+        model.inputCostPer1M === null ||
+        model.outputCostPer1M === null ||
+        model.pricingProvenance === 'UNKNOWN';
+
       const estimatedInputTokens = Math.round(taskProfile.contextSizeEstimate * 0.75);
       const estimatedOutputTokens = Math.round(taskProfile.contextSizeEstimate * 0.25);
-      const estimatedCost =
-        (estimatedInputTokens / 1_000_000) * model.inputCostPer1M +
-        (estimatedOutputTokens / 1_000_000) * model.outputCostPer1M;
+      const estimatedCost = isPriceUnknown
+        ? 0
+        : (estimatedInputTokens / 1_000_000) * (model.inputCostPer1M || 0) +
+          (estimatedOutputTokens / 1_000_000) * (model.outputCostPer1M || 0);
 
-      let score = 100 - estimatedCost * 10; // lower cost -> higher score
+      // Penalize unknown price models in cost scoring so they never falsely win CHEAPEST_MODEL over priced models
+      let score = isPriceUnknown ? 5 : 100 - estimatedCost * 10;
 
       // Verifier Diversity Preference (without violating quality floor)
       let reason: RoutingReasonCode = 'LOWER_COST_ELIGIBLE';
@@ -160,9 +168,11 @@ export class DynamicModelRouter {
     if (mode === 'shadow') {
       const staticModel = options?.staticModelId || (config.models as any)?.[taskProfile.agentRole] || 'qwen-max';
       const staticCap = MODEL_REGISTRY.find((m) => m.modelId === staticModel) || selected.model;
+      const inCost = staticCap.inputCostPer1M ?? 0;
+      const outCost = staticCap.outputCostPer1M ?? 0;
       const staticCost =
-        (taskProfile.contextSizeEstimate * 0.75 / 1_000_000) * staticCap.inputCostPer1M +
-        (taskProfile.contextSizeEstimate * 0.25 / 1_000_000) * staticCap.outputCostPer1M;
+        (taskProfile.contextSizeEstimate * 0.75 / 1_000_000) * inCost +
+        (taskProfile.contextSizeEstimate * 0.25 / 1_000_000) * outCost;
 
       return {
         provider: staticCap.provider,
@@ -219,8 +229,9 @@ export class DynamicModelRouter {
     );
 
     if (higherCandidates.length > 0) {
-      higherCandidates.sort((a, b) => a.inputCostPer1M - b.inputCostPer1M);
+      higherCandidates.sort((a, b) => (a.inputCostPer1M ?? 999) - (b.inputCostPer1M ?? 999));
       const chosen = higherCandidates[0];
+      const inCost = chosen.inputCostPer1M ?? 0;
       return {
         provider: chosen.provider,
         modelId: chosen.modelId,
@@ -228,7 +239,7 @@ export class DynamicModelRouter {
         degradedMode: false,
         candidateModels: higherCandidates.map((c) => c.modelId),
         rejectedCandidates: [{ modelId: currentModelId, reason: 'SCHEMA_VALIDATION_FAILED' }],
-        estimatedCostUsd: (taskProfile.contextSizeEstimate / 1_000_000) * chosen.inputCostPer1M,
+        estimatedCostUsd: (taskProfile.contextSizeEstimate / 1_000_000) * inCost,
       };
     }
 

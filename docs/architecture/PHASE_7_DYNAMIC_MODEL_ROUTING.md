@@ -1,8 +1,8 @@
 # Phase 7 Architecture Truth: Evidence-Governed Dynamic Model Routing & Cost Optimization
 
 **Branch**: `live-mvp`  
-**Milestone Tag**: `phase7-dynamic-model-routing-closure`  
-**Baseline Commits**:
+**Milestone Tag**: `phase7-dynamic-model-routing-final`  
+**Baseline Commits & Tags**:
 - Phase 0: `dc3044a` (`phase0-architecture-truth-baseline`)
 - Phase 1: `23c7728` (`phase1-governed-autonomous-rework`)
 - Phase 2: `6554a3e` (`phase2-true-full-stack-generation`)
@@ -11,87 +11,56 @@
 - Phase 5: `8af40a5` (`phase5-secure-live-application-preview`)
 - Phase 6: `b15f4fe` (`phase6-git-native-delivery`)
 - Phase 7: `32e7ed6` (`phase7-dynamic-model-routing`)
+- Phase 7A: `91f148c` (`phase7-dynamic-model-routing-closure`)
 
 ---
 
 ## 1. Executive Summary & Core Principle
 
-Phase 7 replaces TayDau Force's static model binding and failover behavior with an **Evidence-Governed Dynamic Model Router**.
+Phase 7 replaces static model bindings with an **Evidence-Governed Dynamic Model Router** that chooses the cheapest eligible model meeting required capability floors.
 
-The routing engine evaluates the lowest-cost sufficiently capable model and provider for each specialized task while strictly enforcing:
+Core Invariant:
 - **QUALITY FLOOR FIRST. COST OPTIMIZATION SECOND.**
-- If no available model satisfies the required capability and quality floor, the router **never** silently downgrades.
-- When all semantic model providers fail and limited deterministic output is produced, it is explicitly flagged as `degraded_mode = true`.
-- **Release Gate Invariant**: The Release Evaluator (Check 9) strictly fails `is_ready = false` if any critical stage (`architecture_design`, `fullstack_code_generation`, `defect_rework`) was produced under degraded mode.
+- A model is never silently downgraded below the required capability floor.
+- Unknown pricing is never treated as $0.
+- Fallback to local deterministic generator is explicitly marked `degraded_mode = true`, and strictly blocks release readiness via Release Evaluator Check 9.
 
 ---
 
-## 2. Dynamic Model Routing Pipeline
+## 2. Authoritative Model Capability Registry Truth Table
 
-```text
-               Task Context (Agent Role, Purpose, Prompt)
-                                │
-                                ▼
-                           TaskProfile
-             (taskType, complexity, risk, reasoningReq,
-              codeReq, structuredReq, contextSizeEstimate)
-                                │
-                                ▼
-                    Model Capability Registry
-             (Tabi AI, Groq, Reasoning Models, Fast Models)
-                                │
-                                ▼
-                     Hard Constraint Filter
-                 (Enabled, Context Limit, Allowed Tasks)
-                                │
-                                ▼
-                      Quality Floor Policy
-               (minReasoningTier, minCodeTier, minStructuredTier)
-                                │
-                                ▼
-                       Provider Health Gate
-                    (Circuit Breaker / Failure Rate)
-                                │
-                                ▼
-                      Verifier Diversity Boost
-                 (Prefer model diversity for Reviewer/QA)
-                                │
-                                ▼
-                      Cost & Score Ranking
-                 (Rank lowest cost meeting quality floor)
-                                │
-                                ▼
-                        Routing Decision
-                 (Provider, ModelId, Reason Code)
-                                │
-      ┌─────────────────────────┼─────────────────────────┐
-      ▼                         ▼                         ▼
-Primary Model Call      1-Turn Schema Repair      Capability Escalation
-(JSON Schema Output)    (if schema invalid)       (if repair fails)
-      │                         │                         │
-      └─────────────────────────┼─────────────────────────┘
-                                │
-                                ▼
-               Persist Evidence & Emit Real-Time Events
-         (model_routing_decisions, llm_calls, model.routing.*)
-```
+*Note: Reasoning and Code Tiers are **TAYDAU INTERNAL ROUTING POLICY CLASSIFICATIONS (v1.0.0)**, not vendor benchmark claims.*
+
+| Provider | Model Identifier | Availability | Provider Context Limit | TayDau Policy Routing Cap | Input Price / 1M | Output Price / 1M | Pricing Provenance | Policy Reasoning Tier | Policy Code Tier | Structured Output Mode | Allowed Task Classes |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :--- | :--- |
+| **Tabi AI** | `qwen-max` | **ACTIVE** | 32,768 | 32,768 | $1.60 | $6.40 | `ACCOUNT_CONFIGURED_PRICE` | Tier 4 (Elite) | Tier 4 (Elite) | JSON Prompt Schema | ALL |
+| **Tabi AI** | `qwen-plus` | **ACTIVE** | 131,072 | 32,768 | $0.40 | $1.20 | `ACCOUNT_CONFIGURED_PRICE` | Tier 3 (High) | Tier 3 (High) | JSON Prompt Schema | ALL |
+| **Tabi AI** | `qwen-turbo` | **ACTIVE** | 131,072 | 16,384 | $0.10 | $0.20 | `ACCOUNT_CONFIGURED_PRICE` | Tier 2 (Fast) | Tier 2 (Fast) | JSON Prompt Schema | Requirements, Planning, Design, Summarization |
+| **Groq** | `qwen/qwen3.8-27b` | **ACTIVE** | 32,768 | 32,768 | $0.80 | $4.00 | `ACCOUNT_CONFIGURED_PRICE` | Tier 3 (High) | Tier 3 (High) | `json_object` Mode | ALL |
+| **Groq** | `llama-3.3-70b-versatile` | **ACTIVE** | 131,072 | 32,768 | $0.59 | $0.79 | `PUBLIC_PROVIDER_PRICE` | Tier 3 (High) | Tier 3 (High) | `json_object` Mode | ALL |
+| **Groq** | `llama-3.1-8b-instant` | **ACTIVE** | 131,072 | 8,192 | $0.05 | $0.08 | `PUBLIC_PROVIDER_PRICE` | Tier 2 (Fast) | Tier 2 (Fast) | `json_object` Mode | Requirements, Planning, Design, Summarization |
+| **Groq** | `deepseek-r1-distill-llama-70b` | **DISABLED** | 131,072 | 32,768 | — | — | `UNKNOWN` (Deprecated Oct 2025) | Tier 4 (Elite) | Tier 4 (Elite) | Disabled | None |
+| **Local** | `deterministic-generator` | **FALLBACK** | 100,000 | 100,000 | $0.00 | $0.00 | `ADAPTER_CONFIGURED_PRICE` | Tier 1 (Deterministic) | Tier 1 (Deterministic) | Programmatic Types | Fallback Only (`degraded_mode = true`) |
+
+### Inventory Summary:
+- **Total Registry Entries**: 8
+- **Active Semantic LLM Models**: 6 (3 Tabi AI + 3 Groq)
+- **Deprecated / Disabled Models**: 1 (`deepseek-r1-distill-llama-70b`)
+- **Deterministic Degraded Fallback**: 1 (`deterministic-generator`)
 
 ---
 
-## 3. Model Capability Registry & Basis Classification
+## 3. Specialist Role Ownership & Independence
 
-| Provider | Model Identifier | Type | Capability Tier | Code Tier | Reasoning Tier | Structured Tier | Context Limit | Input Price / 1M | Output Price / 1M | Basis Classification |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Tabi AI** | `qwen-max` | Semantic LLM | 4 (Elite) | 4 | 4 | 4 | 32,768 | $1.60 | $6.40 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Tabi AI** | `qwen-plus` | Semantic LLM | 3 (High) | 3 | 3 | 4 | 32,768 | $0.40 | $1.20 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Tabi AI** | `qwen-turbo` | Semantic LLM | 2 (Fast) | 2 | 2 | 3 | 16,384 | $0.10 | $0.20 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Groq** | `qwen/qwen3.8-27b` | Semantic LLM | 3 (High) | 3 | 3 | 4 | 32,768 | $0.80 | $4.00 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Groq** | `llama-3.3-70b-versatile` | Semantic LLM | 3 (High) | 3 | 3 | 4 | 32,768 | $0.59 | $0.79 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Groq** | `deepseek-r1-distill-llama-70b` | Semantic LLM | 4 (Elite) | 4 | 4 | 4 | 32,768 | $0.75 | $0.99 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Groq** | `llama-3.1-8b-instant` | Semantic LLM | 2 (Fast) | 2 | 2 | 3 | 8,192 | $0.05 | $0.08 | Pricing: Configured; Context: Provider; Tiers: TayDau Policy |
-| **Local** | `deterministic-generator` | Fallback | 1 (Degraded) | 1 | 1 | 4 | 100,000 | $0.00 | $0.00 | Local Rule-Engine Generator |
-
-*Total Registry Entries: 8 (7 Semantic LLM Models + 1 Local Deterministic Fallback).*
+| Specialist Agent | Assigned Name | Primary Responsibilities |
+| :--- | :--- | :--- |
+| **Business Analyst** | `Sofia` | Client brief parsing, requirements synthesis, interactive Q&A |
+| **Project Manager** | `Marcus` | Task decomposition, delivery plan, timeline milestones |
+| **UI/UX Designer** | `Aria` | Component design specs, color tokens, layout hierarchy |
+| **Solution Architect** | `Zara` | System architecture, ER diagrams, endpoint contracts, schema models |
+| **Software Engineer** | `Devon` | Full-stack generation, backend Express, frontend React |
+| **Code Reviewer** | `Evelyn` | Independent code quality audit, security analysis (0 generation authority) |
+| **QA Engineer** | `Quinn` | Frozen test suite authoring, automated execution, defect verification |
 
 ---
 
@@ -111,63 +80,24 @@ Primary Model Call      1-Turn Schema Repair      Capability Escalation
 
 ---
 
-## 5. Verifier Role Independence & Diversity
+## 5. Matched Static vs Dynamic Benchmark & Economic Evidence
 
-To reduce common-mode model bias without breaking organizational role boundaries:
-- **Role Isolation**: Engineer cannot approve own work; verifiers (Code Reviewer, QA Engineer) never receive Engineer private reasoning or scratchpads.
-- **Model Diversity**: If the Software Engineer generated code using Model A (e.g. `qwen-plus`), the Dynamic Router boosts eligible alternative tier-3/tier-4 models (e.g. `llama-3.3-70b-versatile`) for Code Reviewer and QA test generation.
-
----
-
-## 6. Database Migration `013_dynamic_model_routing.sql` & Table Reconciliation
-
-- **Phase 6 Domain Tables**: 30 tables
-- **Migration 013 Created**: `model_routing_decisions`
-- **Total Domain Tables**: **31**
-- **Migration Runner System Table**: 1 (`_migrations`)
-- **Total Tables in PostgreSQL**: **32**
-
-```sql
-CREATE TABLE IF NOT EXISTS model_routing_decisions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  agent_role VARCHAR(64) NOT NULL,
-  task_type VARCHAR(64) NOT NULL,
-  task_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
-  routing_policy_version VARCHAR(32) NOT NULL DEFAULT 'v1.0.0',
-  candidate_models JSONB NOT NULL DEFAULT '[]'::jsonb,
-  rejected_candidates JSONB NOT NULL DEFAULT '[]'::jsonb,
-  selected_provider VARCHAR(64) NOT NULL,
-  selected_model VARCHAR(128) NOT NULL,
-  routing_reason VARCHAR(64) NOT NULL,
-  routing_mode VARCHAR(32) NOT NULL DEFAULT 'active'
-    CHECK (routing_mode IN ('static', 'shadow', 'active')),
-  shadow_selection JSONB,
-  estimated_cost_usd NUMERIC(10, 6) NOT NULL DEFAULT 0,
-  actual_cost_usd NUMERIC(10, 6),
-  latency_ms INT,
-  fallback_count INT NOT NULL DEFAULT 0,
-  degraded_mode BOOLEAN NOT NULL DEFAULT FALSE,
-  validation_status VARCHAR(32) NOT NULL DEFAULT 'pending'
-    CHECK (validation_status IN ('pending', 'passed', 'escalated', 'failed')),
-  error_message TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_model_routing_project_created 
-ON model_routing_decisions(project_id, created_at DESC);
-```
-
----
-
-## 7. Matched Static vs Dynamic Benchmark & Economic Evidence
-
-*Workload: 7 representative multi-agent tasks across 4 verified requirements in a controlled benchmark run.*
+*Workload: 7 representative multi-agent tasks across 4 verified requirements in a matched controlled benchmark run.*
 
 | Metric | Static Baseline (Qwen Max) | Dynamic Routing (Policy v1.0.0) | Variance / Savings |
 | :--- | :--- | :--- | :--- |
-| **Total Project LLM Cost** | **$0.0896** | **$0.0149** | **83.4% reduction in this controlled benchmark** |
+| **Total Project LLM Cost** | **$0.0896** | **$0.0149** | **83.4% reduction in this controlled matched benchmark** |
 | **Cost per Verified Requirement** | **$0.0224** | **$0.0037** | **83.5% reduction** |
 | **Deterministic Quality Gates** | 100% PASS | 100% PASS | Zero regressions |
 | **Degraded Calls in Live Delivery** | 0 | 0 | Zero unverified fallbacks |
-| **Release Readiness Gate** | Release Ready | Release Ready | Release Evaluator 100% satisfied |
+| **Release Readiness Gate** | Release Ready | Release Ready | Release Evaluator 100% satisfied (9/9 checks) |
+
+---
+
+## 6. Database Table Reconciliation
+
+- **Phase 6 Domain Tables**: 30 tables
+- **Migration 013 Created**: `model_routing_decisions`
+- **Total Domain Application Tables**: **31**
+- **Migration Runner System Table**: 1 (`_migrations`)
+- **Total Tables in PostgreSQL Database**: **32**

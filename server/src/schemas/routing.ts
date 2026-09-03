@@ -61,17 +61,26 @@ export interface TaskProfile {
   };
 }
 
+export type PricingProvenance =
+  | 'PUBLIC_PROVIDER_PRICE'
+  | 'ACCOUNT_CONFIGURED_PRICE'
+  | 'ADAPTER_CONFIGURED_PRICE'
+  | 'UNKNOWN';
+
 export interface ModelCapability {
   provider: 'tabi' | 'groq' | 'local' | 'mock';
   modelId: string;
   displayName: string;
-  capabilityTier: number; // 1 (basic) to 4 (elite)
-  codeTier: number; // 1 to 4
-  reasoningTier: number; // 1 to 4
+  capabilityTier: number; // 1 (basic) to 4 (elite) - TayDau internal routing policy classification
+  codeTier: number; // 1 to 4 - TayDau internal routing policy classification
+  reasoningTier: number; // 1 to 4 - TayDau internal routing policy classification
   structuredOutputTier: number; // 1 to 4
-  maxContextTokens: number;
-  inputCostPer1M: number;
-  outputCostPer1M: number;
+  providerContextLimit: number; // Actual configured/provider capability
+  routingContextLimit: number; // Conservative TayDau policy routing cap
+  maxContextTokens: number; // Backwards compatible alias to routingContextLimit
+  inputCostPer1M: number | null;
+  outputCostPer1M: number | null;
+  pricingProvenance: PricingProvenance;
   enabled: boolean;
   allowedTaskTypes?: TaskType[];
   latencyProfileMs?: number;
