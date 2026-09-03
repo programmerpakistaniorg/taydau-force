@@ -36,8 +36,8 @@ Core Invariants:
 | **Project Manager** | `Marcus Planner` | Senior Delivery Manager | Task decomposition, delivery approach, milestone sequencing |
 | **UI/UX Designer** | `Sofia Designer` | Lead Product Experience Designer | Component design specs, color tokens, layout hierarchy |
 | **Solution Architect** | `Arthur Blueprint` | Principal Solution Architect | System architecture, ER diagrams, endpoint contracts, schema models |
-| **Full-Stack Engineer** | `Devon Coder` | Senior Full-Stack Engineer | Production Express backend, React frontend, database migrations |
-| **Code Reviewer** | `Dr. Evelyn Auditor` | Principal Code & Security Auditor | Independent static code audit, architectural compliance, security gate |
+| **Full-Stack Engineer** | `Devon Coder` | Senior Full-Stack Engineer | Production full-stack implementation, frontend, backend, database migrations and deployment artifacts |
+| **Code Reviewer** | `Dr. Evelyn Auditor` | Principal Code & Security Auditor | Independent code quality and architectural compliance audit (separate from deterministic security gate) |
 | **Independent QA Engineer** | `Quinn Tester` | Lead Independent Verification Engineer | Independent test suite derivation, air-gapped verification, defect logging |
 
 ---
