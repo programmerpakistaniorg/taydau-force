@@ -46,16 +46,14 @@ export const AppLayout: React.FC = () => {
         <div className="flex flex-col items-center gap-6">
           <Link
             to="/"
-            className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 p-[2px] shadow-sm hover:scale-105 transition-transform flex items-center justify-center group"
+            className="w-12 h-12 rounded-xl flex items-center justify-center hover:scale-105 transition-transform group p-0.5"
             title="TayDau Force Home"
           >
-            <div className="w-full h-full bg-white rounded-[9px] flex items-center justify-center overflow-hidden p-1">
-              <img
-                src="/TayDau-Force-Logo.png"
-                alt="TayDau Force Logo"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <img
+              src="/TayDau-Force-Logo.png"
+              alt="TayDau Force Logo"
+              className="w-full h-full object-contain"
+            />
           </Link>
 
           {/* Navigation Icon List */}
