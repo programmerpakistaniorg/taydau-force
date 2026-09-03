@@ -51,8 +51,8 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     codeTier: 3,
     reasoningTier: 3,
     structuredOutputTier: 4,
-    providerContextLimit: 32768,
-    routingContextLimit: 32768,
+    providerContextLimit: 131042, // Actual Groq Qwen context capability
+    routingContextLimit: 32768, // Conservative TayDau policy routing cap
     maxContextTokens: 32768,
     inputCostPer1M: 0.80,
     outputCostPer1M: 4.00,
@@ -73,7 +73,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     maxContextTokens: 32768,
     inputCostPer1M: 0.59,
     outputCostPer1M: 0.79,
-    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     latencyProfileMs: 700,
   },
@@ -132,7 +132,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     maxContextTokens: 8192,
     inputCostPer1M: 0.05,
     outputCostPer1M: 0.08,
-    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
+    pricingProvenance: 'ACCOUNT_CONFIGURED_PRICE',
     enabled: true,
     allowedTaskTypes: [
       'requirements_synthesis',
