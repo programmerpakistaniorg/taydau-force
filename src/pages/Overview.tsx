@@ -1381,30 +1381,20 @@ export const Overview: React.FC = () => {
       {/* 5. APPROVAL MODAL OVERLAYS */}
       {/* ========================================================================= */}
       {isApprovalModalOpen && pendingApproval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
-          <div className="max-w-4xl w-full my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="max-w-4xl w-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-150">
             {pendingApproval.artifactType === 'requirements' &&
               project?.requirementBaselines?.[0] &&
               project && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsApprovalModalOpen(false)}
-                    className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white text-slate-600 hover:text-slate-900 shadow-md flex items-center justify-center border border-slate-200 font-bold cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                  <RequirementsReviewCard
-                    baseline={project.requirementBaselines[0]}
-                    project={project}
-                    onApprove={handleApprove}
-                    onRequestChanges={handleRequestChanges}
-                    isLoading={isActionInProgress}
-                  />
-                </div>
+                <RequirementsReviewCard
+                  baseline={project.requirementBaselines[0]}
+                  project={project}
+                  onApprove={handleApprove}
+                  onRequestChanges={handleRequestChanges}
+                  onClose={() => setIsApprovalModalOpen(false)}
+                  isLoading={isActionInProgress}
+                />
               )}
-
-
           </div>
         </div>
       )}
