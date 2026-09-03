@@ -61,6 +61,14 @@ export const ProjectEventTypeSchema = z.enum([
   'preview.stopped',
   'preview.expired',
 
+  'delivery.git.preparing',
+  'delivery.git.repository_created',
+  'delivery.git.commit_created',
+  'delivery.git.push_started',
+  'delivery.git.push_completed',
+  'delivery.git.failed',
+  'delivery.ready',
+
   'release.ready',
   'release.blocked',
 ]);

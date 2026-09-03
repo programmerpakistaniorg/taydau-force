@@ -1,6 +1,7 @@
 import { DefectService } from '../services/defect-service.js';
 import { EventEmitterService } from '../services/event-emitter.js';
 import { LivePreviewManager } from '../services/live-preview-manager.js';
+import { GitDeliveryService } from '../services/git-delivery-service.js';
 import { Router, Request, Response, NextFunction } from 'express';
 import { query, withTransaction } from '../db/pool.js';
 import { createGateway } from '../gateway/provider-factory.js';
@@ -1072,6 +1073,53 @@ router.post('/:id/preview/stop', async (req, res) => {
     res.json({ success: true, message: 'Preview stopped.' });
   } catch (err: any) {
     console.error('[routes/projects] Error stopping preview:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/delivery/git/status — Get Git delivery status
+router.get('/:id/delivery/git/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await GitDeliveryService.getDeliveryStatus(id);
+    res.json(status || { deliveryStatus: 'none' });
+  } catch (err: any) {
+    console.error('[routes/projects] Error getting delivery status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/:id/delivery/git/prepare — Materialize verified revision into Git repo
+router.post('/:id/delivery/git/prepare', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { revisionVersion, branchName, allowUnverified } = req.body || {};
+    const result = await GitDeliveryService.prepareDelivery({
+      projectId: id,
+      revisionVersion,
+      branchName,
+      allowUnverified: Boolean(allowUnverified),
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[routes/projects] Error preparing Git delivery:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/:id/delivery/git/push — Push delivery repo to remote
+router.post('/:id/delivery/git/push', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { deliveryId, remoteUrl } = req.body || {};
+    if (!deliveryId || !remoteUrl) {
+      res.status(400).json({ error: 'deliveryId and remoteUrl are required' });
+      return;
+    }
+    const result = await GitDeliveryService.pushDelivery(deliveryId, remoteUrl);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[routes/projects] Error pushing Git delivery:', err);
     res.status(500).json({ error: err.message });
   }
 });
