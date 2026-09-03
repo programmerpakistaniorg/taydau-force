@@ -35,6 +35,7 @@ import { useSimulation, SIMULATION_STEPS } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { Task, KanbanLane } from '../types';
 import { NoProjectState } from '../components/common/NoProjectState';
+import { LivePreviewFrame } from '../components/workspace/LivePreviewFrame';
 
 export const Execution: React.FC = () => {
   const {
@@ -55,7 +56,7 @@ export const Execution: React.FC = () => {
     );
   }
 
-  const [activeTab, setActiveTab] = useState<'outcomes' | 'kanban'>('outcomes');
+  const [activeTab, setActiveTab] = useState<'outcomes' | 'kanban' | 'preview'>('outcomes');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTask, setActiveTask] = useState<any | null>(null);
@@ -192,8 +193,26 @@ export const Execution: React.FC = () => {
             <Kanban className="w-3.5 h-3.5 text-brand-blue" />
             <span>Developer View</span>
           </button>
+          <button
+            onClick={() => setActiveTab('preview')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'preview'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Live Running Sandbox</span>
+          </button>
         </div>
       </div>
+
+      {/* VIEW 0: Live Running Sandbox */}
+      {activeTab === 'preview' && (
+        <div className="animate-in fade-in duration-150">
+          <LivePreviewFrame projectId={project?.id || ''} />
+        </div>
+      )}
 
       {/* VIEW 1: Outcomes & Deliverables (Default) */}
       {activeTab === 'outcomes' && (

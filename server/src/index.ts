@@ -3,7 +3,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import { errorHandler } from './middleware/error-handler.js';
 import projectsRouter from './routes/projects.js';
-
+import { LivePreviewManager } from './services/live-preview-manager.js';
 import { query } from './db/pool.js';
 
 const app = express();
@@ -47,6 +47,8 @@ app.listen(config.port, async () => {
   try {
     await query('SELECT 1');
     console.log(`[startup] Database connectivity verified.`);
+    await LivePreviewManager.reconcileOrphans();
+    LivePreviewManager.initReaper();
   } catch (err: any) {
     console.error(`[startup] WARNING: Database connection failed:`, err.message);
   }

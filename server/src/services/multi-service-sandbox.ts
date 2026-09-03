@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { query } from '../db/pool.js';
 import { SafeComposeService } from './safe-compose-service.js';
+import { EventEmitterService } from './event-emitter.js';
 import type { ProjectManifest } from '../schemas/manifest.js';
 import type { ServiceExecutionSpec, ResourcePolicy, VerificationRunRecord } from '../schemas/verification.js';
 
@@ -390,6 +391,21 @@ export class MultiServiceSandbox {
           result.cleanupState,
         ]
       );
+
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'verification.completed',
+        stage: 'independent_qa',
+        actorRole: 'qa_engineer',
+        actorName: 'Quinn Tester',
+        summary: `Multi-service verification ${result.status} (run: ${result.runId}).`,
+        payload: {
+          runId: result.runId,
+          status: result.status,
+          services: result.services.map((s) => s.name),
+          durationMs: result.durationMs,
+        },
+      }).catch((e) => console.warn('[multi-service-sandbox] Event emit error:', e));
     } catch (e) {
       console.warn('[multi-service-sandbox] Failed to persist verification run:', e);
     }

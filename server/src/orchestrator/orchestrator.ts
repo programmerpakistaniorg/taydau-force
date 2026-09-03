@@ -7,6 +7,7 @@ import { designGateway } from '../design/design-gateway.js';
 import crypto from 'crypto';
 import { withTransaction, query } from '../db/pool.js';
 import type { ModelGateway } from '../gateway/model-gateway.js';
+import { EventEmitterService } from '../services/event-emitter.js';
 import { runBAAgent } from '../agents/ba-agent.js';
 import { runPMDeliveryPlanAgent, runPMTaskRefinementAgent, type RequirementContext } from '../agents/pm-agent.js';
 import { runUIUXDesignerAgent } from '../agents/ui-ux-designer-agent.js';
@@ -213,6 +214,17 @@ async function executeBAStep(
 
         const nextAction = await WorkflowService.synthesizeNextAction(projectId);
         await WorkflowService.waitForClient(projectId, 'business_analysis', 'business_analyst', nextAction);
+
+        await EventEmitterService.emit({
+          projectId,
+          eventType: 'interaction.required',
+          stage: 'business_analysis',
+          actorRole: 'business_analyst',
+          actorName: 'Aria Analyst',
+          summary: `Aria Analyst requested clarification on ${evalResult.allowedQuestions.length} decision point(s).`,
+          payload: { questionCount: evalResult.allowedQuestions.length },
+        }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
         return;
       }
     }
@@ -223,6 +235,7 @@ async function executeBAStep(
       });
     }
 
+    let createdApprovalId = '';
     await withTransaction(async (client) => {
       await client.query(`DELETE FROM requirements WHERE project_id = $1`, [projectId]);
 
@@ -256,6 +269,7 @@ async function executeBAStep(
         [projectId, baselineId]
       );
       const approvalId = approvalRes.rows[0].id;
+      createdApprovalId = approvalId;
 
       await client.query(
         `UPDATE project_workflows
@@ -276,7 +290,7 @@ async function executeBAStep(
           JSON.stringify({
             type: 'approve_requirements',
             label: 'Review & Approve Requirements',
-            description: 'Aria has prepared the requirements baseline for your review.',
+            description: 'Aria has synthesized the requirements baseline for your review and approval.',
             requiresUser: true,
             targetRoute: '/requirements',
             entityId: approvalId,
@@ -287,6 +301,21 @@ async function executeBAStep(
 
       await client.query(`UPDATE projects SET status = 'analyzed', updated_at = now() WHERE id = $1`, [projectId]);
     });
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'approval.required',
+      stage: 'requirements_review',
+      actorRole: 'business_analyst',
+      actorName: 'Aria Analyst',
+      summary: 'Requirements Baseline ready for client review and approval.',
+      payload: {
+        approvalId: createdApprovalId,
+        artifactType: 'requirements',
+        artifactVersion: 1,
+        requirementsCount: baResult.requirements.length,
+      },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
     await WorkflowService.logActivity(
       projectId,
@@ -557,8 +586,12 @@ async function executeUIUXDesignerStep(
       }
     }
 
+    let specId = '';
+    let nextVersion = 1;
+    let approvalId = '';
+
     await withTransaction(async (client) => {
-      const nextVersion = (existingDesignRes.rows[0]?.version || 0) + 1;
+      nextVersion = (existingDesignRes.rows[0]?.version || 0) + 1;
       const prevId = existingDesignRes.rows[0]?.id || null;
 
       const specRes = await client.query(
@@ -577,7 +610,7 @@ async function executeUIUXDesignerStep(
           revisionContext?.clientFeedback || null,
         ]
       );
-      const specId = specRes.rows[0].id;
+      specId = specRes.rows[0].id;
 
       for (const screen of designSpec.screens) {
         if (screen.htmlContent) {
@@ -608,7 +641,7 @@ async function executeUIUXDesignerStep(
          RETURNING id`,
         [projectId, specId, nextVersion]
       );
-      const approvalId = approvalRes.rows[0].id;
+      approvalId = approvalRes.rows[0].id;
 
       await client.query(
         `UPDATE project_workflows
@@ -638,6 +671,34 @@ async function executeUIUXDesignerStep(
         ]
       );
     });
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'design.generated',
+      stage: 'ui_ux_design',
+      actorRole: 'ui_ux_designer',
+      actorName: 'Sofia Designer',
+      summary: `Sofia Designer generated wireframes with ${designSpec.screens.length} screens.`,
+      payload: {
+        designSpecId: specId,
+        version: nextVersion,
+        screensCount: designSpec.screens.length,
+      },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'approval.required',
+      stage: 'design_review',
+      actorRole: 'ui_ux_designer',
+      actorName: 'Sofia Designer',
+      summary: `Interactive Wireframe Preview (v${nextVersion}) ready for client review.`,
+      payload: {
+        approvalId,
+        artifactType: 'design',
+        artifactVersion: nextVersion,
+      },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
     await WorkflowService.logActivity(
       projectId,
@@ -1215,6 +1276,16 @@ async function executeCodeReviewStep(
       acceptanceIntent: r.title || 'Implement requirement',
     }));
 
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'review.started',
+      stage: 'code_review',
+      actorRole: 'code_reviewer',
+      actorName: 'Dr. Evelyn Auditor',
+      summary: 'Dr. Evelyn started architectural and code review audit.',
+      payload: { fileCount: files.length },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
     const reviewResult = await runCodeReviewAgent(
       gateway,
       {
@@ -1251,6 +1322,19 @@ async function executeCodeReviewStep(
       const classification = DefectClassifier.classifyCodeReviewFinding(projectId, { ...firstBlocker, filePath: firstBlocker.filePath || undefined });
       const { defect } = await DefectService.recordOrUpdateDefect(projectId, classification);
 
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'review.blocked',
+        stage: 'code_review',
+        actorRole: 'code_reviewer',
+        actorName: 'Dr. Evelyn Auditor',
+        summary: `Code review blocked: ${firstBlocker.description}`,
+        payload: {
+          blockersCount: blockingFindings.length,
+          firstBlockerCode: firstBlocker.code,
+        },
+      }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
       await WorkflowService.logActivity(
         projectId,
         'Dr. Evelyn Auditor',
@@ -1283,6 +1367,19 @@ async function executeCodeReviewStep(
       await executeCodeReviewStep(projectId, clientBrief, gateway, runnerId);
       return;
     }
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'review.completed',
+      stage: 'code_review',
+      actorRole: 'code_reviewer',
+      actorName: 'Dr. Evelyn Auditor',
+      summary: `Code review completed with 0 blocking findings (${reviewResult.findings.length} total findings).`,
+      payload: {
+        findingsCount: reviewResult.findings.length,
+        architectureCompliance: reviewResult.architectureCompliance,
+      },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
     // Resolve any previous review defects if all blocking findings cleared
     const openReviewDefects = await query(
@@ -1346,6 +1443,15 @@ async function executeQAStep(
     'QA Verification Started',
     'Deriving/executing acceptance test suite in air-gapped sandbox without viewing implementation source code.'
   );
+
+  await EventEmitterService.emit({
+    projectId,
+    eventType: 'qa.started',
+    stage: 'independent_qa',
+    actorRole: 'qa_engineer',
+    actorName: 'Quinn Tester',
+    summary: 'Quinn Tester started independent acceptance test verification.',
+  }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
   try {
     const [reqRes, archRes, tasksRes] = await Promise.all([
@@ -1485,6 +1591,20 @@ async function executeQAStep(
       );
     }
 
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'qa.test_progress',
+      stage: 'independent_qa',
+      actorRole: 'qa_engineer',
+      actorName: 'Quinn Tester',
+      summary: `Executed ${sandboxResult.testsPassed + sandboxResult.testsFailed} tests (${sandboxResult.testsPassed} passed, ${sandboxResult.testsFailed} failed).`,
+      payload: {
+        testsPassed: sandboxResult.testsPassed,
+        testsFailed: sandboxResult.testsFailed,
+        exitCode: sandboxResult.exitCode,
+      },
+    }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
     // 4. Layered Classification
     const classification = DefectClassifier.classifySandboxExecution(projectId, sandboxResult);
 
@@ -1511,6 +1631,19 @@ async function executeQAStep(
           `All acceptance tests passed. Defect ${d.code} resolved against frozen suite.`
         );
       }
+
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'qa.completed',
+        stage: 'independent_qa',
+        actorRole: 'qa_engineer',
+        actorName: 'Quinn Tester',
+        summary: `Independent QA verified: ${sandboxResult.testsPassed} tests passed (Exit: 0).`,
+        payload: {
+          testsPassed: sandboxResult.testsPassed,
+          suiteSha: activeSuiteSha256,
+        },
+      }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
       await WorkflowService.completeStage(projectId, 'independent_qa', 'release_evaluation');
 

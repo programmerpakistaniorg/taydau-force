@@ -2,6 +2,7 @@ import { query } from '../db/pool.js';
 import { spawn } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
+import { EventEmitterService } from './event-emitter.js';
 
 export interface SecurityFinding {
   source: string;
@@ -189,6 +190,23 @@ export async function runSecurityGate(
       [projectId, f.source, f.severity, f.rule, f.filePath, f.evidence, f.status]
     );
   }
+
+  await EventEmitterService.emit({
+    projectId,
+    eventType: passed ? 'security.completed' : 'security.blocked',
+    stage: 'security_review',
+    summary: passed
+      ? `Deterministic security gate passed (${findings.length} findings, 0 blocking).`
+      : `Security gate blocked with ${criticalCount} critical and ${highCount} high findings.`,
+    payload: {
+      passed,
+      criticalCount,
+      highCount,
+      mediumCount,
+      lowCount,
+      checksSummary,
+    },
+  }).catch((e) => console.warn('[SecurityGate] Event emit error:', e));
 
   return {
     passed,

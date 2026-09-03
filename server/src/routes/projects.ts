@@ -1,5 +1,6 @@
 import { DefectService } from '../services/defect-service.js';
 import { EventEmitterService } from '../services/event-emitter.js';
+import { LivePreviewManager } from '../services/live-preview-manager.js';
 import { Router, Request, Response, NextFunction } from 'express';
 import { query, withTransaction } from '../db/pool.js';
 import { createGateway } from '../gateway/provider-factory.js';
@@ -76,6 +77,13 @@ router.post('/', async (req, res, next) => {
       'Project Created',
       `Client brief received (${clientBrief.trim().length} chars). Autonomous delivery initiated.`
     );
+
+    await EventEmitterService.emit({
+      projectId: project.id,
+      eventType: 'project.created',
+      summary: `Project "${projectName}" created and initialized.`,
+      payload: { name: projectName, clientBrief: clientBrief.trim() },
+    }).catch((e) => console.warn('[routes/projects] Event emit error:', e));
 
     // Run autonomous orchestration in background (prompt non-blocking HTTP response)
     runUntilBlocked(project.id, gateway).catch((err) => {
@@ -159,6 +167,15 @@ const handleAnswer = async (req: Request, res: Response, next: NextFunction) => 
       `Decision for "${interaction.question}": ${typeof answer === 'object' ? JSON.stringify(answer) : answer}`
     );
 
+    await EventEmitterService.emit({
+      projectId: id,
+      eventType: 'interaction.resolved',
+      stage: interaction.workflow_stage,
+      actorRole: interaction.agent_role,
+      summary: `Client resolved question for ${roleDef?.displayName || interaction.agent_role}.`,
+      payload: { interactionId, question: interaction.question, answer },
+    }).catch((e) => console.warn('[routes/projects] Event emit error:', e));
+
     const remainingRes = await query(
       `SELECT COUNT(*)::int AS count FROM client_interactions WHERE project_id = $1 AND status = 'pending'`,
       [id]
@@ -238,6 +255,17 @@ router.post('/:id/approvals/:approvalId/approve', async (req, res, next) => {
       'Human Approval Granted',
       `Client approved ${approval.artifact_type} v${approval.artifact_version}. Autonomous handoff continuing.`
     );
+
+    await EventEmitterService.emit({
+      projectId: id,
+      eventType: 'approval.approved',
+      summary: `Client approved ${approval.artifact_type} (v${approval.artifact_version}).`,
+      payload: {
+        approvalId,
+        artifactType: approval.artifact_type,
+        artifactVersion: approval.artifact_version,
+      },
+    }).catch((e) => console.warn('[routes/projects] Event emit error:', e));
 
     // Resume autonomous execution in background
     runUntilBlocked(id, gateway).catch((err) => {
@@ -330,6 +358,19 @@ router.post('/:id/approvals/:approvalId/request-changes', async (req, res, next)
       'Revision Requested',
       `Feedback: "${feedback.trim()}". Routing to ${classification === 'possible_scope_change' ? 'Aria Analyst (Change Control)' : 'Sofia Designer (Design Revision)'}.`
     );
+
+    await EventEmitterService.emit({
+      projectId: id,
+      eventType: 'approval.changes_requested',
+      summary: `Client requested changes on ${approval.artifact_type} (v${approval.artifact_version}).`,
+      payload: {
+        approvalId,
+        artifactType: approval.artifact_type,
+        artifactVersion: approval.artifact_version,
+        feedback: feedback.trim(),
+        scopeClassification: classification,
+      },
+    }).catch((e) => console.warn('[routes/projects] Event emit error:', e));
 
     // Resume autonomous execution in background
     runUntilBlocked(id, gateway).catch((err) => {
@@ -992,6 +1033,47 @@ router.get('/:id/events', async (req, res) => {
   res.write(':connected\n\n');
 
   EventEmitterService.subscribe(id, res, lastEventId);
+});
+
+// GET /api/projects/:id/preview/status — Get active live preview status
+router.get('/:id/preview/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await LivePreviewManager.getPreviewStatus(id);
+    if (!status) {
+      res.json({ status: 'stopped', previewUrl: null, trustLabel: 'Preview Available — Unverified' });
+      return;
+    }
+    res.json(status);
+  } catch (err: any) {
+    console.error('[routes/projects] Error getting preview status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/:id/preview/start — Start isolated preview stack
+router.post('/:id/preview/start', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { version } = req.body || {};
+    const result = await LivePreviewManager.startPreview(id, version);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[routes/projects] Error starting preview:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/:id/preview/stop — Stop running preview stack
+router.post('/:id/preview/stop', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await LivePreviewManager.stopPreview(id, 'User stopped preview via UI');
+    res.json({ success: true, message: 'Preview stopped.' });
+  } catch (err: any) {
+    console.error('[routes/projects] Error stopping preview:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

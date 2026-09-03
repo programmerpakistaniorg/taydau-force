@@ -53,6 +53,14 @@ export const ProjectEventTypeSchema = z.enum([
   'verification.log',
   'verification.completed',
 
+  'preview.starting',
+  'preview.ready',
+  'preview.failed',
+  'preview.updated',
+  'preview.stopping',
+  'preview.stopped',
+  'preview.expired',
+
   'release.ready',
   'release.blocked',
 ]);

@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { query, withTransaction } from '../db/pool.js';
 import { REWORK_CONFIG } from '../config/rework.js';
 import type { ClassificationResult } from './defect-classifier.js';
+import { EventEmitterService } from './event-emitter.js';
 
 export interface PersistedDefect {
   id: string;
@@ -154,6 +155,20 @@ export class DefectService {
         );
       }
 
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'defect.opened',
+        stage: classification.taxonomy,
+        summary: `Defect ${code} opened: ${classification.title}`,
+        payload: {
+          defectId: newDefect.id,
+          code,
+          severity: newDefect.severity,
+          source: classification.taxonomy,
+          title: classification.title,
+        },
+      }).catch((e) => console.warn('[DefectService] Event emit error:', e));
+
       return { defect: newDefect, isNew: true };
     };
 
@@ -213,6 +228,23 @@ export class DefectService {
         );
       }
 
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'implementation.revision.created',
+        stage: 'implementation',
+        actorRole: 'engineer',
+        actorName: 'Devon Coder',
+        summary: `Implementation Revision v${version} created (${files.length} files, ${totalBytes} bytes).`,
+        payload: {
+          revisionId: revision.id,
+          version,
+          sha256,
+          fileCount: files.length,
+          totalBytes,
+          reworkAttempt,
+        },
+      }).catch((e) => console.warn('[DefectService] Event emit error:', e));
+
       return revision;
     };
 
@@ -268,15 +300,26 @@ export class DefectService {
     externalClient?: PoolClient
   ): Promise<void> {
     const q = externalClient ? externalClient.query.bind(externalClient) : query;
-    await q(
+    const res = await q(
       `UPDATE defects
        SET status = 'resolved',
            resolved_at = now(),
            resolution_evidence = $1,
            resolution_artifact_id = $2
-       WHERE id = $3`,
+       WHERE id = $3
+       RETURNING project_id, code, title`,
       [JSON.stringify(evidence), resolutionArtifactId || null, defectId]
     );
+
+    if (res.rows.length > 0) {
+      const { project_id, code, title } = res.rows[0];
+      await EventEmitterService.emit({
+        projectId: project_id,
+        eventType: 'defect.resolved',
+        summary: `Defect ${code} resolved: ${title}.`,
+        payload: { defectId, code, evidence },
+      }).catch((e) => console.warn('[DefectService] Event emit error:', e));
+    }
   }
 
   /**
@@ -291,6 +334,13 @@ export class DefectService {
        WHERE project_id = $2 AND status NOT IN ('resolved', 'rejected_invalid')`,
       [JSON.stringify(reason), projectId]
     );
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'defect.escalated',
+      summary: `Autonomous rework bound exceeded for project: ${reason}.`,
+      payload: { reason },
+    }).catch((e) => console.warn('[DefectService] Event emit error:', e));
   }
 
   /**
