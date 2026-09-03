@@ -1,3 +1,4 @@
+import { DefectService } from '../services/defect-service.js';
 import { Router, Request, Response, NextFunction } from 'express';
 import { query, withTransaction } from '../db/pool.js';
 import { createGateway } from '../gateway/provider-factory.js';
@@ -866,6 +867,68 @@ router.post('/:id/end', async (req, res, next) => {
     res.json({ success: true, message: 'Project ended permanently.' });
   } catch (err) {
     next(err);
+  }
+});
+
+
+// GET /api/projects/:id/defects - Sanitized read-only defect list
+router.get('/:id/defects', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const defects = await DefectService.getAllProjectDefects(id);
+    res.json(defects);
+  } catch (err: any) {
+    console.error('[routes/projects] Error fetching defects:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/rework-history - Sanitized implementation revisions & telemetry
+router.get('/:id/rework-history', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const revisionsRes = await query(
+      `SELECT ir.id, ir.version, ir.summary, ir.file_count AS "fileCount",
+              ir.total_bytes AS "totalBytes", ir.sha256, ir.rework_attempt AS "reworkAttempt",
+              ir.created_at AS "createdAt",
+              COALESCE(
+                json_agg(d.code) FILTER (WHERE d.code IS NOT NULL),
+                '[]'::json
+              ) AS "addressedDefectCodes"
+       FROM implementation_revisions ir
+       LEFT JOIN implementation_revision_defects ird ON ir.id = ird.implementation_revision_id
+       LEFT JOIN defects d ON ird.defect_id = d.id
+       WHERE ir.project_id = $1
+       GROUP BY ir.id
+       ORDER BY ir.version ASC`,
+      [id]
+    );
+
+    const costRes = await query(
+      `SELECT
+         COALESCE(SUM(cost_usd) FILTER (WHERE purpose NOT ILIKE '%rework%'), 0) AS "initialDeliveryCost",
+         COALESCE(SUM(cost_usd) FILTER (WHERE purpose ILIKE '%rework%'), 0) AS "reworkCost",
+         COALESCE(SUM(cost_usd), 0) AS "totalProjectCost",
+         COUNT(*) AS "totalCalls",
+         COUNT(*) FILTER (WHERE purpose ILIKE '%rework%') AS "reworkCalls"
+       FROM llm_calls
+       WHERE project_id = $1`,
+      [id]
+    );
+
+    res.json({
+      revisions: revisionsRes.rows,
+      telemetry: costRes.rows[0] || {
+        initialDeliveryCost: 0,
+        reworkCost: 0,
+        totalProjectCost: 0,
+        totalCalls: 0,
+        reworkCalls: 0,
+      },
+    });
+  } catch (err: any) {
+    console.error('[routes/projects] Error fetching rework history:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -168,7 +168,7 @@ export async function executeSandboxTests(
     '--tmpfs', '/workspace:rw,size=128m,uid=10001,gid=10001,mode=1777',
     '-v', `${hostMountPath}:/app_source:ro`,
     SANDBOX_IMAGE,
-    'sh', '-c', 'cp -r /app_source/* /workspace/ && cd /workspace && pytest -v --tb=short'
+    'sh', '-c', 'cp -rf /app_source/. /workspace/ 2>/dev/null || true; cd /workspace && pytest -v --tb=short'
   ];
 
   return new Promise<SandboxExecutionResult>((resolve) => {

@@ -1,3 +1,8 @@
+import { config } from '../config.js';
+import { DefectClassifier, type ClassificationResult } from '../services/defect-classifier.js';
+import { DefectService, type PersistedDefect } from '../services/defect-service.js';
+import { REWORK_CONFIG } from '../config/rework.js';
+import { runEngineerReworkAgent } from '../agents/engineer-rework-agent.js';
 import { designGateway } from '../design/design-gateway.js';
 import crypto from 'crypto';
 import { withTransaction, query } from '../db/pool.js';
@@ -935,6 +940,158 @@ async function executeEngineerStep(
   }
 }
 
+
+async function handleDevonRework(
+  projectId: string,
+  clientBrief: string,
+  gateway: ModelGateway,
+  defect: PersistedDefect,
+  requirements: RequirementContext[],
+  architecture: ArchitectureOutput,
+  tasks: TaskOutput[],
+  currentFiles: Array<{ path: string; content: string }>,
+  currentAttempt: number
+): Promise<{ success: boolean; newVersion?: number }> {
+  if (currentAttempt >= REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS) {
+    await DefectService.escalateUnresolvedDefects(
+      projectId,
+      `Maximum autonomous rework limit (${REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS}) reached.`
+    );
+    await WorkflowService.escalateWorkflow(
+      projectId,
+      'independent_qa',
+      'MAX_REWORK_EXCEEDED',
+      `Maximum rework attempts (${REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS}) exceeded for defect ${defect.code}. Human specialist review required.`,
+      'engineer'
+    );
+    await WorkflowService.logActivity(
+      projectId,
+      'TayDau Governance',
+      'system',
+      'escalated project to human review due to',
+      `Exceeded ${REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS} rework attempts on ${defect.code}`,
+      'rework',
+      'Rework Escalated',
+      `Autonomous rework attempts exhausted. Project transitioned to needs_attention.`
+    );
+    return { success: false };
+  }
+
+  const nextAttempt = currentAttempt + 1;
+
+  await WorkflowService.setReworkState(
+    projectId,
+    'implementation',
+    'engineer',
+    nextAttempt,
+    REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS,
+    defect.code
+  );
+
+  await WorkflowService.logActivity(
+    projectId,
+    'Devon Coder',
+    'engineer',
+    `started autonomous defect remediation on ${defect.code} (Attempt ${nextAttempt} of ${REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS})`,
+    'faulty source files',
+    'rework',
+    'Rework Started',
+    `Analyzing failure evidence for ${defect.code}: ${defect.title}. Generating targeted implementation patch.`
+  );
+
+  const reworkOutput = await runEngineerReworkAgent(
+    gateway,
+    {
+      clientBrief,
+      requirements,
+      architecture,
+      tasks,
+      faultyFiles: currentFiles,
+      defect: {
+        code: defect.code,
+        title: defect.title,
+        severity: defect.severity,
+        description: defect.description,
+        evidence: defect.evidence,
+      },
+      reworkAttempt: nextAttempt,
+    },
+    projectId
+  );
+
+  const newSha = DefectService.computeImplementationRevisionSha(reworkOutput.files);
+  const noProgressCheck = await DefectService.checkNoProgress(projectId, newSha);
+
+  const maxVerRes = await query(
+    `SELECT COALESCE(MAX(version), 1) as max_v
+     FROM code_artifacts ca
+     JOIN tasks t ON ca.task_id = t.id
+     WHERE t.project_id = $1`,
+    [projectId]
+  );
+  const newVersion = parseInt(maxVerRes.rows[0].max_v, 10) + 1;
+
+  const revision = await DefectService.recordImplementationRevision(
+    projectId,
+    newVersion,
+    reworkOutput.files,
+    reworkOutput.implementationSummary,
+    nextAttempt,
+    [defect.id]
+  );
+
+  const taskRes = await query(`SELECT id, code FROM tasks WHERE project_id = $1`, [projectId]);
+  const taskMap = new Map<string, string>();
+  for (const r of taskRes.rows) {
+    taskMap.set(r.code, r.id);
+  }
+  const defaultTaskId = taskRes.rows[0]?.id;
+
+  await withTransaction(async (client) => {
+    for (const f of reworkOutput.files) {
+      const primaryTaskCode = f.relatedTaskCodes?.[0];
+      const taskId = taskMap.get(primaryTaskCode) ?? defaultTaskId;
+      const ext = f.path.endsWith('.py') ? 'python' : 'text';
+      const fileHash = crypto.createHash('sha256').update(f.content || '', 'utf8').digest('hex');
+
+      await client.query(
+        `INSERT INTO code_artifacts (
+           task_id, file_path, content, language, generated_by, artifact_type, version, sha256, implementation_revision_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [taskId, f.path, f.content, ext, 'Engineer', 'source_code', newVersion, fileHash, revision.id]
+      );
+    }
+  });
+
+  await WorkflowService.logActivity(
+    projectId,
+    'Devon Coder',
+    'engineer',
+    `completed Implementation v${newVersion} for`,
+    `${defect.code} remediation`,
+    'artifact',
+    'Implementation Updated',
+    `Remediation v${newVersion} produced ${reworkOutput.files.length} files (SHA: ${newSha.slice(0, 10)}...). Summary: ${reworkOutput.implementationSummary}`
+  );
+
+  if (noProgressCheck.noProgress) {
+    await DefectService.escalateUnresolvedDefects(
+      projectId,
+      `No-progress detected: ${noProgressCheck.unchangedCount} consecutive identical revisions produced under open defect.`
+    );
+    await WorkflowService.escalateWorkflow(
+      projectId,
+      'independent_qa',
+      'NO_PROGRESS_DETECTED',
+      `Remediation produced identical implementation hash across ${noProgressCheck.unchangedCount} consecutive attempts without resolving ${defect.code}. Human review required.`,
+      'engineer'
+    );
+    return { success: false };
+  }
+
+  return { success: true, newVersion };
+}
+
 async function executeCodeReviewStep(
   projectId: string,
   clientBrief: string,
@@ -956,16 +1113,27 @@ async function executeCodeReviewStep(
   );
 
   try {
-    const [codeRes, archRes, reqRes] = await Promise.all([
+    // Get latest active implementation files
+    const maxVerRes = await query(
+      `SELECT COALESCE(MAX(ca.version), 1) AS max_v
+       FROM code_artifacts ca
+       JOIN tasks t ON ca.task_id = t.id
+       WHERE t.project_id = $1`,
+      [projectId]
+    );
+    const activeVersion = parseInt(maxVerRes.rows[0].max_v, 10);
+
+    const [codeRes, archRes, reqRes, tasksRes] = await Promise.all([
       query(
         `SELECT ca.file_path, ca.content, ca.language 
          FROM code_artifacts ca
          JOIN tasks t ON ca.task_id = t.id
-         WHERE t.project_id = $1`,
-        [projectId]
+         WHERE t.project_id = $1 AND ca.version = $2`,
+        [projectId, activeVersion]
       ),
       query(`SELECT tech_stack, file_structure, implementation_spec, decisions FROM architecture_specs WHERE project_id = $1`, [projectId]),
       query(`SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code`, [projectId]),
+      query(`SELECT id, code, title, description, priority, assigned_role FROM tasks WHERE project_id = $1 ORDER BY code`, [projectId]),
     ]);
 
     const files = codeRes.rows.map((r) => ({
@@ -993,6 +1161,17 @@ async function executeCodeReviewStep(
         : JSON.parse(r.acceptance_criteria),
     }));
 
+    const tasks: TaskOutput[] = tasksRes.rows.map((r) => ({
+      code: r.code,
+      title: r.title,
+      priority: (r.priority as any) || 'Medium',
+      description: r.description || '',
+      requirementCode: r.requirement_code || '',
+      assignedRole: r.assigned_role || 'engineer',
+      dependencies: Array.isArray(r.dependencies) ? r.dependencies : (typeof r.dependencies === 'string' ? JSON.parse(r.dependencies) : []),
+      acceptanceIntent: r.title || 'Implement requirement',
+    }));
+
     const reviewResult = await runCodeReviewAgent(
       gateway,
       {
@@ -1005,8 +1184,6 @@ async function executeCodeReviewStep(
       projectId
     );
 
-    const secResult = await runSecurityGate(projectId, files);
-
     await withTransaction(async (client) => {
       await client.query(`DELETE FROM code_reviews WHERE project_id = $1`, [projectId]);
       await client.query(
@@ -1018,10 +1195,70 @@ async function executeCodeReviewStep(
           JSON.stringify(reviewResult.findings),
           JSON.stringify(reviewResult.architectureCompliance),
           reviewResult.maintainabilityAssessment,
-          'openai/gpt-oss-120b',
+          config.models.codeReview,
         ]
       );
     });
+
+    // Check for blocking findings
+    const blockingFindings = reviewResult.findings.filter((f) => f.isBlocking || f.severity === 'critical' || f.severity === 'high');
+
+    if (blockingFindings.length > 0) {
+      const firstBlocker = blockingFindings[0];
+      const classification = DefectClassifier.classifyCodeReviewFinding(projectId, { ...firstBlocker, filePath: firstBlocker.filePath || undefined });
+      const { defect } = await DefectService.recordOrUpdateDefect(projectId, classification);
+
+      await WorkflowService.logActivity(
+        projectId,
+        'Dr. Evelyn Auditor',
+        'code_reviewer',
+        `identified ${blockingFindings.length} blocking review finding(s), logging ${defect.code}`,
+        defect.title,
+        'rework',
+        'Review Blocker',
+        `Reviewer blocked release: ${firstBlocker.description}. Initiating autonomous remediation.`
+      );
+
+      const reworkResult = await handleDevonRework(
+        projectId,
+        clientBrief,
+        gateway,
+        defect,
+        requirements,
+        architecture,
+        tasks,
+        files,
+        defect.reworkAttempt
+      );
+
+      if (!reworkResult.success) {
+        return; // Halted in needs_attention
+      }
+
+      // Re-run code review immediately on new version
+      await WorkflowService.completeStage(projectId, 'implementation', 'code_review');
+      await executeCodeReviewStep(projectId, clientBrief, gateway, runnerId);
+      return;
+    }
+
+    // Resolve any previous review defects if all blocking findings cleared
+    const openReviewDefects = await query(
+      `SELECT id, code FROM defects WHERE project_id = $1 AND source = 'review_blocker' AND status NOT IN ('resolved', 'rejected_invalid')`,
+      [projectId]
+    );
+    for (const d of openReviewDefects.rows) {
+      await DefectService.resolveDefect(d.id, { reviewApproved: true, summary: reviewResult.summary });
+      await WorkflowService.logActivity(
+        projectId,
+        'Dr. Evelyn Auditor',
+        'code_reviewer',
+        `verified resolution of ${d.code}`,
+        'reworked source code',
+        'rework',
+        'Defect Resolved',
+        `Blocking review finding ${d.code} resolved in latest implementation.`
+      );
+    }
 
     await WorkflowService.completeStage(projectId, 'code_review', 'independent_qa');
 
@@ -1030,7 +1267,7 @@ async function executeCodeReviewStep(
       'Dr. Evelyn Auditor',
       'code_reviewer',
       'completed code audit with',
-      `${reviewResult.findings.length} finding(s) & ${secResult.totalFindings} security check(s)`,
+      `${reviewResult.findings.length} finding(s) (0 blocking)`,
       'review',
       'Audit Passed',
       `Compliance: ${reviewResult.architectureCompliance.status}. Code approved for QA sandbox.`
@@ -1060,17 +1297,18 @@ async function executeQAStep(
     projectId,
     'Quinn Tester',
     'qa_engineer',
-    'started independent test suite derivation from',
-    'requirements baseline',
+    'started independent acceptance verification in',
+    'isolated Docker sandbox',
     'qa',
-    'QA Derivation Started',
-    'Deriving acceptance test suite in air-gapped sandbox without viewing implementation source code.'
+    'QA Verification Started',
+    'Deriving/executing acceptance test suite in air-gapped sandbox without viewing implementation source code.'
   );
 
   try {
-    const [reqRes, archRes] = await Promise.all([
+    const [reqRes, archRes, tasksRes] = await Promise.all([
       query(`SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code`, [projectId]),
       query(`SELECT tech_stack, file_structure, implementation_spec, decisions FROM architecture_specs WHERE project_id = $1`, [projectId]),
+      query(`SELECT id, code, title, description, priority, assigned_role FROM tasks WHERE project_id = $1 ORDER BY code`, [projectId]),
     ]);
 
     const requirements: RequirementContext[] = reqRes.rows.map((r) => ({
@@ -1092,63 +1330,104 @@ async function executeQAStep(
       decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
     };
 
-    let qaOutput: QAOutput = await runQAAgent(gateway, clientBrief, requirements, architecture, projectId);
+    const tasks: TaskOutput[] = tasksRes.rows.map((r) => ({
+      code: r.code,
+      title: r.title,
+      priority: (r.priority as any) || 'Medium',
+      description: r.description || '',
+      requirementCode: r.requirement_code || '',
+      assignedRole: r.assigned_role || 'engineer',
+      dependencies: Array.isArray(r.dependencies) ? r.dependencies : (typeof r.dependencies === 'string' ? JSON.parse(r.dependencies) : []),
+      acceptanceIntent: r.title || 'Implement requirement',
+    }));
 
-    const valResult = validateQAArtifacts(
-      qaOutput,
-      requirements.map((r) => r.code)
-    );
-
-    if (!valResult.valid) {
-      console.warn(`[orchestrator] QA validation found warnings: ${valResult.errors.join('; ')}`);
-    }
-
-    const suiteContent = qaOutput.testFiles.map((f) => f.content).join('\n');
-    const suiteSha256 = crypto.createHash('sha256').update(suiteContent, 'utf8').digest('hex');
-
-    await withTransaction(async (client) => {
-      await client.query(`DELETE FROM qa_test_artifacts WHERE project_id = $1`, [projectId]);
-      await client.query(`DELETE FROM qa_suites WHERE project_id = $1`, [projectId]);
-
-      await client.query(
-        `INSERT INTO qa_suites (project_id, suite_sha256, file_count, is_frozen, version)
-         VALUES ($1, $2, $3, true, 1)`,
-        [projectId, suiteSha256, qaOutput.testFiles.length]
-      );
-
-      for (const tf of qaOutput.testFiles) {
-        const fileHash = crypto.createHash('sha256').update(tf.content, 'utf8').digest('hex');
-        await client.query(
-          `INSERT INTO qa_test_artifacts (project_id, file_path, content, language, test_framework, sha256, is_frozen)
-           VALUES ($1, $2, $3, 'python', 'pytest', $4, true)`,
-          [projectId, tf.path, tf.content, fileHash]
-        );
-      }
-    });
-
-    const codeFilesRes = await query(
-      `SELECT ca.file_path, ca.content FROM code_artifacts ca
-       JOIN tasks t ON ca.task_id = t.id WHERE t.project_id = $1`,
+    // 1. Check if an already-frozen valid QA suite exists for this project
+    const existingSuiteRes = await query(
+      `SELECT id, suite_sha256, version, file_count, is_frozen
+       FROM qa_suites
+       WHERE project_id = $1 AND is_frozen = true
+       ORDER BY version DESC LIMIT 1`,
       [projectId]
     );
 
-    const runId = `qa-${Date.now()}`;
-    const workspaceDir = await materializeWorkspace(
-      projectId,
-      runId,
-      codeFilesRes.rows.map((r) => ({ path: r.file_path, content: r.content })),
-      qaOutput.testFiles.map((tf) => ({ path: tf.path, content: tf.content }))
+    let currentQaFiles: Array<{ path: string; content: string }> = [];
+    let activeSuiteSha256 = '';
+    let activeSuiteId = '';
+
+    if (existingSuiteRes.rows.length > 0) {
+      // Reuse SAME frozen QA suite
+      activeSuiteId = existingSuiteRes.rows[0].id;
+      activeSuiteSha256 = existingSuiteRes.rows[0].suite_sha256;
+      const testArtifactsRes = await query(
+        `SELECT file_path, content FROM qa_test_artifacts WHERE project_id = $1 ORDER BY file_path`,
+        [projectId]
+      );
+      currentQaFiles = testArtifactsRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+    } else {
+      // Derive independent QA acceptance test suite ONCE
+      const qaOutput: QAOutput = await runQAAgent(gateway, clientBrief, requirements, architecture, projectId);
+      const valResult = validateQAArtifacts(qaOutput, requirements.map((r) => r.code));
+      if (!valResult.valid) {
+        console.warn(`[orchestrator] QA validation warnings: ${valResult.errors.join('; ')}`);
+      }
+
+      currentQaFiles = qaOutput.testFiles.map((tf) => ({ path: tf.path, content: tf.content }));
+      const suiteContent = currentQaFiles.map((f) => f.content).join('\n');
+      activeSuiteSha256 = crypto.createHash('sha256').update(suiteContent, 'utf8').digest('hex');
+
+      await withTransaction(async (client) => {
+        await client.query(`DELETE FROM qa_test_artifacts WHERE project_id = $1`, [projectId]);
+        await client.query(`DELETE FROM qa_suites WHERE project_id = $1`, [projectId]);
+
+        const insSuite = await client.query(
+          `INSERT INTO qa_suites (project_id, suite_sha256, file_count, is_frozen, version)
+           VALUES ($1, $2, $3, true, 1) RETURNING id`,
+          [projectId, activeSuiteSha256, currentQaFiles.length]
+        );
+        activeSuiteId = insSuite.rows[0].id;
+
+        for (const tf of currentQaFiles) {
+          const fileHash = crypto.createHash('sha256').update(tf.content, 'utf8').digest('hex');
+          await client.query(
+            `INSERT INTO qa_test_artifacts (project_id, file_path, content, language, test_framework, sha256, is_frozen)
+             VALUES ($1, $2, $3, 'python', 'pytest', $4, true)`,
+            [projectId, tf.path, tf.content, fileHash]
+          );
+        }
+      });
+    }
+
+    // 2. Fetch latest active implementation files
+    const maxVerRes = await query(
+      `SELECT COALESCE(MAX(ca.version), 1) AS max_v
+       FROM code_artifacts ca
+       JOIN tasks t ON ca.task_id = t.id
+       WHERE t.project_id = $1`,
+      [projectId]
     );
+    const activeVersion = parseInt(maxVerRes.rows[0].max_v, 10);
+
+    const codeFilesRes = await query(
+      `SELECT ca.file_path, ca.content FROM code_artifacts ca
+       JOIN tasks t ON ca.task_id = t.id
+       WHERE t.project_id = $1 AND ca.version = $2`,
+      [projectId, activeVersion]
+    );
+    const activeCodeFiles = codeFilesRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+
+    // 3. Materialize and execute in isolated Docker container
+    const runId = `qa-${Date.now()}`;
+    const workspaceDir = await materializeWorkspace(projectId, runId, activeCodeFiles, currentQaFiles);
     const sandboxResult: SandboxExecutionResult = await executeSandboxTests(projectId, runId, workspaceDir);
     await cleanupWorkspace(workspaceDir);
 
+    // Record test run
     const taskRes = await query(`SELECT id FROM tasks WHERE project_id = $1 LIMIT 1`, [projectId]);
     const taskId = taskRes.rows[0]?.id;
-
     if (taskId) {
       await query(
-        `INSERT INTO test_runs (task_id, exit_code, stdout, stderr, duration_ms, tests_passed, tests_failed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO test_runs (task_id, exit_code, stdout, stderr, duration_ms, tests_passed, tests_failed, project_id, status, test_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'acceptance')`,
         [
           taskId,
           sandboxResult.exitCode ?? 0,
@@ -1157,20 +1436,65 @@ async function executeQAStep(
           sandboxResult.durationMs,
           sandboxResult.testsPassed,
           sandboxResult.testsFailed,
+          projectId,
+          sandboxResult.status,
         ]
       );
     }
 
-    if (sandboxResult.exitCode !== 0 && sandboxResult.testsFailed > 0) {
+    // 4. Layered Classification
+    const classification = DefectClassifier.classifySandboxExecution(projectId, sandboxResult);
+
+    if (classification.taxonomy === 'qa_passed') {
+      // 100% QA Passed -> resolve any outstanding QA product defects
+      const openQADefects = await query(
+        `SELECT id, code FROM defects WHERE project_id = $1 AND source IN ('qa', 'product_defect') AND status NOT IN ('resolved', 'rejected_invalid')`,
+        [projectId]
+      );
+      for (const d of openQADefects.rows) {
+        await DefectService.resolveDefect(d.id, {
+          testsPassed: sandboxResult.testsPassed,
+          exitCode: sandboxResult.exitCode,
+          verifiedWithSuiteSha: activeSuiteSha256,
+        });
+        await WorkflowService.logActivity(
+          projectId,
+          'Quinn Tester',
+          'qa_engineer',
+          `verified resolution of ${d.code}`,
+          `Frozen Acceptance Suite (SHA: ${activeSuiteSha256.slice(0, 10)}...)`,
+          'rework',
+          'Defect Resolved',
+          `All acceptance tests passed. Defect ${d.code} resolved against frozen suite.`
+        );
+      }
+
+      await WorkflowService.completeStage(projectId, 'independent_qa', 'release_evaluation');
+
       await WorkflowService.logActivity(
         projectId,
         'Quinn Tester',
         'qa_engineer',
-        'detected test failures during sandbox run, triggering',
-        'automated defect rework',
-        'rework',
-        'Rework Triggered',
-        `${sandboxResult.testsFailed} test(s) failed. Initiating QA repair.`
+        'completed independent sandbox verification with',
+        `${sandboxResult.testsPassed} test(s) passed (Exit: 0)`,
+        'qa',
+        'Verification Passed',
+        `Suite SHA-256: ${activeSuiteSha256.slice(0, 12)}... All requirements verified.`
+      );
+      return;
+    }
+
+    if (classification.taxonomy === 'qa_artifact_error') {
+      // QA Artifact Error -> Quinn self-repairs test suite without dispatching Devon
+      await WorkflowService.logActivity(
+        projectId,
+        'Quinn Tester',
+        'qa_engineer',
+        'detected QA artifact syntax/import defect, initiating',
+        'QA suite versioned repair',
+        'qa',
+        'QA Artifact Repair',
+        `Repairing test artifact error: ${classification.summary}. Implementation remains unchanged.`
       );
 
       const repaired = await runQARepairAgent(
@@ -1178,24 +1502,118 @@ async function executeQAStep(
         clientBrief,
         requirements,
         architecture,
-        qaOutput,
+        {
+          assumptions: ['Isolated sandbox testing'],
+          testPlanSummary: 'Repaired acceptance test suite',
+          testFiles: currentQaFiles.map((f) => ({ path: f.path, purpose: 'acceptance_test', content: f.content, relatedRequirementCodes: requirements.map((r) => r.code) })),
+          requirementCoverage: requirements.map((r) => ({ requirementCode: r.code, testNames: currentQaFiles.map((f) => f.path) })),
+        },
         sandboxResult.stderr || sandboxResult.stdout,
         projectId
       );
-      qaOutput = repaired;
+
+      const newQaFiles = repaired.testFiles.map((tf) => ({ path: tf.path, content: tf.content }));
+      const newSuiteContent = newQaFiles.map((f) => f.content).join('\n');
+      const newSuiteSha256 = crypto.createHash('sha256').update(newSuiteContent, 'utf8').digest('hex');
+
+      const maxVerQa = await query(`SELECT COALESCE(MAX(version), 1) as max_v FROM qa_suites WHERE project_id = $1`, [projectId]);
+      const nextQaVersion = parseInt(maxVerQa.rows[0].max_v, 10) + 1;
+
+      await withTransaction(async (client) => {
+        // Mark old suite superseded
+        if (activeSuiteId) {
+          await client.query(`UPDATE qa_suites SET superseded_by_suite_id = $1 WHERE id = $2`, [activeSuiteId, activeSuiteId]);
+        }
+
+        const insNewSuite = await client.query(
+          `INSERT INTO qa_suites (project_id, suite_sha256, file_count, is_frozen, version, parent_suite_id, repair_reason)
+           VALUES ($1, $2, $3, true, $4, $5, $6) RETURNING id`,
+          [projectId, newSuiteSha256, newQaFiles.length, nextQaVersion, activeSuiteId || null, classification.summary]
+        );
+
+        await client.query(`DELETE FROM qa_test_artifacts WHERE project_id = $1`, [projectId]);
+        for (const tf of newQaFiles) {
+          const fileHash = crypto.createHash('sha256').update(tf.content, 'utf8').digest('hex');
+          await client.query(
+            `INSERT INTO qa_test_artifacts (project_id, file_path, content, language, test_framework, sha256, is_frozen)
+             VALUES ($1, $2, $3, 'python', 'pytest', $4, true)`,
+            [projectId, tf.path, tf.content, fileHash]
+          );
+        }
+      });
+
+      await WorkflowService.logActivity(
+        projectId,
+        'Quinn Tester',
+        'qa_engineer',
+        `froze repaired QA Suite v${nextQaVersion} with`,
+        `New SHA-256: ${newSuiteSha256.slice(0, 10)}...`,
+        'qa',
+        'QA Suite Repaired',
+        `Repaired QA artifact defect. Re-executing against unchanged Implementation v${activeVersion}.`
+      );
+
+      // Re-run QA step immediately with repaired suite
+      await executeQAStep(projectId, clientBrief, gateway, runnerId);
+      return;
     }
 
-    await WorkflowService.completeStage(projectId, 'independent_qa', 'release_evaluation');
+    if (classification.taxonomy === 'product_defect') {
+      // Real Product Defect -> Keep QA suite FROZEN and immutable. Dispatch Devon for rework.
+      const matchedReq = requirements.find((r) => r.code === classification.relatedRequirementCode);
+      const reqIds = matchedReq ? [matchedReq.id] : [];
+      const { defect } = await DefectService.recordOrUpdateDefect(projectId, classification, activeSuiteId, reqIds);
 
+      await WorkflowService.logActivity(
+        projectId,
+        'Quinn Tester',
+        'qa_engineer',
+        `detected acceptance test failure, logged ${defect.code}`,
+        defect.title,
+        'rework',
+        'Product Defect Detected',
+        `Frozen QA test failed against Implementation v${activeVersion}. Failure: ${classification.summary}. Triggering Devon rework.`
+      );
+
+      const reworkResult = await handleDevonRework(
+        projectId,
+        clientBrief,
+        gateway,
+        defect,
+        requirements,
+        architecture,
+        tasks,
+        activeCodeFiles,
+        defect.reworkAttempt
+      );
+
+      if (!reworkResult.success) {
+        return; // Halted in needs_attention
+      }
+
+      // Reverification pipeline: Reviewer -> SAME frozen QA suite -> Security
+      await WorkflowService.completeStage(projectId, 'implementation', 'code_review');
+      await executeCodeReviewStep(projectId, clientBrief, gateway, runnerId);
+      return;
+    }
+
+    // For system/infrastructure errors, timeouts, or unknown failures:
+    await WorkflowService.escalateWorkflow(
+      projectId,
+      'independent_qa',
+      classification.taxonomy.toUpperCase(),
+      classification.summary,
+      'qa_engineer'
+    );
     await WorkflowService.logActivity(
       projectId,
-      'Quinn Tester',
-      'qa_engineer',
-      'completed independent sandbox verification with',
-      `${sandboxResult.testsPassed} test(s) passed (Exit: 0)`,
-      'qa',
-      'Verification Passed',
-      `Suite SHA-256: ${suiteSha256.slice(0, 12)}... All requirements verified.`
+      'TayDau Governance',
+      'system',
+      `halted execution due to ${classification.taxonomy}:`,
+      classification.summary,
+      'system',
+      'Execution Halted',
+      `Diagnostic details: ${JSON.stringify(classification.evidence)}`
     );
   } catch (err: any) {
     console.error(`[orchestrator] Error in executeQAStep for project ${projectId}:`, err);
@@ -1218,18 +1636,120 @@ async function executeReleaseEvaluationStep(
   if (!claimed) return;
 
   try {
-    const codeFilesRes = await query(
-      `SELECT ca.file_path, ca.content FROM code_artifacts ca
-       JOIN tasks t ON ca.task_id = t.id WHERE t.project_id = $1`,
+    // 1. Get latest active code files
+    const maxVerRes = await query(
+      `SELECT COALESCE(MAX(ca.version), 1) AS max_v
+       FROM code_artifacts ca
+       JOIN tasks t ON ca.task_id = t.id
+       WHERE t.project_id = $1`,
       [projectId]
     );
+    const activeVersion = parseInt(maxVerRes.rows[0].max_v, 10);
+
+    const codeFilesRes = await query(
+      `SELECT ca.file_path, ca.content FROM code_artifacts ca
+       JOIN tasks t ON ca.task_id = t.id
+       WHERE t.project_id = $1 AND ca.version = $2`,
+      [projectId, activeVersion]
+    );
     const files = codeFilesRes.rows.map((r) => ({ path: r.file_path, content: r.content }));
+
+    // 2. Deterministic Security Gate
     const securityResult = await runSecurityGate(projectId, files);
 
     if (!securityResult.passed) {
-      throw new Error(
-        `Deterministic Security Gate failed with ${securityResult.criticalCount} critical and ${securityResult.highCount} high findings.`
+      const firstFinding = securityResult.findings[0] || { rule: 'Security Check Failed', severity: 'critical', evidence: 'Rule violation' };
+      const classification = DefectClassifier.classifySecurityFinding(projectId, { ...firstFinding, filePath: firstFinding.filePath || undefined, evidence: firstFinding.evidence || undefined });
+      const { defect } = await DefectService.recordOrUpdateDefect(projectId, classification);
+
+      await WorkflowService.logActivity(
+        projectId,
+        'Deterministic Security Gate',
+        'system',
+        `detected ${securityResult.criticalCount} critical and ${securityResult.highCount} high security finding(s)`,
+        defect.code,
+        'rework',
+        'Security Blocker',
+        `Deterministic gate blocked release: ${firstFinding.rule}. Triggering Devon remediation.`
       );
+
+      const [reqRes, archRes, tasksRes, briefRes] = await Promise.all([
+        query(`SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code`, [projectId]),
+        query(`SELECT tech_stack, file_structure, implementation_spec, decisions FROM architecture_specs WHERE project_id = $1`, [projectId]),
+        query(`SELECT id, code, title, description, priority, assigned_role FROM tasks WHERE project_id = $1 ORDER BY code`, [projectId]),
+        query(`SELECT client_brief FROM projects WHERE id = $1`, [projectId]),
+      ]);
+
+      const requirements: RequirementContext[] = reqRes.rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        title: r.title,
+        type: r.type,
+        priority: r.priority,
+        acceptanceCriteria: Array.isArray(r.acceptance_criteria) ? r.acceptance_criteria : JSON.parse(r.acceptance_criteria),
+      }));
+
+      const rawArch = archRes.rows[0];
+      const architecture: ArchitectureOutput = {
+        techStack: typeof rawArch.tech_stack === 'string' ? JSON.parse(rawArch.tech_stack) : rawArch.tech_stack,
+        fileStructure: typeof rawArch.file_structure === 'string' ? JSON.parse(rawArch.file_structure) : rawArch.file_structure,
+        implementationSpec: rawArch.implementation_spec,
+        decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
+      };
+
+      const tasks: TaskOutput[] = tasksRes.rows.map((r) => ({
+        code: r.code,
+        title: r.title,
+        priority: (r.priority as any) || 'Medium',
+        description: r.description || '',
+        requirementCode: r.requirement_code || '',
+        assignedRole: r.assigned_role || 'engineer',
+        dependencies: Array.isArray(r.dependencies) ? r.dependencies : (typeof r.dependencies === 'string' ? JSON.parse(r.dependencies) : []),
+        acceptanceIntent: r.title || 'Implement requirement',
+      }));
+
+      const reworkResult = await handleDevonRework(
+        projectId,
+        briefRes.rows[0]?.client_brief || '',
+        gateway,
+        defect,
+        requirements,
+        architecture,
+        tasks,
+        files,
+        defect.reworkAttempt
+      );
+
+      if (!reworkResult.success) {
+        return;
+      }
+
+      await WorkflowService.completeStage(projectId, 'implementation', 'code_review');
+      await executeCodeReviewStep(projectId, briefRes.rows[0]?.client_brief || '', gateway, runnerId);
+      return;
+    }
+
+    // 3. Strict Release Verification Checks
+    const [openDefectsRes, testRunRes, wfRes] = await Promise.all([
+      query(`SELECT count(*) as count FROM defects WHERE project_id = $1 AND status NOT IN ('resolved', 'rejected_invalid')`, [projectId]),
+      query(`SELECT count(*) as count FROM test_runs WHERE project_id = $1 AND tests_failed > 0 AND status != 'passed'`, [projectId]),
+      query(`SELECT stage_status FROM project_workflows WHERE project_id = $1`, [projectId]),
+    ]);
+
+    const openDefectsCount = parseInt(openDefectsRes.rows[0].count, 10);
+    const failedTestsCount = parseInt(testRunRes.rows[0].count, 10);
+    const workflowStatus = wfRes.rows[0]?.stage_status;
+
+    if (openDefectsCount > 0) {
+      throw new Error(`Cannot release: Project has ${openDefectsCount} unresolved defect(s).`);
+    }
+
+    if (failedTestsCount > 0) {
+      throw new Error(`Cannot release: Project has unresolved failing acceptance test runs.`);
+    }
+
+    if (workflowStatus === 'needs_attention' || workflowStatus === 'failed') {
+      throw new Error(`Cannot release: Workflow is in ${workflowStatus} state.`);
     }
 
     const checks = {
@@ -1239,6 +1759,7 @@ async function executeReleaseEvaluationStep(
       codeAudited: true,
       sandboxPassed: true,
       securityClean: securityResult.passed,
+      defectsResolved: openDefectsCount === 0,
     };
 
     await withTransaction(async (client) => {
@@ -1260,7 +1781,7 @@ async function executeReleaseEvaluationStep(
       'Final Verified Delivery',
       'release',
       'Release Ready',
-      'Delivery complete: 100% requirements verified, air-gapped tests passed, immutable hashes recorded.'
+      'Delivery complete: 100% requirements verified, immutable QA hashes recorded, all defects resolved.'
     );
   } catch (err: any) {
     console.error(`[orchestrator] Error in executeReleaseEvaluationStep for project ${projectId}:`, err);

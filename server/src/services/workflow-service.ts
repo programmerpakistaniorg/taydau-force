@@ -24,7 +24,8 @@ export type WorkflowStageStatus =
   | 'failed'
   | 'blocked'
   | 'paused'
-  | 'cancelled';
+  | 'cancelled'
+  | 'needs_attention';
 
 export interface NextAction {
   type: 'answer_questions' | 'approve_requirements' | 'approve_design' | 'retry' | 'working' | 'delivery' | 'none';
@@ -283,10 +284,88 @@ export class WorkflowService {
     await query(`UPDATE projects SET status = 'failed', updated_at = now() WHERE id = $1`, [projectId]);
   }
 
+  static async escalateWorkflow(
+    projectId: string,
+    failedStage: WorkflowStage,
+    errorCode: string,
+    errorSummary: string,
+    activeRole: string
+  ): Promise<void> {
+    await query(
+      `UPDATE project_workflows
+       SET 
+        stage = $1,
+        stage_status = 'needs_attention',
+        active_role = $2,
+        last_error_code = $3,
+        last_error_summary = $4,
+        next_action_type = 'retry',
+        next_action_payload = $5,
+        runner_id = null,
+        run_started_at = null,
+        updated_at = now()
+       WHERE project_id = $6`,
+      [
+        failedStage,
+        activeRole,
+        errorCode,
+        errorSummary,
+        JSON.stringify({
+          type: 'retry',
+          label: 'Human Specialist Review Required',
+          description: `Rework bound or system failure in ${failedStage}: ${errorSummary}`,
+          requiresUser: true,
+          targetRoute: '/project',
+        }),
+        projectId,
+      ]
+    );
+
+    await query(`UPDATE projects SET status = 'needs_attention', updated_at = now() WHERE id = $1`, [projectId]);
+  }
+
+  static async setReworkState(
+    projectId: string,
+    stage: WorkflowStage,
+    activeRole: string,
+    attempt: number,
+    maxAttempts: number,
+    defectCode: string
+  ): Promise<void> {
+    await query(
+      `UPDATE project_workflows
+       SET 
+        stage = $1,
+        stage_status = 'running',
+        active_role = $2,
+        last_error_code = 'REWORK_IN_PROGRESS',
+        last_error_summary = $3,
+        updated_at = now()
+       WHERE project_id = $4`,
+      [
+        stage,
+        activeRole,
+        `Remediating ${defectCode} (Attempt ${attempt} of ${maxAttempts})`,
+        projectId,
+      ]
+    );
+  }
+
   static async synthesizeNextAction(projectId: string): Promise<NextAction> {
     const workflow = await this.getWorkflow(projectId);
 
-    if (workflow.stageStatus === 'failed') {
+    if (workflow.stageStatus === 'failed' || workflow.stageStatus === 'needs_attention') {
+      const isEscalated = workflow.stageStatus === 'needs_attention';
+      return {
+        type: 'retry',
+        label: isEscalated ? 'Specialist Review Required' : 'Retry Development',
+        description: workflow.lastErrorSummary || 'A verification or execution step requires attention.',
+        requiresUser: true,
+        targetRoute: '/project',
+      };
+    }
+
+    if (false) {
       return {
         type: 'retry',
         label: 'Retry Development',

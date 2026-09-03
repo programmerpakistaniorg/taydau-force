@@ -47,8 +47,9 @@ server/.env.*.local
 *.pem
 *.key
 
-# Temporary sandbox execution workspaces
+# Temporary sandbox execution# TayDau workspace & scratch artifacts
 .taydau/
+scratch/
 
 # Archives and external research
 *.rar
