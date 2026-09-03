@@ -23,7 +23,13 @@ import {
   Shield,
   Clock,
   Terminal,
-  Activity
+  Activity,
+  PauseCircle,
+  StopCircle,
+  Square,
+  Play,
+  PlayCircle,
+  XCircle
 } from 'lucide-react';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { SpecialistQuestionModal } from '../components/workflow/SpecialistQuestionModal';
@@ -40,7 +46,11 @@ export const Overview: React.FC = () => {
     answerInteraction,
     approveRequest,
     requestChanges,
-    retryStage
+    retryStage,
+    pauseProject,
+    resumeProject,
+    endProject,
+    clearActiveProject
   } = useLiveProject();
 
   // Form states
@@ -58,6 +68,11 @@ export const Overview: React.FC = () => {
 
   // Approval modal state
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState<boolean>(false);
+
+  // Stop / Pause / End project modal state
+  const [isStopModalOpen, setIsStopModalOpen] = useState<boolean>(false);
+  const [stopModalMode, setStopModalMode] = useState<'stop_only' | 'new_project'>('stop_only');
+  const [isStoppingProject, setIsStoppingProject] = useState<boolean>(false);
 
   const hasProject = Boolean(project && project.id);
   const workflow = project?.workflow;
@@ -134,6 +149,60 @@ export const Overview: React.FC = () => {
       console.error('Failed to retry stage:', err);
     }
   };
+
+  const handleStopClick = () => {
+    setStopModalMode('stop_only');
+    setIsStopModalOpen(true);
+  };
+
+  const handleNewProjectClick = () => {
+    const isRunning = hasProject && stageStatus !== 'completed' && stageStatus !== 'cancelled' && stageStatus !== 'paused';
+    if (isRunning) {
+      setStopModalMode('new_project');
+      setIsStopModalOpen(true);
+    } else {
+      setIsPromptModalOpen(true);
+    }
+  };
+
+  const handlePauseConfirm = async () => {
+    setIsStoppingProject(true);
+    try {
+      await pauseProject();
+      setIsStopModalOpen(false);
+      if (stopModalMode === 'new_project') {
+        setIsPromptModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to pause project:', err);
+    } finally {
+      setIsStoppingProject(false);
+    }
+  };
+
+  const handleEndConfirm = async () => {
+    setIsStoppingProject(true);
+    try {
+      await endProject();
+      setIsStopModalOpen(false);
+      if (stopModalMode === 'new_project') {
+        setIsPromptModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to end project:', err);
+    } finally {
+      setIsStoppingProject(false);
+    }
+  };
+
+  const handleResumeClick = async () => {
+    try {
+      await resumeProject();
+    } catch (err) {
+      console.error('Failed to resume project:', err);
+    }
+  };
+
 
   // Full 7 Specialists + DevOps System Stage Definition
   const rails = [
@@ -467,13 +536,37 @@ export const Overview: React.FC = () => {
                 </div>
 
                 {hasProject && (
-                  <button
-                    type="button"
-                    onClick={() => setIsPromptModalOpen(true)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200 transition-colors cursor-pointer"
-                  >
-                    + New
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {stageStatus === 'paused' ? (
+                      <button
+                        type="button"
+                        onClick={handleResumeClick}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                        title="Resume Project Delivery"
+                      >
+                        <Play className="w-2.5 h-2.5 fill-current" />
+                        <span>Resume</span>
+                      </button>
+                    ) : stageStatus !== 'cancelled' && stageStatus !== 'completed' ? (
+                      <button
+                        type="button"
+                        onClick={handleStopClick}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Stop or Pause Project"
+                      >
+                        <Square className="w-2.5 h-2.5 fill-current text-rose-500" />
+                        <span>Stop</span>
+                      </button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={handleNewProjectClick}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+                    >
+                      + New
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -485,10 +578,46 @@ export const Overview: React.FC = () => {
                   <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 line-clamp-4 leading-relaxed">
                     “{project?.clientBrief}”
                   </p>
-                  <div className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 pt-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Active in Delivery Loop</span>
-                  </div>
+
+                  {stageStatus === 'paused' ? (
+                    <div className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <PauseCircle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Paused (Saved)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleResumeClick}
+                        className="underline hover:text-amber-900 cursor-pointer font-extrabold"
+                      >
+                        Resume ▶
+                      </button>
+                    </div>
+                  ) : stageStatus === 'cancelled' ? (
+                    <div className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg flex items-center gap-1">
+                      <StopCircle className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Project Ended</span>
+                    </div>
+                  ) : stageStatus === 'completed' ? (
+                    <div className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>100% Delivery Completed</span>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] font-semibold text-emerald-600 flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Active in Delivery Loop</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleStopClick}
+                        className="text-slate-400 hover:text-rose-600 text-[10px] font-medium cursor-pointer transition-colors"
+                      >
+                        Stop
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <form onSubmit={handleStartProject} className="space-y-3">
@@ -1079,6 +1208,99 @@ export const Overview: React.FC = () => {
           </div>
         )}
       </div>
+
+            {/* ========================================================================= */}
+      {/* 2B. STOP / PAUSE / END PROJECT MODAL */}
+      {/* ========================================================================= */}
+      {isStopModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {stopModalMode === 'new_project' ? 'Start a New Project' : 'Stop Project Development'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {stopModalMode === 'new_project'
+                    ? `An active project (${project?.name}) is currently in progress.`
+                    : `What would you like to do with "${project?.name}"?`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStopModalOpen(false)}
+                disabled={isStoppingProject}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: Pause */}
+              <div
+                onClick={!isStoppingProject ? handlePauseConfirm : undefined}
+                className="group p-4 rounded-2xl border-2 border-amber-200/80 hover:border-amber-400 bg-amber-50/40 hover:bg-amber-50 transition-all cursor-pointer shadow-xs relative"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 font-bold">
+                    <PauseCircle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 group-hover:text-amber-900 transition-colors">
+                        Pause, I'll restart it later
+                      </div>
+                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
+                        Recommended
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                      Temporarily halts agent loops. All requirements, wireframes, code files, and test results are securely preserved so you can resume at any time.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 2: End Permanently */}
+              <div
+                onClick={!isStoppingProject ? handleEndConfirm : undefined}
+                className="group p-4 rounded-2xl border-2 border-rose-200/80 hover:border-rose-400 bg-rose-50/40 hover:bg-rose-50 transition-all cursor-pointer shadow-xs relative"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200 font-bold">
+                    <StopCircle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 group-hover:text-rose-900 transition-colors">
+                        End this project permanently
+                      </div>
+                      <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
+                        Permanent
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                      Permanently terminates autonomous development and archives this project run.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsStopModalOpen(false)}
+                disabled={isStoppingProject}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Keep Working
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. NEW PROJECT PROMPT MODAL */}

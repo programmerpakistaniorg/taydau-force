@@ -89,3 +89,40 @@ export async function advanceProject(id: string): Promise<{ id: string; status: 
   }
   return res.json();
 }
+
+export async function pauseProject(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${id}/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to pause project');
+  }
+  return res.json();
+}
+
+export async function resumeProject(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${id}/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to resume project');
+  }
+  return res.json();
+}
+
+export async function endProject(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${id}/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to end project');
+  }
+  return res.json();
+}
+

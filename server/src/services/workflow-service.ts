@@ -22,7 +22,9 @@ export type WorkflowStageStatus =
   | 'waiting_for_client'
   | 'completed'
   | 'failed'
-  | 'blocked';
+  | 'blocked'
+  | 'paused'
+  | 'cancelled';
 
 export interface NextAction {
   type: 'answer_questions' | 'approve_requirements' | 'approve_design' | 'retry' | 'working' | 'delivery' | 'none';
@@ -419,5 +421,71 @@ export class WorkflowService {
       default:
         return 'in_progress';
     }
+  }
+
+  static async pauseWorkflow(projectId: string): Promise<void> {
+    await query(
+      `UPDATE project_workflows
+       SET 
+        stage_status = 'paused',
+        active_role = null,
+        runner_id = null,
+        run_started_at = null,
+        next_action_type = 'resume',
+        next_action_payload = jsonb_build_object(
+          'type', 'resume',
+          'label', 'Resume Delivery',
+          'description', 'Project paused by user. Click resume to continue.',
+          'requiresUser', true,
+          'targetRoute', '/'
+        ),
+        updated_at = now()
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    await query(`UPDATE projects SET status = 'paused', updated_at = now() WHERE id = $1`, [projectId]);
+  }
+
+  static async resumeWorkflow(projectId: string): Promise<void> {
+    await query(
+      `UPDATE project_workflows
+       SET 
+        stage_status = 'pending',
+        runner_id = null,
+        run_started_at = null,
+        retry_count = 0,
+        last_error_code = null,
+        last_error_summary = null,
+        updated_at = now()
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    await query(`UPDATE projects SET status = 'in_progress', updated_at = now() WHERE id = $1`, [projectId]);
+  }
+
+  static async endWorkflow(projectId: string): Promise<void> {
+    await query(
+      `UPDATE project_workflows
+       SET 
+        stage_status = 'cancelled',
+        active_role = null,
+        runner_id = null,
+        run_started_at = null,
+        next_action_type = 'none',
+        next_action_payload = jsonb_build_object(
+          'type', 'none',
+          'label', 'Project Ended',
+          'description', 'Project permanently closed by user.',
+          'requiresUser', false,
+          'targetRoute', '/'
+        ),
+        updated_at = now()
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    await query(`UPDATE projects SET status = 'cancelled', updated_at = now() WHERE id = $1`, [projectId]);
   }
 }

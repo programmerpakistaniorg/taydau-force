@@ -797,4 +797,71 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
+// POST /api/projects/:id/pause
+router.post('/:id/pause', async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    await WorkflowService.pauseWorkflow(id);
+    await WorkflowService.logActivity(
+      id,
+      'User',
+      'client',
+      'paused the project',
+      'Paused Delivery',
+      'user',
+      'Project Paused',
+      'User paused autonomous delivery loop. All artifacts and state preserved.'
+    );
+    res.json({ success: true, message: 'Project paused successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/projects/:id/resume
+router.post('/:id/resume', async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    await WorkflowService.resumeWorkflow(id);
+    await WorkflowService.logActivity(
+      id,
+      'User',
+      'client',
+      'resumed the project',
+      'Resumed Delivery',
+      'user',
+      'Project Resumed',
+      'User resumed autonomous delivery loop.'
+    );
+    runUntilBlocked(id, gateway).catch((err) => {
+      console.error(`[orchestrator] Background resume error for project ${id}:`, err);
+    });
+    res.json({ success: true, message: 'Project resumed successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/projects/:id/end
+router.post('/:id/end', async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    await WorkflowService.endWorkflow(id);
+    await WorkflowService.logActivity(
+      id,
+      'User',
+      'client',
+      'ended the project permanently',
+      'Project Terminated',
+      'user',
+      'Project Closed',
+      'User permanently ended this software delivery project.'
+    );
+    res.json({ success: true, message: 'Project ended permanently.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
+

@@ -25,6 +25,10 @@ interface LiveProjectContextType {
   requestChanges: (approvalId: string, feedback: string) => Promise<void>;
   retryStage: () => Promise<void>;
   advanceProject: (id?: string) => Promise<void>;
+  pauseProject: () => Promise<void>;
+  resumeProject: () => Promise<void>;
+  endProject: () => Promise<void>;
+  clearActiveProject: () => void;
   refreshProject: () => Promise<void>;
 }
 
@@ -35,6 +39,14 @@ function getProgressMessage(project: FullProjectResponse | null): string {
 
   const wf = project.workflow;
   if (!wf) return 'Project initialized.';
+
+  if (wf.stageStatus === 'paused') {
+    return 'Project paused by client. Autonomous delivery loop is on hold.';
+  }
+
+  if (wf.stageStatus === 'cancelled') {
+    return 'Project ended permanently.';
+  }
 
   if (wf.stageStatus === 'failed') {
     return wf.lastErrorSummary || 'Development requires attention.';
@@ -306,6 +318,57 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
+  const pauseProject = async (): Promise<void> => {
+    if (!activeProjectId) return;
+    setIsActionInProgress(true);
+    setError(null);
+    try {
+      await api.pauseProject(activeProjectId);
+      await refreshProject();
+    } catch (err: any) {
+      setError(err.message || 'Failed to pause project');
+      throw err;
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const resumeProject = async (): Promise<void> => {
+    if (!activeProjectId) return;
+    setIsActionInProgress(true);
+    setError(null);
+    try {
+      await api.resumeProject(activeProjectId);
+      await refreshProject();
+    } catch (err: any) {
+      setError(err.message || 'Failed to resume project');
+      throw err;
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const endProject = async (): Promise<void> => {
+    if (!activeProjectId) return;
+    setIsActionInProgress(true);
+    setError(null);
+    try {
+      await api.endProject(activeProjectId);
+      await refreshProject();
+    } catch (err: any) {
+      setError(err.message || 'Failed to end project');
+      throw err;
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const clearActiveProject = () => {
+    setActiveProjectId(null);
+    setProject(null);
+    localStorage.removeItem('taydau_active_project_id');
+  };
+
   return (
     <LiveProjectContext.Provider
       value={{
@@ -326,6 +389,10 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         requestChanges,
         retryStage,
         advanceProject,
+        pauseProject,
+        resumeProject,
+        endProject,
+        clearActiveProject,
         refreshProject,
       }}
     >
