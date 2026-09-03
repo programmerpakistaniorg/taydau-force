@@ -357,7 +357,13 @@ router.post('/:id/retry', async (req, res, next) => {
 
     await query(
       `UPDATE project_workflows
-       SET stage_status = 'pending', retry_count = retry_count + 1, updated_at = now()
+       SET stage_status = 'pending',
+           retry_count = retry_count + 1,
+           last_error_code = null,
+           last_error_summary = null,
+           runner_id = null,
+           run_started_at = null,
+           updated_at = now()
        WHERE project_id = $1`,
       [id]
     );

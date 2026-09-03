@@ -414,11 +414,14 @@ export class DeterministicGenerator {
   }
 
   static generateEngineerOutput(userPrompt?: string): EngineerOutput {
-    const prompt = userPrompt || '';
-    const taskMatches = prompt.match(/\bT-\d+\b|\bTASK-\d+\b/g) || ['T-001', 'T-002', 'T-003', 'T-004'];
+    const prompt = (userPrompt || '').toLowerCase();
+    const isBlog = prompt.includes('blog') || prompt.includes('article') || prompt.includes('post') || prompt.includes('resource');
+    const isPortfolio = prompt.includes('portfolio') || prompt.includes('designer') || prompt.includes('agency') || prompt.includes('service');
+
+    const taskMatches = (userPrompt || '').match(/\bT-\d+\b|\bTASK-\d+\b/g) || ['T-001', 'T-002', 'T-003', 'T-004'];
     const uniqueTasks = Array.from(new Set(taskMatches));
     if (uniqueTasks.length === 0) {
-      uniqueTasks.push('T-001', 'T-002', 'T-003');
+      uniqueTasks.push('T-001', 'T-002', 'T-003', 'T-004');
     }
 
     const taskCoverage = uniqueTasks.map((tCode) => ({
@@ -426,54 +429,59 @@ export class DeterministicGenerator {
       filePaths: ['requirements.txt', 'app/main.py', 'app/models.py', 'app/database.py'],
     }));
 
-    return {
-      implementationSummary: 'Implemented complete modular FastAPI application with SQLite database persistence, Pydantic validation models, and REST endpoints adhering strictly to architectural constraints.',
-      taskCoverage,
-      assumptions: [
-        'Python 3.11 execution runtime in isolated sandbox container.',
-        'SQLite embedded database stored locally in ephemeral workspace.',
-      ],
-      files: [
-        {
-          path: 'requirements.txt',
-          purpose: 'Pinned production dependencies for FastAPI application runtime.',
-          content: 'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.4\nsqlalchemy==2.0.28\naiosqlite==0.20.0\npytest==8.1.1\nhttpx==0.27.0\n',
-          relatedTaskCodes: uniqueTasks,
-        },
-        {
-          path: 'app/models.py',
-          purpose: 'Domain data schemas and request/response models with Pydantic v2 validation.',
-          content: `from pydantic import BaseModel, EmailStr, Field
+    let modelsContent = '';
+    let dbContent = '';
+    let mainContent = '';
+
+    if (isBlog) {
+      modelsContent = `from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
+
+class CategoryBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
+    slug: str = Field(..., min_length=2, max_length=50)
+
+class CategoryCreate(CategoryBase):
+    pass
+
+class CategoryResponse(CategoryBase):
+    id: str
+
+class PostBase(BaseModel):
+    title: str = Field(..., min_length=3, max_length=200)
+    slug: str = Field(..., min_length=3, max_length=200)
+    content: str = Field(..., min_length=10)
+    summary: Optional[str] = Field(default="")
+    category: str = Field(default="general")
+    status: str = Field(default="published")
+
+class PostCreate(PostBase):
+    pass
+
+class PostResponse(PostBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
 
 class ContactInquiryCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    service_type: str = Field(default="ui_ux_design")
-    project_scope: Optional[str] = Field(default="mvp_design")
-    budget_range: Optional[str] = Field(default="$5k-$10k")
-    message: str = Field(..., min_length=10, max_length=2000)
+    message: str = Field(..., min_length=5, max_length=2000)
+    honeypot: Optional[str] = None
 
 class ContactInquiryResponse(BaseModel):
     id: str
-    name: str
-    email: str
-    service_type: str
     status: str = "received"
-    created_at: datetime
+    message: str = "Inquiry captured successfully"
 
 class HealthCheckResponse(BaseModel):
     status: str = "healthy"
     version: str = "1.0.0"
     database: str = "connected"
-`,
-          relatedTaskCodes: uniqueTasks,
-        },
-        {
-          path: 'app/database.py',
-          purpose: 'SQLite database connection helper and local in-memory storage manager.',
-          content: `import sqlite3
+`;
+
+      dbContent = `import sqlite3
 import os
 import uuid
 from datetime import datetime
@@ -484,11 +492,181 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS posts (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            content TEXT NOT NULL,
+            summary TEXT,
+            category TEXT NOT NULL DEFAULT 'general',
+            status TEXT NOT NULL DEFAULT 'published',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS inquiries (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
-            service_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_1', 'AI Insights', 'ai-insights')")
+    cursor.execute("INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_2', 'Machine Learning', 'machine-learning')")
+    conn.commit()
+    conn.close()
+
+def get_posts(category: str = None, limit: int = 50):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if category:
+        cursor.execute("SELECT id, title, slug, content, summary, category, status, created_at, updated_at FROM posts WHERE category = ? AND status = 'published' ORDER BY created_at DESC LIMIT ?", (category, limit))
+    else:
+        cursor.execute("SELECT id, title, slug, content, summary, category, status, created_at, updated_at FROM posts WHERE status = 'published' ORDER BY created_at DESC LIMIT ?", (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "title": r[1], "slug": r[2], "content": r[3], "summary": r[4], "category": r[5], "status": r[6], "created_at": r[7], "updated_at": r[8]} for r in rows]
+
+def create_post(data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    pid = f"post_{uuid.uuid4().hex[:10]}"
+    now = datetime.utcnow().isoformat()
+    cursor.execute("""
+        INSERT INTO posts (id, title, slug, content, summary, category, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (pid, data["title"], data["slug"], data["content"], data.get("summary", ""), data.get("category", "general"), data.get("status", "published"), now, now))
+    conn.commit()
+    conn.close()
+    return {**data, "id": pid, "created_at": now, "updated_at": now}
+
+def save_inquiry(data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    iid = f"inq_{uuid.uuid4().hex[:10]}"
+    cursor.execute("INSERT INTO inquiries (id, name, email, message) VALUES (?, ?, ?, ?)", (iid, data["name"], data["email"], data["message"]))
+    conn.commit()
+    conn.close()
+    return {"id": iid, "status": "received", "message": "Inquiry captured successfully"}
+`;
+
+      mainContent = `from fastapi import FastAPI, HTTPException, status, Query, Header
+from typing import List, Optional
+from app.models import PostCreate, PostResponse, CategoryResponse, ContactInquiryCreate, ContactInquiryResponse, HealthCheckResponse
+from app.database import init_db, get_posts, create_post, save_inquiry
+
+app = FastAPI(title="AI & Machine Learning Insights Blog API", version="1.0.0")
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+@app.get("/health", response_model=HealthCheckResponse)
+def health_check():
+    return HealthCheckResponse()
+
+@app.get("/api/posts", response_model=List[PostResponse])
+def list_posts(category: Optional[str] = Query(None), limit: int = Query(50, le=100)):
+    return get_posts(category=category, limit=limit)
+
+@app.post("/api/posts", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
+def add_post(post: PostCreate, authorization: Optional[str] = Header(None)):
+    # Basic auth check simulation
+    return create_post(post.dict())
+
+@app.get("/api/posts/{slug}", response_model=PostResponse)
+def get_post_by_slug(slug: str):
+    posts = get_posts()
+    for p in posts:
+        if p["slug"] == slug:
+            return p
+    raise HTTPException(status_code=404, detail="Post not found")
+
+@app.post("/api/contact", response_model=ContactInquiryResponse, status_code=status.HTTP_201_CREATED)
+def submit_contact(payload: ContactInquiryCreate):
+    if payload.honeypot:
+        raise HTTPException(status_code=400, detail="Spam detected")
+    return save_inquiry(payload.dict())
+
+@app.get("/sitemap.xml")
+def sitemap():
+    return {"status": "ok", "routes": ["/", "/blog", "/categories", "/about", "/contact"]}
+
+@app.get("/")
+def root():
+    return {"message": "AI & ML Knowledge Base Online", "docs": "/docs"}
+`;
+    } else {
+      // General / Portfolio / SaaS domain
+      modelsContent = `from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List
+from datetime import datetime
+
+class ContactInquiryCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr
+    service_type: Optional[str] = Field(default="standard")
+    project_scope: Optional[str] = Field(default="mvp")
+    budget_range: Optional[str] = Field(default="$5k-$10k")
+    message: str = Field(..., min_length=5, max_length=2000)
+    honeypot: Optional[str] = None
+
+class ContactInquiryResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    status: str = "received"
+    created_at: datetime
+
+class ItemCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    description: Optional[str] = ""
+    status: str = "active"
+
+class ItemResponse(ItemCreate):
+    id: str
+    created_at: datetime
+
+class HealthCheckResponse(BaseModel):
+    status: str = "healthy"
+    version: str = "1.0.0"
+    database: str = "connected"
+`;
+
+      dbContent = `import sqlite3
+import os
+import uuid
+from datetime import datetime
+
+DB_PATH = os.environ.get("SQLITE_DB_PATH", "app.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS items (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS inquiries (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            service_type TEXT,
             project_scope TEXT,
             budget_range TEXT,
             message TEXT NOT NULL,
@@ -507,7 +685,7 @@ def save_inquiry(data: dict) -> dict:
     cursor.execute("""
         INSERT INTO inquiries (id, name, email, service_type, project_scope, budget_range, message, status, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?)
-    """, (inquiry_id, data["name"], data["email"], data.get("service_type", "ui_ux_design"),
+    """, (inquiry_id, data["name"], data["email"], data.get("service_type", "standard"),
           data.get("project_scope", ""), data.get("budget_range", ""), data["message"], now.isoformat()))
     conn.commit()
     conn.close()
@@ -515,21 +693,16 @@ def save_inquiry(data: dict) -> dict:
         "id": inquiry_id,
         "name": data["name"],
         "email": data["email"],
-        "service_type": data.get("service_type", "ui_ux_design"),
         "status": "received",
         "created_at": now
     }
-`,
-          relatedTaskCodes: uniqueTasks,
-        },
-        {
-          path: 'app/main.py',
-          purpose: 'FastAPI application entry point registering routes, health check, and error handlers.',
-          content: `from fastapi import FastAPI, HTTPException, status
+`;
+
+      mainContent = `from fastapi import FastAPI, HTTPException, status
 from app.models import ContactInquiryCreate, ContactInquiryResponse, HealthCheckResponse
 from app.database import init_db, save_inquiry
 
-app = FastAPI(title="TayDau Delivery Service API", version="1.0.0")
+app = FastAPI(title="TayDau Autonomous Service API", version="1.0.0")
 
 @app.on_event("startup")
 def on_startup():
@@ -541,6 +714,8 @@ def health_check():
 
 @app.post("/api/inquiries", response_model=ContactInquiryResponse, status_code=status.HTTP_201_CREATED)
 def create_inquiry(payload: ContactInquiryCreate):
+    if payload.honeypot:
+        raise HTTPException(status_code=400, detail="Spam detected")
     try:
         result = save_inquiry(payload.dict())
         return result
@@ -550,7 +725,39 @@ def create_inquiry(payload: ContactInquiryCreate):
 @app.get("/")
 def root():
     return {"message": "TayDau Autonomous Service Online", "docs": "/docs"}
-`,
+`;
+    }
+
+    return {
+      implementationSummary: 'Implemented complete modular FastAPI application with SQLite database persistence, Pydantic validation models, and REST endpoints adhering strictly to architectural constraints.',
+      taskCoverage,
+      assumptions: [
+        'Python 3.11 execution runtime in isolated sandbox container.',
+        'SQLite embedded database stored locally in ephemeral workspace.',
+      ],
+      files: [
+        {
+          path: 'requirements.txt',
+          purpose: 'Pinned production dependencies for FastAPI application runtime.',
+          content: 'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.4\nsqlalchemy==2.0.28\naiosqlite==0.20.0\npytest==8.1.1\nhttpx==0.27.0\n',
+          relatedTaskCodes: uniqueTasks,
+        },
+        {
+          path: 'app/models.py',
+          purpose: 'Domain data schemas and request/response models with Pydantic v2 validation.',
+          content: modelsContent,
+          relatedTaskCodes: uniqueTasks,
+        },
+        {
+          path: 'app/database.py',
+          purpose: 'SQLite database connection helper and local storage manager.',
+          content: dbContent,
+          relatedTaskCodes: uniqueTasks,
+        },
+        {
+          path: 'app/main.py',
+          purpose: 'FastAPI application entry point registering routes, health check, and error handlers.',
+          content: mainContent,
           relatedTaskCodes: uniqueTasks,
         },
       ],
