@@ -2,7 +2,7 @@ import { query } from '../db/pool.js';
 
 export interface ReleaseCheck {
   name: string;
-  category: 'requirements' | 'qa' | 'security' | 'review' | 'traceability';
+  category: 'requirements' | 'qa' | 'security' | 'review' | 'traceability' | 'model_quality';
   passed: boolean;
   details: string;
 }
@@ -162,6 +162,23 @@ export async function evaluateReleaseReadiness(projectId: string): Promise<Relea
     category: 'traceability',
     passed: tracePassed,
     details: `${coveredTasks}/${totalTasks} implementation tasks mapped to code artifacts (${totalTasks > 0 ? ((coveredTasks / totalTasks) * 100).toFixed(0) : 0}%)`,
+  });
+
+  // Check 9: Semantic Model Quality Floor (No Unresolved Degraded Critical Routes)
+  const degradedCritRes = await query(
+    `SELECT count(*) FROM model_routing_decisions
+     WHERE project_id = $1 AND degraded_mode = true
+       AND task_type IN ('architecture_design', 'fullstack_code_generation', 'defect_rework')`,
+    [projectId]
+  );
+  const degradedCritCount = parseInt(degradedCritRes.rows[0].count, 10);
+  checks.push({
+    name: 'Semantic Model Quality Floor (No Degraded Critical Stages)',
+    category: 'model_quality',
+    passed: degradedCritCount === 0,
+    details: degradedCritCount === 0
+      ? 'All critical stages executed on verified capable semantic models'
+      : `${degradedCritCount} critical stage(s) generated under degraded fallback mode`,
   });
 
   const passedChecks = checks.filter((c) => c.passed).length;
