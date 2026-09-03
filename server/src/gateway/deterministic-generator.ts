@@ -413,166 +413,246 @@ export class DeterministicGenerator {
     };
   }
 
-  static generateEngineerOutput(): EngineerOutput {
+  static generateEngineerOutput(userPrompt?: string): EngineerOutput {
+    const prompt = userPrompt || '';
+    const taskMatches = prompt.match(/\bT-\d+\b|\bTASK-\d+\b/g) || ['T-001', 'T-002', 'T-003', 'T-004'];
+    const uniqueTasks = Array.from(new Set(taskMatches));
+    if (uniqueTasks.length === 0) {
+      uniqueTasks.push('T-001', 'T-002', 'T-003');
+    }
+
+    const taskCoverage = uniqueTasks.map((tCode) => ({
+      taskCode: tCode,
+      filePaths: ['requirements.txt', 'app/main.py', 'app/models.py', 'app/database.py'],
+    }));
+
     return {
-      implementationSummary: 'Implemented complete modular service, REST router, and schema migrations adhering strictly to architecture decisions.',
-      taskCoverage: [
-        {
-          taskCode: 'TASK-001',
-          filePaths: ['app/src/db/schema.sql', 'app/src/services/booking-service.ts'],
-        },
-        {
-          taskCode: 'TASK-002',
-          filePaths: ['app/src/routes/bookings.ts', 'app/src/index.ts'],
-        },
-        {
-          taskCode: 'TASK-003',
-          filePaths: ['app/src/middleware/validate.ts', 'app/src/config.ts'],
-        },
-      ],
+      implementationSummary: 'Implemented complete modular FastAPI application with SQLite database persistence, Pydantic validation models, and REST endpoints adhering strictly to architectural constraints.',
+      taskCoverage,
       assumptions: [
-        'Database connection pool configured via environment variables.',
-        'JSON body parser enabled on Express app.',
+        'Python 3.11 execution runtime in isolated sandbox container.',
+        'SQLite embedded database stored locally in ephemeral workspace.',
       ],
       files: [
         {
-          path: 'app/src/services/booking-service.ts',
-          purpose: 'Domain service handling booking creation, availability checking, and state updates.',
-          content: `export interface Booking {
-  id: string;
-  customerName: string;
-  serviceType: string;
-  scheduledAt: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-}
-
-export class BookingService {
-  private bookings: Map<string, Booking> = new Map();
-
-  async createBooking(data: Omit<Booking, 'id' | 'status'>): Promise<Booking> {
-    const id = 'bk_' + Math.random().toString(36).substring(2, 9);
-    const booking: Booking = { ...data, id, status: 'pending' };
-    this.bookings.set(id, booking);
-    return booking;
-  }
-
-  async getBooking(id: string): Promise<Booking | null> {
-    return this.bookings.get(id) ?? null;
-  }
-
-  async listBookings(): Promise<Booking[]> {
-    return Array.from(this.bookings.values());
-  }
-}`,
-          relatedTaskCodes: ['TASK-001', 'TASK-002'],
+          path: 'requirements.txt',
+          purpose: 'Pinned production dependencies for FastAPI application runtime.',
+          content: 'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.4\nsqlalchemy==2.0.28\naiosqlite==0.20.0\npytest==8.1.1\nhttpx==0.27.0\n',
+          relatedTaskCodes: uniqueTasks,
         },
         {
-          path: 'app/src/routes/bookings.ts',
-          purpose: 'REST controller routing booking HTTP requests to the domain service.',
-          content: `import { Router } from 'express';
-import { BookingService } from '../services/booking-service.js';
+          path: 'app/models.py',
+          purpose: 'Domain data schemas and request/response models with Pydantic v2 validation.',
+          content: `from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List
+from datetime import datetime
 
-export function createBookingRouter(service: BookingService): Router {
-  const router = Router();
+class ContactInquiryCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr
+    service_type: str = Field(default="ui_ux_design")
+    project_scope: Optional[str] = Field(default="mvp_design")
+    budget_range: Optional[str] = Field(default="$5k-$10k")
+    message: str = Field(..., min_length=10, max_length=2000)
 
-  router.post('/', async (req, res) => {
-    try {
-      const { customerName, serviceType, scheduledAt } = req.body;
-      if (!customerName || !serviceType || !scheduledAt) {
-        return res.status(400).json({ error: 'Missing required booking fields' });
-      }
-      const booking = await service.createBooking({ customerName, serviceType, scheduledAt });
-      return res.status(201).json(booking);
-    } catch (err: any) {
-      return res.status(500).json({ error: 'Failed to create booking' });
+class ContactInquiryResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    service_type: str
+    status: str = "received"
+    created_at: datetime
+
+class HealthCheckResponse(BaseModel):
+    status: str = "healthy"
+    version: str = "1.0.0"
+    database: str = "connected"
+`,
+          relatedTaskCodes: uniqueTasks,
+        },
+        {
+          path: 'app/database.py',
+          purpose: 'SQLite database connection helper and local in-memory storage manager.',
+          content: `import sqlite3
+import os
+import uuid
+from datetime import datetime
+
+DB_PATH = os.environ.get("SQLITE_DB_PATH", "app.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS inquiries (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            service_type TEXT NOT NULL,
+            project_scope TEXT,
+            budget_range TEXT,
+            message TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'received',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_inquiry(data: dict) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    inquiry_id = f"inq_{uuid.uuid4().hex[:10]}"
+    now = datetime.utcnow()
+    cursor.execute("""
+        INSERT INTO inquiries (id, name, email, service_type, project_scope, budget_range, message, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?)
+    """, (inquiry_id, data["name"], data["email"], data.get("service_type", "ui_ux_design"),
+          data.get("project_scope", ""), data.get("budget_range", ""), data["message"], now.isoformat()))
+    conn.commit()
+    conn.close()
+    return {
+        "id": inquiry_id,
+        "name": data["name"],
+        "email": data["email"],
+        "service_type": data.get("service_type", "ui_ux_design"),
+        "status": "received",
+        "created_at": now
     }
-  });
+`,
+          relatedTaskCodes: uniqueTasks,
+        },
+        {
+          path: 'app/main.py',
+          purpose: 'FastAPI application entry point registering routes, health check, and error handlers.',
+          content: `from fastapi import FastAPI, HTTPException, status
+from app.models import ContactInquiryCreate, ContactInquiryResponse, HealthCheckResponse
+from app.database import init_db, save_inquiry
 
-  router.get('/', async (_req, res) => {
-    const list = await service.listBookings();
-    return res.json({ data: list });
-  });
+app = FastAPI(title="TayDau Delivery Service API", version="1.0.0")
 
-  return router;
-}`,
-          relatedTaskCodes: ['TASK-002'],
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+@app.get("/health", response_model=HealthCheckResponse)
+def health_check():
+    return HealthCheckResponse()
+
+@app.post("/api/inquiries", response_model=ContactInquiryResponse, status_code=status.HTTP_201_CREATED)
+def create_inquiry(payload: ContactInquiryCreate):
+    try:
+        result = save_inquiry(payload.dict())
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/")
+def root():
+    return {"message": "TayDau Autonomous Service Online", "docs": "/docs"}
+`,
+          relatedTaskCodes: uniqueTasks,
         },
       ],
     };
   }
 
-  static generateCodeReviewOutput(): CodeReviewOutput {
+  static generateCodeReviewOutput(userPrompt?: string): CodeReviewOutput {
+    const prompt = userPrompt || '';
+    const reqMatches = prompt.match(/\bREQ-\d+\b/g) || ['REQ-001', 'REQ-002'];
+    const uniqueReqs = Array.from(new Set(reqMatches));
+
     return {
-      summary: 'Code review completed with 0 blocking security or architecture issues. Implementation clean and modular.',
+      summary: 'Code review completed with 0 blocking security or architecture issues. Implementation clean, modular, and adheres to SQLite air-gapped constraints.',
       findings: [
         {
           code: 'CR-001',
           severity: 'low',
           isBlocking: false,
           category: 'Maintainability',
-          filePath: 'app/src/routes/bookings.ts',
-          description: 'Consider adding JSDoc comments to public controller methods for enhanced team readability.',
-          recommendation: 'Add standardized JSDoc annotations describing query params and responses.',
-          relatedRequirementCodes: ['REQ-001'],
+          filePath: 'app/main.py',
+          description: 'Consider adding lifespan async context manager for newer FastAPI conventions.',
+          recommendation: 'Use FastAPI lifespan event handlers when migrating past v0.110.',
+          relatedRequirementCodes: uniqueReqs,
         },
       ],
       architectureCompliance: {
         status: 'pass',
         notes: [
-          'Correct separation of domain service and HTTP routing layers.',
-          'TypeScript interfaces match schema contracts accurately.',
+          'Correct separation of data models, SQLite storage helpers, and FastAPI HTTP routing layers.',
+          'Pydantic schemas match request and response contracts accurately.',
         ],
       },
       maintainabilityAssessment: 'High maintainability index with clean modular exports and strong type contracts.',
     };
   }
 
-  static generateQAOutput(): QAOutput {
+  static generateQAOutput(userPrompt?: string): QAOutput {
+    const prompt = userPrompt || '';
+    const reqMatches = prompt.match(/\bREQ-\d+\b/g) || ['REQ-001', 'REQ-002', 'REQ-003', 'REQ-004'];
+    const uniqueReqs = Array.from(new Set(reqMatches));
+    if (uniqueReqs.length === 0) {
+      uniqueReqs.push('REQ-001', 'REQ-002');
+    }
+
+    const requirementCoverage = uniqueReqs.map((rCode) => ({
+      requirementCode: rCode,
+      testNames: [
+        `test_health_check_endpoint_${rCode.replace('-', '_')}`,
+        `test_create_inquiry_valid_payload_${rCode.replace('-', '_')}`,
+      ],
+    }));
+
     return {
-      testPlanSummary: 'Automated test suite verifying functional booking creation, input validation, and boundary conditions.',
+      testPlanSummary: 'Automated Pytest test suite verifying health check endpoints, Pydantic input validation, and SQLite persistence.',
       testFiles: [
         {
-          path: 'app/tests/booking.test.ts',
-          purpose: 'Integration tests for booking service and REST endpoints.',
-          content: `import { describe, it, expect } from 'vitest';
-import { BookingService } from '../src/services/booking-service.js';
+          path: 'tests/test_main.py',
+          purpose: 'FastAPI TestClient integration tests verifying health checks, status codes, and input validation.',
+          content: `import pytest
+from fastapi.testclient import TestClient
+from app.main import app
 
-describe('BookingService', () => {
-  it('creates and retrieves a booking successfully', async () => {
-    const service = new BookingService();
-    const created = await service.createBooking({
-      customerName: 'Alice Smith',
-      serviceType: 'Oil Change',
-      scheduledAt: '2026-09-01T10:00:00Z',
-    });
-    expect(created.id).toBeDefined();
-    expect(created.status).toBe('pending');
+client = TestClient(app)
 
-    const fetched = await service.getBooking(created.id);
-    expect(fetched).toEqual(created);
-  });
+def test_health_check():
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["database"] == "connected"
 
-  it('lists multiple bookings correctly', async () => {
-    const service = new BookingService();
-    await service.createBooking({ customerName: 'Bob', serviceType: 'Brake Check', scheduledAt: '2026-09-01T11:00:00Z' });
-    const list = await service.listBookings();
-    expect(list.length).toBe(1);
-  });
-});`,
-          relatedRequirementCodes: ['REQ-001', 'REQ-002'],
+def test_create_inquiry_success():
+    payload = {
+        "name": "Sarah Designer",
+        "email": "sarah@example.com",
+        "service_type": "ui_ux_design",
+        "project_scope": "portfolio_redesign",
+        "budget_range": "$5k-$10k",
+        "message": "We would like to redesign our mobile portfolio and web design system."
+    }
+    response = client.post("/api/inquiries", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Sarah Designer"
+    assert data["email"] == "sarah@example.com"
+    assert data["status"] == "received"
+    assert "id" in data
+
+def test_create_inquiry_invalid_email():
+    payload = {
+        "name": "Invalid User",
+        "email": "not-an-email",
+        "message": "Short message"
+    }
+    response = client.post("/api/inquiries", json=payload)
+    assert response.status_code == 422
+`,
+          relatedRequirementCodes: uniqueReqs,
         },
       ],
-      requirementCoverage: [
-        {
-          requirementCode: 'REQ-001',
-          testNames: ['creates and retrieves a booking successfully'],
-        },
-        {
-          requirementCode: 'REQ-002',
-          testNames: ['lists multiple bookings correctly'],
-        },
-      ],
-      assumptions: ['Tests run in isolated Vitest runtime environment'],
+      requirementCoverage,
+      assumptions: ['Tests execute inside air-gapped Docker sandbox using pytest and httpx TestClient.'],
     };
   }
 }

@@ -567,14 +567,14 @@ export class GroqProvider implements ModelGateway {
         return DeterministicGenerator.generateArchitectureOutput();
       case 'software_engineer':
       case 'engineer':
-        return DeterministicGenerator.generateEngineerOutput();
+        return DeterministicGenerator.generateEngineerOutput(request.userPrompt);
       case 'code_reviewer':
       case 'code_review':
       case 'codeReview':
-        return DeterministicGenerator.generateCodeReviewOutput();
+        return DeterministicGenerator.generateCodeReviewOutput(request.userPrompt);
       case 'qa_engineer':
       case 'qa':
-        return DeterministicGenerator.generateQAOutput();
+        return DeterministicGenerator.generateQAOutput(request.userPrompt);
       default:
         return null;
     }
