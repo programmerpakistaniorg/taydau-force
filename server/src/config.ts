@@ -13,7 +13,6 @@ function requireEnv(key: string, fallback?: string): string {
 
 function parsePricing(): Record<string, { inputPer1M: number; outputPer1M: number }> {
   const pricing: Record<string, { inputPer1M: number; outputPer1M: number }> = {};
-  // Scan env for PRICING_*_INPUT and PRICING_*_OUTPUT pairs
   for (const [key, value] of Object.entries(process.env)) {
     const inputMatch = key.match(/^PRICING_(.+)_INPUT$/);
     if (inputMatch && value) {
@@ -46,7 +45,7 @@ function parseBudgetHardLimit(): number {
 }
 
 function parsePort(): number {
-  const raw = process.env.PORT ?? '3000';
+  const raw = process.env.PORT ?? '3001';
   const val = parseInt(raw, 10);
   if (isNaN(val) || val <= 0 || val > 65535) {
     throw new Error(`Invalid PORT: '${raw}'. Must be a valid port number between 1 and 65535.`);
@@ -54,46 +53,52 @@ function parsePort(): number {
   return val;
 }
 
-// Provider selection — computed before the config object so both sections can reference it.
-const modelProvider = requireEnv('MODEL_PROVIDER');
+// Provider selection: 'tabi' (default) or 'groq'
+const modelProvider = process.env.MODEL_PROVIDER || 'tabi';
 
 export const config = {
   modelProvider,
 
-  alibaba: modelProvider === 'alibaba' || modelProvider === 'qwen'
-    ? {
-        apiKey: requireEnv('ALIBABA_API_KEY'),
-        baseUrl: requireEnv('ALIBABA_BASE_URL'),
-        workspaceId: process.env.ALIBABA_WORKSPACE_ID || '',
-      }
-    : { apiKey: '', baseUrl: '', workspaceId: '' },
+  tabi: {
+    apiKey: process.env.TABI_API_KEY || '',
+    baseUrl: process.env.TABI_BASE_URL || 'https://tabitoken.com/v1',
+  },
 
-  groq: modelProvider === 'groq'
-    ? {
-        apiKey: requireEnv('GROQ_API_KEY'),
-        baseUrl: requireEnv('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
-      }
-    : { apiKey: '', baseUrl: '' },
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || '',
+    baseUrl: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+  },
 
   models: modelProvider === 'groq'
     ? {
-        ba: requireEnv('GROQ_BA_MODEL', 'qwen/qwen3.8-27b'),
-        pm: requireEnv('GROQ_PM_MODEL', 'qwen/qwen3.8-27b'),
-        designer: requireEnv('GROQ_DESIGNER_MODEL', 'qwen/qwen3.8-27b'),
-        architect: requireEnv('GROQ_ARCHITECT_MODEL', 'qwen/qwen3.8-27b'),
-        engineer: requireEnv('GROQ_ENGINEER_MODEL', 'qwen/qwen3.8-27b'),
-        codeReview: requireEnv('GROQ_CODE_REVIEW_MODEL', 'qwen/qwen3.8-27b'),
-        qa: requireEnv('GROQ_QA_MODEL', 'qwen/qwen3.8-27b'),
+        ba: process.env.GROQ_BA_MODEL || 'qwen/qwen3.8-27b',
+        pm: process.env.GROQ_PM_MODEL || 'qwen/qwen3.8-27b',
+        designer: process.env.GROQ_DESIGNER_MODEL || 'qwen/qwen3.8-27b',
+        architect: process.env.GROQ_ARCHITECT_MODEL || 'qwen/qwen3.8-27b',
+        engineer: process.env.GROQ_ENGINEER_MODEL || 'qwen/qwen3.8-27b',
+        codeReview: process.env.GROQ_CODE_REVIEW_MODEL || 'qwen/qwen3.8-27b',
+        qa: process.env.GROQ_QA_MODEL || 'qwen/qwen3.8-27b',
       }
     : {
-        ba: requireEnv('QWEN_BA_MODEL', 'qwen-plus'),
-        pm: requireEnv('QWEN_PM_MODEL', 'qwen-plus'),
-        designer: requireEnv('QWEN_DESIGNER_MODEL', 'qwen-plus'),
-        architect: requireEnv('QWEN_ARCHITECT_MODEL', 'qwen-max'),
-        engineer: requireEnv('QWEN_ENGINEER_MODEL', 'qwen-max'),
-        codeReview: requireEnv('QWEN_CODE_REVIEW_MODEL', 'qwen-max'),
-        qa: requireEnv('QWEN_QA_MODEL', 'qwen-plus'),
+        // Tabi AI: Normal agents use claude-opus-5, Coding/Architecture/Security/QA use claude-opus-5-thinking
+        ba: process.env.TABI_BA_MODEL || 'claude-opus-5',
+        pm: process.env.TABI_PM_MODEL || 'claude-opus-5',
+        designer: process.env.TABI_DESIGNER_MODEL || 'claude-opus-5-thinking',
+        architect: process.env.TABI_ARCHITECT_MODEL || 'claude-opus-5-thinking',
+        engineer: process.env.TABI_ENGINEER_MODEL || 'claude-opus-5-thinking',
+        codeReview: process.env.TABI_CODE_REVIEW_MODEL || 'claude-opus-5-thinking',
+        qa: process.env.TABI_QA_MODEL || 'claude-opus-5-thinking',
       },
+
+  groqModels: {
+    ba: process.env.GROQ_BA_MODEL || 'qwen/qwen3.8-27b',
+    pm: process.env.GROQ_PM_MODEL || 'qwen/qwen3.8-27b',
+    designer: process.env.GROQ_DESIGNER_MODEL || 'qwen/qwen3.8-27b',
+    architect: process.env.GROQ_ARCHITECT_MODEL || 'qwen/qwen3.8-27b',
+    engineer: process.env.GROQ_ENGINEER_MODEL || 'qwen/qwen3.8-27b',
+    codeReview: process.env.GROQ_CODE_REVIEW_MODEL || 'qwen/qwen3.8-27b',
+    qa: process.env.GROQ_QA_MODEL || 'qwen/qwen3.8-27b',
+  },
 
   pricing: parsePricing(),
   database: {
@@ -103,5 +108,4 @@ export const config = {
     hardLimitUsd: parseBudgetHardLimit(),
   },
   port: parsePort(),
-} as const;
-
+};
