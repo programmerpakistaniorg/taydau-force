@@ -69,6 +69,10 @@ export const ProjectEventTypeSchema = z.enum([
   'delivery.git.failed',
   'delivery.ready',
 
+  'model.routing.selected',
+  'model.routing.fallback',
+  'model.routing.degraded',
+
   'release.ready',
   'release.blocked',
 ]);

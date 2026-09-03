@@ -172,6 +172,84 @@ export const CostGovernor: React.FC = () => {
           </table>
         </div>
       </Card>
+
+      {/* Dynamic Model Routing Telemetry */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-brand-blue" />
+              Evidence-Governed Dynamic Model Routing
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Policy v1.0.0 — Quality Floor First, Cost Optimization Second. Selects cheapest eligible model meeting required capability tiers.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="primary" size="sm">Policy: v1.0.0</Badge>
+            <Badge variant="success" size="sm">Quality Floor: Enforced</Badge>
+          </div>
+        </div>
+
+        {((project as any)?.modelRoutingDecisions && (project as any).modelRoutingDecisions.length > 0) ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 text-left">
+                  <th className="pb-2.5 font-semibold">Specialist</th>
+                  <th className="pb-2.5 font-semibold">Task Type</th>
+                  <th className="pb-2.5 font-semibold">Selected Route</th>
+                  <th className="pb-2.5 font-semibold">Routing Reason</th>
+                  <th className="pb-2.5 font-semibold text-right">Est. Cost</th>
+                  <th className="pb-2.5 font-semibold text-right">Actual Cost</th>
+                  <th className="pb-2.5 font-semibold text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {((project as any).modelRoutingDecisions || []).map((dec: any) => (
+                  <tr key={dec.id || Math.random()} className="hover:bg-slate-50/60">
+                    <td className="py-2.5 font-semibold text-slate-800 capitalize">
+                      {dec.agentRole?.replace(/_/g, ' ')}
+                    </td>
+                    <td className="py-2.5 text-slate-600 font-mono text-[11px]">
+                      {dec.taskType}
+                    </td>
+                    <td className="py-2.5 font-mono text-indigo-700">
+                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[11px] font-semibold">
+                        {dec.selectedProvider}/{dec.selectedModel}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-slate-600">
+                      <span className="text-[11px] font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {dec.routingReason}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-slate-500">
+                      ${(dec.estimatedCostUsd || 0).toFixed(4)}
+                    </td>
+                    <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                      {dec.actualCostUsd !== null ? `$${dec.actualCostUsd.toFixed(4)}` : '—'}
+                    </td>
+                    <td className="py-2.5 text-center">
+                      {dec.degradedMode ? (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold">DEGRADED</span>
+                      ) : dec.validationStatus === 'escalated' ? (
+                        <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded text-[10px] font-bold">ESCALATED</span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold">PASSED</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-4 text-center text-xs text-slate-500">
+            Dynamic routing evaluates capability floors and optimizes costs per task when live workflow runs.
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

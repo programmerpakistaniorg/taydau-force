@@ -508,6 +508,7 @@ router.get('/:id', async (req, res, next) => {
       releaseReadinessResult,
       llmCallsResult,
       designArtifactsResult,
+      modelRoutingResult,
     ] = await Promise.all([
       WorkflowService.getWorkflow(id),
       WorkflowService.synthesizeNextAction(id),
@@ -551,6 +552,7 @@ router.get('/:id', async (req, res, next) => {
       query('SELECT * FROM release_readiness WHERE project_id = $1 ORDER BY evaluated_at DESC LIMIT 1', [id]),
       query('SELECT * FROM llm_calls WHERE project_id = $1 ORDER BY created_at ASC', [id]),
       query(`SELECT * FROM design_artifacts WHERE design_spec_id IN (SELECT id FROM design_specs WHERE project_id = $1) ORDER BY created_at ASC`, [id]),
+      query('SELECT * FROM model_routing_decisions WHERE project_id = $1 ORDER BY created_at ASC', [id]),
     ]);
 
     const costSummary = await getProjectCostSummary(id);
@@ -836,6 +838,28 @@ router.get('/:id', async (req, res, next) => {
         details: a.details,
         createdAt: a.created_at,
       })),
+      modelRoutingDecisions: (modelRoutingResult?.rows || []).map((mr: any) => ({
+        id: mr.id,
+        agentRole: mr.agent_role,
+        taskType: mr.task_type,
+        taskProfile: safeJson(mr.task_profile, {}),
+        routingPolicyVersion: mr.routing_policy_version,
+        candidateModels: safeJson(mr.candidate_models, []),
+        rejectedCandidates: safeJson(mr.rejected_candidates, []),
+        selectedProvider: mr.selected_provider,
+        selectedModel: mr.selected_model,
+        routingReason: mr.routing_reason,
+        routingMode: mr.routing_mode,
+        shadowSelection: safeJson(mr.shadow_selection, null),
+        estimatedCostUsd: parseFloat(mr.estimated_cost_usd || 0),
+        actualCostUsd: mr.actual_cost_usd ? parseFloat(mr.actual_cost_usd) : null,
+        latencyMs: mr.latency_ms,
+        fallbackCount: mr.fallback_count,
+        degradedMode: mr.degraded_mode,
+        validationStatus: mr.validation_status,
+        errorMessage: mr.error_message,
+        createdAt: mr.created_at,
+      })),
       costSummary: {
         totalBudget: 5.00,
         ...costSummary,
@@ -1120,6 +1144,98 @@ router.post('/:id/delivery/git/push', async (req, res) => {
     res.json(result);
   } catch (err: any) {
     console.error('[routes/projects] Error pushing Git delivery:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/routing/decisions — Get model routing history
+router.get('/:id/routing/decisions', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT * FROM model_routing_decisions WHERE project_id = $1 ORDER BY created_at DESC`,
+      [id]
+    );
+    res.json(result.rows.map((r: any) => ({
+      id: r.id,
+      agentRole: r.agent_role,
+      taskType: r.task_type,
+      taskProfile: safeJson(r.task_profile, {}),
+      routingPolicyVersion: r.routing_policy_version,
+      candidateModels: safeJson(r.candidate_models, []),
+      rejectedCandidates: safeJson(r.rejected_candidates, []),
+      selectedProvider: r.selected_provider,
+      selectedModel: r.selected_model,
+      routingReason: r.routing_reason,
+      routingMode: r.routing_mode,
+      shadowSelection: safeJson(r.shadow_selection, null),
+      estimatedCostUsd: parseFloat(r.estimated_cost_usd || 0),
+      actualCostUsd: r.actual_cost_usd ? parseFloat(r.actual_cost_usd) : null,
+      latencyMs: r.latency_ms,
+      fallbackCount: r.fallback_count,
+      degradedMode: r.degraded_mode,
+      validationStatus: r.validation_status,
+      errorMessage: r.error_message,
+      createdAt: r.created_at,
+    })));
+  } catch (err: any) {
+    console.error('[routes/projects] Error getting routing decisions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/routing/summary — Get dynamic vs static comparison & savings
+router.get('/:id/routing/summary', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT * FROM model_routing_decisions WHERE project_id = $1 ORDER BY created_at ASC`,
+      [id]
+    );
+    const decisions = result.rows;
+    let totalActualCost = 0;
+    let totalBaselineStaticCost = 0;
+    let degradedCount = 0;
+    let fallbackCount = 0;
+    const modelDistribution: Record<string, number> = {};
+    const roleDistribution: Record<string, { calls: number; cost: number }> = {};
+
+    for (const d of decisions) {
+      const actual = parseFloat(d.actual_cost_usd || d.estimated_cost_usd || 0);
+      const estimated = parseFloat(d.estimated_cost_usd || 0);
+      // Static baseline estimation for Qwen Max ($1.60/$6.40)
+      const staticBaseline = d.shadow_selection ? parseFloat(d.shadow_selection.estimatedCostUsd || 0) : estimated * 1.8;
+
+      totalActualCost += actual;
+      totalBaselineStaticCost += staticBaseline;
+      if (d.degraded_mode) degradedCount++;
+      if (d.fallback_count > 0) fallbackCount++;
+
+      modelDistribution[d.selected_model] = (modelDistribution[d.selected_model] || 0) + 1;
+      if (!roleDistribution[d.agent_role]) {
+        roleDistribution[d.agent_role] = { calls: 0, cost: 0 };
+      }
+      roleDistribution[d.agent_role].calls += 1;
+      roleDistribution[d.agent_role].cost += actual;
+    }
+
+    const netSavingsUsd = Math.max(0, totalBaselineStaticCost - totalActualCost);
+    const savingsPercent = totalBaselineStaticCost > 0 ? (netSavingsUsd / totalBaselineStaticCost) * 100 : 0;
+
+    res.json({
+      totalDecisions: decisions.length,
+      totalActualCostUsd: totalActualCost,
+      totalBaselineStaticCostUsd: totalBaselineStaticCost,
+      netSavingsUsd,
+      savingsPercent,
+      degradedCount,
+      fallbackCount,
+      modelDistribution,
+      roleDistribution,
+      routingPolicyVersion: 'v1.0.0',
+    });
+  } catch (err: any) {
+    console.error('[routes/projects] Error getting routing summary:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,20 +1,11 @@
-import { config } from '../config.js';
 import type { ModelGateway } from './model-gateway.js';
-import { TabiProvider } from './tabi-provider.js';
-import { GroqProvider } from './groq-provider.js';
+import { RoutedModelGateway } from './routed-gateway.js';
 
 /**
- * Provider factory — returns the active ModelGateway based on MODEL_PROVIDER.
- * Default is Tabi AI (with automatic Groq secondary failover).
+ * Provider factory — returns the active evidence-governed RoutedModelGateway.
+ * Dynamically evaluates task profile, capability floor, provider health,
+ * cost optimization, and bounded fallbacks.
  */
 export function createGateway(): ModelGateway {
-  switch (config.modelProvider) {
-    case 'tabi':
-    case 'tabitoken':
-      return new TabiProvider();
-    case 'groq':
-      return new GroqProvider();
-    default:
-      return new TabiProvider();
-  }
+  return new RoutedModelGateway();
 }

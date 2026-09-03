@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import type { TaskProfile, RoutingDecision } from '../schemas/routing.js';
 
 /**
  * Abstract Model Gateway contract.
  * All LLM providers must implement this interface so that agent orchestration
- * can remain provider-agnostic while cost telemetry is captured uniformly.
+ * can remain provider-agnostic while cost telemetry and dynamic model routing
+ * are captured uniformly.
  */
 
 export interface ModelGatewayRequest {
@@ -21,6 +23,12 @@ export interface ModelGatewayRequest {
   temperature?: number;
   /** Optional reasoning effort: "none" | "low" | "medium" | "high" */
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+
+  // ── Dynamic Model Routing Context ───────────────────────────────────────
+  /** Explicit or inferred TaskProfile */
+  taskProfile?: TaskProfile;
+  /** Version of the routing policy */
+  routingPolicyVersion?: string;
 
   // ── Cost telemetry context ──────────────────────────────────────────────
   /** Project this call belongs to */
@@ -49,6 +57,12 @@ export interface ModelGatewayResponse {
   latencyMs: number;
   /** Echo of the modelId that was actually called */
   modelId: string;
+  /** Provider that fulfilled the request */
+  provider?: string;
+  /** Flag indicating whether request was fulfilled via degraded fallback */
+  degradedMode?: boolean;
+  /** Routing decision metadata */
+  routingDecision?: RoutingDecision;
 }
 
 export interface ModelGateway {
