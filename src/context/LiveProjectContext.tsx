@@ -16,6 +16,7 @@ interface LiveProjectContextType {
   isLoading: boolean;
   isActionInProgress: boolean;
   isPolling: boolean;
+  connectionStatus: 'connected' | 'reconnecting' | 'fallback_polling' | 'disconnected';
   error: string | null;
   currentProgressMessage: string;
   loadProject: (id: string) => Promise<void>;
@@ -113,9 +114,12 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isActionInProgress, setIsActionInProgress] = useState<boolean>(false);
   const [isPolling, setIsPolling] = useState<boolean>(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'fallback_polling' | 'disconnected'>('disconnected');
   const [error, setError] = useState<string | null>(null);
 
   const pollTimerRef = useRef<any>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
 
   const setMode = (newMode: AppMode) => {
     setModeState(newMode);
@@ -159,10 +163,15 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [activeProjectId, loadProject]);
 
-  // Continuous polling while live project is active and not completed/failed
+  // Real-Time SSE Stream with Fallback Polling
   useEffect(() => {
     if (mode !== 'live' || !activeProjectId) {
+      setConnectionStatus('disconnected');
       setIsPolling(false);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -170,52 +179,94 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       return;
     }
 
-    const isProjectActive =
-      project?.workflow?.stageStatus !== 'completed' &&
-      project?.workflow?.stageStatus !== 'failed' &&
-      project?.workflow?.stage !== 'completed';
-
-    if (isProjectActive) {
+    const startFallbackPolling = () => {
       setIsPolling(true);
       if (!pollTimerRef.current) {
         pollTimerRef.current = setInterval(async () => {
           try {
-            const data = await api.fetchProject(activeProjectId);
-            setProject(data);
-
-            const stillActive =
-              data.workflow?.stageStatus !== 'completed' &&
-              data.workflow?.stageStatus !== 'failed' &&
-              data.workflow?.stage !== 'completed';
-
-            if (!stillActive) {
-              if (pollTimerRef.current) {
-                clearInterval(pollTimerRef.current);
-                pollTimerRef.current = null;
-              }
-              setIsPolling(false);
-              loadProjectsList();
-            }
+            await refreshProject();
           } catch (err) {
-            console.error('Polling error:', err);
+            console.error('[LiveProjectContext] Fallback polling error:', err);
           }
-        }, 2000);
+        }, 5000);
       }
-    } else {
+    };
+
+    const stopFallbackPolling = () => {
       setIsPolling(false);
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
-    }
+    };
 
-    return () => {
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
+    // Construct SSE URL (API base URL)
+    const sseUrl = `/api/projects/${activeProjectId}/events${lastEventIdRef.current ? `?lastEventId=${lastEventIdRef.current}` : ''}`;
+    const es = new EventSource(sseUrl);
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      setConnectionStatus('connected');
+      stopFallbackPolling();
+    };
+
+    es.onmessage = (event) => {
+      if (event.lastEventId) {
+        lastEventIdRef.current = event.lastEventId;
+      }
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.eventType && payload.eventType !== 'agent.activity') {
+          refreshProject();
+        }
+      } catch (err) {
+        // Non-JSON comments (e.g. handshake, heartbeat)
       }
     };
-  }, [mode, activeProjectId, project?.workflow?.stageStatus, project?.workflow?.stage, loadProjectsList]);
+
+    // Specific typed event listeners
+    const handleTypedEvent = (event: MessageEvent) => {
+      if (event.lastEventId) {
+        lastEventIdRef.current = event.lastEventId;
+      }
+      refreshProject();
+    };
+
+    const eventTypes = [
+      'workflow.stage.started',
+      'workflow.stage.completed',
+      'workflow.stage.waiting_for_client',
+      'workflow.needs_attention',
+      'interaction.required',
+      'interaction.resolved',
+      'approval.required',
+      'approval.approved',
+      'approval.changes_requested',
+      'design.generated',
+      'design.approved',
+      'implementation.revision.created',
+      'qa.started',
+      'qa.completed',
+      'verification.started',
+      'verification.completed',
+      'release.ready',
+    ];
+
+    for (const type of eventTypes) {
+      es.addEventListener(type, handleTypedEvent as EventListener);
+    }
+
+    es.onerror = () => {
+      setConnectionStatus('fallback_polling');
+      startFallbackPolling();
+    };
+
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+      stopFallbackPolling();
+    };
+  }, [mode, activeProjectId, refreshProject]);
 
   // Initial load
   useEffect(() => {
@@ -380,6 +431,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         isLoading,
         isActionInProgress,
         isPolling,
+        connectionStatus,
         error,
         currentProgressMessage: getProgressMessage(project),
         loadProject,

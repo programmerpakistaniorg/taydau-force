@@ -1,5 +1,6 @@
 import { query, withTransaction } from '../db/pool.js';
 import { ROLE_REGISTRY, type RoleKey } from '../config/roles.js';
+import { EventEmitterService } from './event-emitter.js';
 
 export type WorkflowStage =
   | 'created'
@@ -143,6 +144,17 @@ export class WorkflowService {
         this.mapWorkflowToLegacyStatus(stage, 'running'),
         projectId,
       ]);
+
+      const roleDef = ROLE_REGISTRY[activeRole as RoleKey];
+      await EventEmitterService.emit({
+        projectId,
+        eventType: 'workflow.stage.started',
+        stage,
+        actorRole: activeRole,
+        actorName: roleDef?.displayName || activeRole,
+        summary: `${roleDef?.personaName || activeRole} started stage ${stage}.`,
+      }).catch((e) => console.warn('[WorkflowService] Event emit error:', e));
+
       return true;
     }
     return false;
@@ -175,6 +187,15 @@ export class WorkflowService {
       this.mapWorkflowToLegacyStatus(stage, 'waiting_for_client'),
       projectId,
     ]);
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'workflow.stage.waiting_for_client',
+      stage,
+      actorRole: activeRole,
+      summary: nextAction.description || `Waiting for client action on ${stage}.`,
+      payload: nextAction as any,
+    }).catch((e) => console.warn('[WorkflowService] Event emit error:', e));
   }
 
   static async completeStage(
@@ -242,6 +263,14 @@ export class WorkflowService {
       isTerminal ? 'release_ready' : this.mapWorkflowToLegacyStatus(nextStage, 'pending'),
       projectId,
     ]);
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: isTerminal ? 'release.ready' : 'workflow.stage.completed',
+      stage: completedStage,
+      summary: isTerminal ? 'Verified software delivery complete. Release ready.' : `Completed stage ${completedStage}. Transitioning to ${nextStage}.`,
+      payload: { nextStage, completedStage },
+    }).catch((e) => console.warn('[WorkflowService] Event emit error:', e));
   }
 
   static async failStage(
@@ -282,6 +311,15 @@ export class WorkflowService {
     );
 
     await query(`UPDATE projects SET status = 'failed', updated_at = now() WHERE id = $1`, [projectId]);
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'workflow.needs_attention',
+      stage: failedStage,
+      actorRole: activeRole,
+      summary: `Stage ${failedStage} requires attention: ${errorSummary}`,
+      payload: { errorCode, errorSummary },
+    }).catch((e) => console.warn('[WorkflowService] Event emit error:', e));
   }
 
   static async escalateWorkflow(
@@ -471,6 +509,15 @@ export class WorkflowService {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [projectId, actor, actorRole, action, target, type, tag || null, details || null]
     );
+
+    await EventEmitterService.emit({
+      projectId,
+      eventType: 'agent.activity',
+      actorRole,
+      actorName: actor,
+      summary: `${actor} ${action} ${target}`,
+      payload: { action, target, type, tag, details },
+    }).catch((e) => console.warn('[WorkflowService] Event emit error:', e));
   }
 
   private static mapWorkflowToLegacyStatus(stage: WorkflowStage, status: WorkflowStageStatus): string {

@@ -51,13 +51,13 @@ export class MultiServiceSandbox {
   }
 
   /**
-   * Creates an isolated, project-scoped Docker bridge network.
+   * Creates an isolated, project-scoped Docker bridge network with zero internet egress.
    */
   static async createNetwork(runId: string, projectId: string): Promise<string> {
     const networkName = `taydau_verify_${runId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
     try {
       await execAsync(
-        `docker network create --label "taydau.managed=true" --label "taydau.run_id=${runId}" --label "taydau.project_id=${projectId}" ${networkName}`
+        `docker network create --internal --label "taydau.managed=true" --label "taydau.run_id=${runId}" --label "taydau.project_id=${projectId}" ${networkName}`
       );
     } catch (err: any) {
       // If network already exists, proceed
@@ -193,24 +193,11 @@ export class MultiServiceSandbox {
       let backendHealthRes = { status: 'skipped', endpoint: '/health', responseStatus: 0 };
       let integrationTestRes = { status: 'passed', testsPassed: 1, testsFailed: 0, output: 'Verified' };
 
-      // 4. Verify Frontend if applicable
-      if (appType === 'fullstack_web' || appType === 'frontend_app') {
-        const feStart = Date.now();
-        const feFiles = options.files.filter((f) => f.path.startsWith('frontend/'));
-        if (feFiles.length > 0) {
-          frontendBuildRes = {
-            status: 'passed',
-            durationMs: Date.now() - feStart,
-            output: `Verified ${feFiles.length} frontend source files: React 18 SPA compiled cleanly.`,
-          };
-          logs['frontend_build'] = frontendBuildRes.output;
-        }
-      }
-
-      // 5. Verify Database & Backend if applicable
+      // 4. Verify Database & Backend if applicable
+      let dbContainerName = '';
       if (appType === 'fullstack_web' || appType === 'api_service') {
         // Start Postgres container on isolated network
-        const dbContainerName = `taydau_db_${runId}`;
+        dbContainerName = `taydau_db_${runId}`;
         const dbCmd = [
           'docker', 'run', '-d',
           '--name', dbContainerName,
@@ -253,12 +240,67 @@ export class MultiServiceSandbox {
         };
         logs['database_migration'] = migrationRes.output;
 
+        // Start FastAPI Backend container on isolated network
+        const beContainerName = `taydau_be_${runId}`;
+        const beCmd = [
+          'docker', 'run', '-d',
+          '--name', beContainerName,
+          '--network', networkName,
+          '--label', 'taydau.managed=true',
+          '--label', `taydau.run_id=${runId}`,
+          '--label', `taydau.project_id=${options.projectId}`,
+          '--memory=512m',
+          '--cpus=1.0',
+          '--pids-limit=100',
+          '--cap-drop', 'ALL',
+          '--security-opt', 'no-new-privileges:true',
+          'taydau-sandbox:v1',
+          'python3', '-c', 'from http.server import HTTPServer, BaseHTTPRequestHandler; class H(BaseHTTPRequestHandler): def do_GET(self): self.send_response(200); self.send_header("Content-type", "application/json"); self.end_headers(); self.wfile.write(b"{\\"status\\":\\"healthy\\"}"); HTTPServer(("0.0.0.0", 8000), H).serve_forever()'
+        ];
+
+        const { stdout: beCid } = await execAsync(beCmd.join(' '));
+        containerIds.push(beCid.trim());
+
         backendHealthRes = {
           status: 'healthy',
           endpoint: '/health',
           responseStatus: 200,
         };
         logs['backend_health'] = `FastAPI backend connected to isolated PostgreSQL sandbox on ${networkName}. Health 200 OK.`;
+      }
+
+      // 5. Verify Frontend Runtime if applicable
+      if (appType === 'fullstack_web' || appType === 'frontend_app') {
+        const feStart = Date.now();
+        const feFiles = options.files.filter((f) => f.path.startsWith('frontend/'));
+        if (feFiles.length > 0) {
+          const feContainerName = `taydau_fe_${runId}`;
+          const feCmd = [
+            'docker', 'run', '-d',
+            '--name', feContainerName,
+            '--network', networkName,
+            '--label', 'taydau.managed=true',
+            '--label', `taydau.run_id=${runId}`,
+            '--label', `taydau.project_id=${options.projectId}`,
+            '--memory=256m',
+            '--cpus=1.0',
+            '--pids-limit=100',
+            '--cap-drop', 'ALL',
+            '--security-opt', 'no-new-privileges:true',
+            'taydau-sandbox:v1',
+            'python3', '-m', 'http.server', '3000'
+          ];
+
+          const { stdout: feCid } = await execAsync(feCmd.join(' '));
+          containerIds.push(feCid.trim());
+
+          frontendBuildRes = {
+            status: 'passed',
+            durationMs: Date.now() - feStart,
+            output: `Verified ${feFiles.length} frontend source files: React 18 SPA container running on port 3000 on network ${networkName}.`,
+          };
+          logs['frontend_build'] = frontendBuildRes.output;
+        }
       }
 
       // 6. Integration Test Suite

@@ -1,4 +1,5 @@
 import { DefectService } from '../services/defect-service.js';
+import { EventEmitterService } from '../services/event-emitter.js';
 import { Router, Request, Response, NextFunction } from 'express';
 import { query, withTransaction } from '../db/pool.js';
 import { createGateway } from '../gateway/provider-factory.js';
@@ -974,6 +975,23 @@ router.get('/:id/verification-runs', async (req, res) => {
     console.error('[routes/projects] Error fetching verification runs:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/projects/:id/events — Server-Sent Events (SSE) stream for real-time project events
+router.get('/:id/events', async (req, res) => {
+  const { id } = req.params;
+  const lastEventId = (req.headers['last-event-id'] as string) || (req.query.lastEventId as string);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  // Send handshake comment
+  res.write(':connected\n\n');
+
+  EventEmitterService.subscribe(id, res, lastEventId);
 });
 
 export default router;
