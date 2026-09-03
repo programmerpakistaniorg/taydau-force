@@ -5,52 +5,38 @@ import { EngineerOutputSchema, type EngineerOutput } from '../schemas/code-artif
 import type { RequirementContext } from './pm-agent.js';
 import type { TaskOutput } from '../schemas/task.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
+import type { DesignSpec } from '../schemas/design-spec.js';
+import { ManifestService } from '../services/manifest-service.js';
 
 const ENGINEER_SYSTEM_PROMPT = `You are an Implementation Software Engineer for TayDau Force, an autonomous software delivery organization.
 
-Your job: generate complete, runnable Python 3.11 source code files strictly implementing the approved architecture specification, implementation tasks, and requirements.
+Your job: generate complete, runnable full-stack software project source code files strictly implementing the approved architecture specification, design contract, implementation tasks, and requirements.
 
 Mandatory Implementation Rules:
-- Tech Stack:
-  - Language: Python 3.11
-  - Framework: FastAPI
-  - Validation: Pydantic v2
-  - Database: SQLite via SQLAlchemy ORM (self-contained, no external database service)
-- File Scope:
-  - Generate 3 to 4 concise essential files under "app/" (e.g. app/database.py, app/models.py, app/schemas.py, app/main.py).
-  - Keep code focused, clean, and concise. Combine routes cleanly in app/main.py or app/api.py.
-  - DO NOT generate duplicate files. Each file path in the files array must be unique.
-  - DO NOT generate test files. Independent QA will write tests separately.
-  - DO NOT use external database engines. Use SQLite ("sqlite:///./app.db").
-- Code Quality:
-  - Every file must contain complete, functional, production-grade Python code.
+- Architecture Contract Compliance:
+  - If applicationType is "fullstack_web":
+    - Generate real React 18 + TypeScript + Vite frontend code (frontend/src/App.tsx, frontend/src/services/api.ts, frontend/src/types/index.ts, frontend/package.json, frontend/vite.config.ts, frontend/index.html).
+    - Generate real FastAPI backend code (backend/app/main.py, backend/app/models/domain.py, backend/app/schemas/dto.py, backend/app/database.py, backend/requirements.txt).
+    - Generate database migration artifacts (database/alembic.ini, database/alembic/env.py, database/alembic/versions/001_initial.py).
+    - Generate configuration and deployment artifacts (.env.example with ZERO credentials, Dockerfile.frontend, Dockerfile.backend, docker-compose.yml, .github/workflows/ci.yml, README.md, API.md).
+  - If applicationType is "api_service" (API-Only):
+    - Do NOT generate frontend files.
+    - Generate FastAPI backend code under app/ (app/main.py, app/models/domain.py, app/schemas/dto.py, app/database.py, requirements.txt).
+    - Generate database migration artifacts (alembic.ini, alembic/versions/001_initial.py).
+    - Generate deployment artifacts (Dockerfile.backend, docker-compose.yml, .env.example, README.md, API.md).
+- Design-to-Code Contract:
+  - If a Design Specification is provided, implement real React components matching the approved screens, layout, and design tokens (colors, typography, component hierarchies).
+- Code Quality & Security:
+  - Every file must contain complete, functional, production-grade code.
   - Never use placeholders, ellipses (...), or unimplemented stubs (# TODO).
-  - Write clean, concise, idiomatic Python code without excessive verbosity.
-  - Implement full validation (e.g. quantity >= 0, threshold >= 0) and proper HTTP status codes (201, 200, 400, 404, 422).
-  - Use atomic database transactions for stock updates.
+  - Strict input validation via Pydantic v2 in backend and TypeScript interfaces in frontend.
+  - Frontend API client routes in frontend/src/services/api.ts MUST match backend FastAPI route endpoints.
+  - NEVER output API keys, passwords, or credentials in .env.example (use placeholder variable names only).
+  - DO NOT generate test files (tests/* or qa/*). Independent QA will write tests separately.
 - Traceability:
   - Every file must specify which TASK-XXX codes it implements in relatedTaskCodes.
-  - Provide taskCoverage mapping each assigned TASK-XXX to its implementing file paths.
 
-Output Format:
-Return strictly a valid JSON object matching this schema:
-{
-  "implementationSummary": "Concise summary of implemented modules and endpoints",
-  "taskCoverage": [
-    { "taskCode": "TASK-001", "filePaths": ["app/models.py", "app/database.py"] }
-  ],
-  "assumptions": [
-    "SQLite local storage at ./inventory.db"
-  ],
-  "files": [
-    {
-      "path": "app/database.py",
-      "purpose": "SQLAlchemy SQLite engine and session factory",
-      "content": "from sqlalchemy import create_engine...",
-      "relatedTaskCodes": ["TASK-001"]
-    }
-  ]
-}`;
+Return strictly a valid JSON object matching the EngineerOutputSchema.`;
 
 export async function runEngineerAgent(
   gateway: ModelGateway,
@@ -58,7 +44,8 @@ export async function runEngineerAgent(
   requirements: RequirementContext[],
   tasks: TaskOutput[],
   architecture: ArchitectureOutput,
-  projectId: string
+  projectId: string,
+  designSpec?: DesignSpec | null
 ): Promise<EngineerOutput> {
   const reqSummary = requirements
     .map(
@@ -75,18 +62,30 @@ export async function runEngineerAgent(
     .join('\n');
 
   const archSummary = [
+    `Application Type: ${architecture.contract?.applicationType || 'fullstack_web'}`,
     `Database: ${architecture.techStack.database}`,
-    `Framework: ${architecture.techStack.framework}`,
+    `Backend Framework: ${architecture.techStack.framework}`,
+    `Frontend Framework: ${architecture.contract?.frontendFramework || 'React 18 + TypeScript + Vite'}`,
     `Planned Files: ${architecture.fileStructure.join(', ')}`,
-    `Implementation Spec Summary:\n${architecture.implementationSpec.slice(0, 1200)}`,
+    `Implementation Spec Summary:\n${architecture.implementationSpec.slice(0, 1500)}`,
   ].join('\n');
+
+  const designSummary = designSpec
+    ? [
+        `\nApproved Design Specification:`,
+        `Design System: ${designSpec.designSystem?.styleDirection || 'Modern'}`,
+        `Screens (${(designSpec.screens || []).length}):`,
+        ...(designSpec.screens || []).map((s: any) => `  - Screen: ${s.name} (${s.route}): ${(s.wireframeElements || []).join(', ')}`),
+      ].join('\n')
+    : '\nNo UI Design Specification (API-only mode).';
 
   const userPrompt = [
     `Client Brief:\n${clientBrief}`,
     `\nValidated Requirements:\n${reqSummary}`,
     `\nAssigned Implementation Tasks:\n${taskSummary}`,
     `\nApproved Architecture:\n${archSummary}`,
-    `\nPlease generate the full implementation source code files.`,
+    designSummary,
+    `\nPlease generate the full coherent implementation project files.`,
   ].join('\n');
 
   const { result } = await callAgent(
@@ -100,7 +99,7 @@ export async function runEngineerAgent(
       agentRole: 'engineer',
       purpose: 'Generate implementation code artifacts',
       reasoningEffort: 'medium',
-      maxTokens: 4200,
+      maxTokens: 8000,
       temperature: 0.1,
     }
   );
@@ -108,6 +107,7 @@ export async function runEngineerAgent(
   const validTaskCodes = new Set(tasks.map((t) => t.code));
   const defaultTaskCode = tasks[0]?.code || 'TASK-001';
   for (const file of result.files) {
+    file.fileType = file.fileType || ManifestService.inferFileType(file.path);
     file.relatedTaskCodes = (file.relatedTaskCodes || [])
       .filter((tc) => validTaskCodes.has(tc));
     if (file.relatedTaskCodes.length === 0) {
@@ -120,3 +120,4 @@ export async function runEngineerAgent(
 
   return result;
 }
+

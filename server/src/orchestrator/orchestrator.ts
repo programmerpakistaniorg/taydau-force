@@ -26,6 +26,7 @@ import {
 import { getRemainingBudget } from '../services/cost-telemetry.js';
 import { QuestionPolicy } from '../services/question-policy.js';
 import { WorkflowService, type WorkflowStage } from '../services/workflow-service.js';
+import { ManifestService } from '../services/manifest-service.js';
 import type { TaskOutput } from '../schemas/task.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
 import type { QAOutput } from '../schemas/qa-artifact.js';
@@ -720,19 +721,21 @@ async function executeArchitectStep(
 
     await withTransaction(async (client) => {
       await client.query(
-        `INSERT INTO architecture_specs (project_id, tech_stack, file_structure, implementation_spec, decisions)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO architecture_specs (project_id, tech_stack, file_structure, implementation_spec, decisions, contract)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (project_id) DO UPDATE SET
            tech_stack = EXCLUDED.tech_stack,
            file_structure = EXCLUDED.file_structure,
            implementation_spec = EXCLUDED.implementation_spec,
-           decisions = EXCLUDED.decisions`,
+           decisions = EXCLUDED.decisions,
+           contract = EXCLUDED.contract`,
         [
           projectId,
           JSON.stringify(architecture.techStack),
           JSON.stringify(architecture.fileStructure),
           architecture.implementationSpec,
           JSON.stringify(architecture.decisions),
+          JSON.stringify(architecture.contract || {}),
         ]
       );
 
@@ -844,10 +847,19 @@ async function executeEngineerStep(
     const rawArch = archResult.rows[0];
     const architecture: ArchitectureOutput = {
       techStack: typeof rawArch.tech_stack === 'string' ? JSON.parse(rawArch.tech_stack) : rawArch.tech_stack,
+      contract: rawArch.contract ? (typeof rawArch.contract === 'string' ? JSON.parse(rawArch.contract) : rawArch.contract) : undefined,
       fileStructure: typeof rawArch.file_structure === 'string' ? JSON.parse(rawArch.file_structure) : rawArch.file_structure,
       implementationSpec: rawArch.implementation_spec,
       decisions: typeof rawArch.decisions === 'string' ? JSON.parse(rawArch.decisions) : rawArch.decisions,
     };
+
+    const designRes = await query(
+      `SELECT design_jsonb FROM design_specs WHERE project_id = $1 AND status = 'approved' ORDER BY version DESC LIMIT 1`,
+      [projectId]
+    );
+    const designSpec: DesignSpec | null = designRes.rows[0]?.design_jsonb
+      ? (typeof designRes.rows[0].design_jsonb === 'string' ? JSON.parse(designRes.rows[0].design_jsonb) : designRes.rows[0].design_jsonb)
+      : null;
 
     const engineerOutput = await runEngineerAgent(
       gateway,
@@ -855,7 +867,8 @@ async function executeEngineerStep(
       requirements,
       implementationTasks,
       architecture,
-      projectId
+      projectId,
+      designSpec
     );
 
     const valResult = validateEngineerArtifacts(
@@ -867,6 +880,20 @@ async function executeEngineerStep(
     if (!valResult.valid) {
       throw new Error(`Engineer artifact validation failed: ${valResult.errors.join('; ')}`);
     }
+
+    // Full-stack Cross-File Consistency Validation
+    const consistency = ManifestService.validateCrossFileConsistency(engineerOutput.files);
+    if (!consistency.valid) {
+      console.warn(`[orchestrator] Cross-file consistency warnings: ${consistency.errors.join('; ')}`);
+    }
+
+    const appType = (architecture.contract?.applicationType as any) || 'fullstack_web';
+    const projectManifest = ManifestService.buildManifest(
+      `Project-${projectId.slice(0, 8)}`,
+      appType,
+      1,
+      engineerOutput.files
+    );
 
     const implTaskMap = new Map(
       taskResult.rows
@@ -884,14 +911,15 @@ async function executeEngineerStep(
       for (const file of engineerOutput.files) {
         const primaryTaskCode = file.relatedTaskCodes[0];
         const taskId = implTaskMap.get(primaryTaskCode) ?? defaultTaskId;
-        const ext = file.path.endsWith('.py') ? 'python' : 'text';
+        const ext = file.path.endsWith('.py') ? 'python' : (file.path.endsWith('.tsx') || file.path.endsWith('.ts') ? 'typescript' : 'text');
         const fileHash = crypto.createHash('sha256').update(file.content, 'utf8').digest('hex');
+        const fileType = file.fileType || ManifestService.inferFileType(file.path);
 
         const insertRes = await client.query(
           `INSERT INTO code_artifacts (
             task_id, file_path, content, language, generated_by, artifact_type, version, sha256
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-          [taskId, file.path, file.content, ext, 'Engineer', 'source_code', 1, fileHash]
+          [taskId, file.path, file.content, ext, 'Engineer', fileType, 1, fileHash]
         );
         const artifactId = insertRes.rows[0].id;
 
@@ -914,6 +942,21 @@ async function executeEngineerStep(
           }
         }
       }
+
+      // Record Implementation Revision v1 with full-stack manifest
+      await DefectService.recordImplementationRevision(
+        projectId,
+        1,
+        engineerOutput.files,
+        engineerOutput.implementationSummary || 'Initial full-stack implementation',
+        0,
+        [],
+        {
+          manifest: projectManifest,
+          fileInventory: projectManifest.files,
+          externalClient: client,
+        }
+      );
     });
 
     await WorkflowService.completeStage(projectId, 'implementation', 'code_review');

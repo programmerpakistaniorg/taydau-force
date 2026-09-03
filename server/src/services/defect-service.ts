@@ -173,26 +173,34 @@ export class DefectService {
     summary: string,
     reworkAttempt: number,
     addressedDefectIds: string[] = [],
-    externalClient?: PoolClient
+    options?: {
+      manifest?: Record<string, any>;
+      fileInventory?: Record<string, any>[];
+      externalClient?: PoolClient;
+    }
   ): Promise<ImplementationRevisionRecord> {
     const sha256 = this.computeImplementationRevisionSha(files);
     const totalBytes = files.reduce((acc, f) => acc + Buffer.byteLength(f.content || '', 'utf8'), 0);
+    const manifestJson = options?.manifest ? JSON.stringify(options.manifest) : '{}';
+    const inventoryJson = options?.fileInventory ? JSON.stringify(options.fileInventory) : '[]';
 
     const execute = async (client: PoolClient) => {
       const insRes = await client.query(
         `INSERT INTO implementation_revisions (
-           project_id, version, summary, file_count, total_bytes, sha256, rework_attempt
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+           project_id, version, summary, file_count, total_bytes, sha256, rework_attempt, manifest, file_inventory
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (project_id, version) DO UPDATE
            SET summary = EXCLUDED.summary,
                file_count = EXCLUDED.file_count,
                total_bytes = EXCLUDED.total_bytes,
                sha256 = EXCLUDED.sha256,
-               rework_attempt = EXCLUDED.rework_attempt
+               rework_attempt = EXCLUDED.rework_attempt,
+               manifest = EXCLUDED.manifest,
+               file_inventory = EXCLUDED.file_inventory
          RETURNING id, project_id AS "projectId", version, summary,
                    file_count AS "fileCount", total_bytes AS "totalBytes",
                    sha256, rework_attempt AS "reworkAttempt", created_at AS "createdAt"`,
-        [projectId, version, summary, files.length, totalBytes, sha256, reworkAttempt]
+        [projectId, version, summary, files.length, totalBytes, sha256, reworkAttempt, manifestJson, inventoryJson]
       );
       const revision = insRes.rows[0];
 
@@ -208,8 +216,8 @@ export class DefectService {
       return revision;
     };
 
-    if (externalClient) {
-      return execute(externalClient);
+    if (options?.externalClient) {
+      return execute(options.externalClient);
     }
     return withTransaction(execute);
   }
@@ -327,4 +335,52 @@ export class DefectService {
     );
     return res.rows;
   }
+
+  /**
+   * Asserts caller authorization before any QA suite or test artifact mutation.
+   * Strictly rejects any mutation attempted by 'engineer' or non-QA roles.
+   */
+  static assertQAMutationAuthorized(role: string): void {
+    const normalized = (role || '').trim().toLowerCase();
+    if (normalized === 'engineer' || normalized === 'developer' || normalized === 'devon') {
+      throw new Error(`AUTHORIZATION_DENIED: Role '${role}' has no mutation authority over QA test suites or artifacts.`);
+    }
+  }
+
+  /**
+   * Updates or repairs a QA suite with role-based authorization check.
+   */
+  static async mutateQASuite(
+    callerRole: string,
+    projectId: string,
+    suiteId: string,
+    updates: { suiteSha256?: string; isFrozen?: boolean; repairReason?: string }
+  ): Promise<void> {
+    this.assertQAMutationAuthorized(callerRole);
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+
+    if (updates.suiteSha256 !== undefined) {
+      sets.push(`suite_sha256 = $${idx++}`);
+      vals.push(updates.suiteSha256);
+    }
+    if (updates.isFrozen !== undefined) {
+      sets.push(`is_frozen = $${idx++}`);
+      vals.push(updates.isFrozen);
+    }
+    if (updates.repairReason !== undefined) {
+      sets.push(`repair_reason = $${idx++}`);
+      vals.push(updates.repairReason);
+    }
+
+    if (sets.length === 0) return;
+
+    vals.push(suiteId, projectId);
+    await query(
+      `UPDATE qa_suites SET ${sets.join(', ')} WHERE id = $${idx++} AND project_id = $${idx++}`,
+      vals
+    );
+  }
 }
+
