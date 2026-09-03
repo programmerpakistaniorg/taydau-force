@@ -932,5 +932,49 @@ router.get('/:id/rework-history', async (req, res) => {
   }
 });
 
+// GET /api/projects/:id/verification-runs — retrieve multi-service sandbox verification history
+router.get('/:id/verification-runs', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const runs = await query(
+      `SELECT
+         id, project_id, implementation_revision_id, run_id, status,
+         services, resource_policy, frontend_build_result, migration_result,
+         backend_health_result, integration_test_result, security_result,
+         error_code, error_message, logs, cleanup_state, started_at, completed_at
+       FROM verification_runs
+       WHERE project_id = $1
+       ORDER BY started_at DESC`,
+      [id]
+    );
+
+    res.json({
+      verificationRuns: runs.rows.map((r) => ({
+        id: r.id,
+        projectId: r.project_id,
+        implementationRevisionId: r.implementation_revision_id,
+        runId: r.run_id,
+        status: r.status,
+        services: safeJson(r.services, []),
+        resourcePolicy: safeJson(r.resource_policy, {}),
+        frontendBuildResult: safeJson(r.frontend_build_result, null),
+        migrationResult: safeJson(r.migration_result, null),
+        backendHealthResult: safeJson(r.backend_health_result, null),
+        integrationTestResult: safeJson(r.integration_test_result, null),
+        securityResult: safeJson(r.security_result, null),
+        errorCode: r.error_code,
+        errorMessage: r.error_message,
+        logs: safeJson(r.logs, {}),
+        cleanupState: r.cleanup_state,
+        startedAt: r.started_at,
+        completedAt: r.completed_at,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[routes/projects] Error fetching verification runs:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
 
