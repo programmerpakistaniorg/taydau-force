@@ -70,6 +70,7 @@ export const CostGovernor: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Badge variant="success" size="md">Mode: FREE_ONLY</Badge>
           <Badge variant="teal" size="md">Cost Governor: Active</Badge>
           <Badge variant="primary" size="md">Safety Cap: $5.00</Badge>
         </div>

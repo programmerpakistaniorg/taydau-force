@@ -151,7 +151,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       // ── Secondary Failover: Groq Provider ─────────────────────────────────
       if (config.groq.apiKey) {
         try {
-          const groqModel = (config.groqModels as any)?.[request.agentRole] || 'qwen/qwen3.8-27b';
+          const groqModel = (config.models as any)?.[request.agentRole] || 'openai/gpt-oss-120b';
           const groqRequest: ModelGatewayRequest = {
             ...request,
             modelId: groqModel,

@@ -8,6 +8,7 @@ import {
   type RoutingDecision,
   type RoutingReasonCode,
   type ModelRoutingRecord,
+  type InferenceBillingMode,
 } from '../schemas/routing.js';
 import {
   MODEL_REGISTRY,
@@ -16,6 +17,7 @@ import {
   providerHealth,
   inferTaskProfile,
 } from './routing-registry.js';
+import { providerAdapters } from './providers/provider-registry.js';
 
 export class DynamicModelRouter {
   private static instance: DynamicModelRouter;
@@ -28,7 +30,7 @@ export class DynamicModelRouter {
   }
 
   /**
-   * Evaluates the best route for a given TaskProfile according to policy.
+   * Evaluates the best route for a given TaskProfile according to policy and INFERENCE_BILLING_MODE.
    */
   routeTask(
     taskProfile: TaskProfile,
@@ -36,41 +38,84 @@ export class DynamicModelRouter {
       overrideMode?: 'static' | 'shadow' | 'active';
       staticModelId?: string;
       engineerModelId?: string;
+      previousProvider?: string;
     }
   ): RoutingDecision {
-    const mode = options?.overrideMode || (process.env.ROUTING_MODE as any) || 'active';
+    const billingMode: InferenceBillingMode = config.inferenceBillingMode || 'FREE_ONLY';
+    const routingMode = options?.overrideMode || (process.env.ROUTING_MODE as any) || 'active';
     const policy = QUALITY_FLOOR_POLICIES[taskProfile.taskType] || QUALITY_FLOOR_POLICIES.summarization_or_formatting;
 
     const candidateModels: string[] = [];
     const rejectedCandidates: { modelId: string; reason: string }[] = [];
 
     // 1. Evaluate all registry candidates
-    const eligible: { model: ModelCapability; estimatedCost: number; score: number; reason: RoutingReasonCode }[] = [];
+    const eligible: {
+      model: ModelCapability;
+      estimatedCost: number;
+      expectedBillableCost: number;
+      referenceCost: number;
+      score: number;
+      reason: RoutingReasonCode;
+    }[] = [];
 
     for (const model of MODEL_REGISTRY) {
-      if (!model.enabled) {
-        rejectedCandidates.push({ modelId: model.modelId, reason: 'MODEL_DISABLED' });
+      // Check if disabled in registry
+      if (!model.enabled || model.trustLevel === 'DISABLED') {
+        rejectedCandidates.push({ modelId: model.modelId, reason: 'MODEL_DISABLED_OR_UNTRUSTED' });
         continue;
       }
 
+      // Exclude local deterministic generator from normal evaluation (reserved for fallback)
       if (model.modelId === 'deterministic-generator' || model.provider === 'local') {
-        continue; // Reserved as fallback
+        continue;
       }
 
-      // Check allowed task types if defined
+      // Check provider configuration
+      const adapter = providerAdapters.get(model.provider);
+      if (!adapter || !adapter.isConfigured()) {
+        rejectedCandidates.push({ modelId: model.modelId, reason: 'PROVIDER_API_KEY_NOT_CONFIGURED' });
+        continue;
+      }
+
+      // ── BILLING ELIGIBILITY CHECK ──────────────────────────────────────────
+      if (billingMode === 'FREE_ONLY') {
+        if (model.billingClassification === 'PAID') {
+          rejectedCandidates.push({ modelId: model.modelId, reason: 'BILLING_REQUIRED_INELIGIBLE_IN_FREE_ONLY' });
+          continue;
+        }
+        if (model.billingClassification === 'UNKNOWN') {
+          rejectedCandidates.push({ modelId: model.modelId, reason: 'BILLING_STATUS_UNKNOWN' });
+          continue;
+        }
+      }
+
+      // ── TRUST POLICY CHECK ────────────────────────────────────────────────
+      if (policy.criticalForRelease && model.trustLevel === 'EXPERIMENTAL') {
+        rejectedCandidates.push({ modelId: model.modelId, reason: 'EXPERIMENTAL_PROVIDER_NOT_ALLOWED_FOR_CRITICAL_TASK' });
+        continue;
+      }
+
+      // ── DATA POLICY CHECK ─────────────────────────────────────────────────
+      const taskConfidentiality = taskProfile.confidentiality || 'PUBLIC_OR_SYNTHETIC';
+      if (taskConfidentiality !== 'PUBLIC_OR_SYNTHETIC' && model.dataPolicy === 'PUBLIC_OR_SYNTHETIC_ONLY') {
+        rejectedCandidates.push({ modelId: model.modelId, reason: 'DATA_POLICY_MISMATCH' });
+        continue;
+      }
+
+      // ── TASK TYPE CONSTRAINTS ─────────────────────────────────────────────
       if (model.allowedTaskTypes && !model.allowedTaskTypes.includes(taskProfile.taskType)) {
         rejectedCandidates.push({ modelId: model.modelId, reason: 'TASK_TYPE_NOT_ALLOWED' });
         continue;
       }
 
-      // Check routing context token limit
+      // ── CONTEXT LIMIT PRECHECK ────────────────────────────────────────────
       const contextLimit = model.routingContextLimit || model.maxContextTokens;
       if (contextLimit < taskProfile.contextSizeEstimate) {
         rejectedCandidates.push({ modelId: model.modelId, reason: 'CONTEXT_LIMIT_EXCEEDED' });
         continue;
       }
 
-      // Check Quality Floor: Reasoning Tier
+      // ── QUALITY FLOOR CHECKS ──────────────────────────────────────────────
       if (model.reasoningTier < policy.minReasoningTier) {
         rejectedCandidates.push({
           modelId: model.modelId,
@@ -79,7 +124,6 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // Check Quality Floor: Code Tier
       if (model.codeTier < policy.minCodeTier) {
         rejectedCandidates.push({
           modelId: model.modelId,
@@ -88,7 +132,6 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // Check Quality Floor: Structured Output Tier
       if (model.structuredOutputTier < policy.minStructuredTier) {
         rejectedCandidates.push({
           modelId: model.modelId,
@@ -97,82 +140,100 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // Check provider health
+      // ── HEALTH & QUOTA CHECKS ─────────────────────────────────────────────
       if (!providerHealth.isHealthy(model.modelId) || !providerHealth.isHealthy(model.provider)) {
-        rejectedCandidates.push({ modelId: model.modelId, reason: 'PROVIDER_UNHEALTHY' });
+        const quotaState = providerHealth.getQuotaState(model.modelId) !== 'AVAILABLE'
+          ? providerHealth.getQuotaState(model.modelId)
+          : providerHealth.getQuotaState(model.provider);
+        rejectedCandidates.push({ modelId: model.modelId, reason: `QUOTA_OR_HEALTH_BLOCKED (${quotaState})` });
         continue;
       }
 
-      // Candidate is eligible
+      // ── CANDIDATE QUALIFIED ───────────────────────────────────────────────
       candidateModels.push(model.modelId);
-
-      const isPriceUnknown =
-        model.inputCostPer1M === null ||
-        model.outputCostPer1M === null ||
-        model.pricingProvenance === 'UNKNOWN';
 
       const estimatedInputTokens = Math.round(taskProfile.contextSizeEstimate * 0.75);
       const estimatedOutputTokens = Math.round(taskProfile.contextSizeEstimate * 0.25);
-      const estimatedCost = isPriceUnknown
+
+      const expectedBillableCost = billingMode === 'FREE_ONLY' || model.billingClassification === 'FREE_TIER' || model.billingClassification === 'FREE_CREDITS'
         ? 0
         : (estimatedInputTokens / 1_000_000) * (model.inputCostPer1M || 0) +
           (estimatedOutputTokens / 1_000_000) * (model.outputCostPer1M || 0);
 
-      // Penalize unknown price models in cost scoring so they never falsely win CHEAPEST_MODEL over priced models
-      let score = isPriceUnknown ? 5 : 100 - estimatedCost * 10;
+      const refInputRate = model.referenceCostPer1M?.input ?? model.inputCostPer1M ?? 0;
+      const refOutputRate = model.referenceCostPer1M?.output ?? model.outputCostPer1M ?? 0;
+      const referenceCost =
+        (estimatedInputTokens / 1_000_000) * refInputRate +
+        (estimatedOutputTokens / 1_000_000) * refOutputRate;
+
+      // Quality-Floor First Scoring
+      let score = 50 + model.capabilityTier * 10 + model.structuredOutputTier * 5;
+
+      // Latency penalty
+      if (model.latencyProfileMs) {
+        score -= Math.min(20, model.latencyProfileMs / 100);
+      }
 
       // Verifier Diversity Preference (without violating quality floor)
-      let reason: RoutingReasonCode = 'LOWER_COST_ELIGIBLE';
+      let reason: RoutingReasonCode = model.billingClassification === 'FREE_TIER' ? 'FREE_TIER_SELECTED' : 'FREE_CREDITS_SELECTED';
+
       if (
         (taskProfile.taskType === 'code_review' || taskProfile.taskType === 'qa_test_generation') &&
         options?.engineerModelId &&
         model.modelId !== options.engineerModelId &&
         model.capabilityTier >= 3
       ) {
-        score += 20; // boost diversity score for verifiers
+        score += 25; // boost diversity score for verifiers
         reason = 'ROLE_DIVERSITY';
       }
 
-      if (policy.criticalForRelease) {
+      // Provider balancing boost (spread RPM across different free providers)
+      if (options?.previousProvider && model.provider !== options.previousProvider) {
+        score += 10;
+      }
+
+      if (policy.criticalForRelease && reason !== 'ROLE_DIVERSITY') {
         reason = 'CAPABILITY_FLOOR';
       }
 
       eligible.push({
         model,
-        estimatedCost,
+        estimatedCost: expectedBillableCost,
+        expectedBillableCost,
+        referenceCost,
         score,
         reason,
       });
     }
 
-    // 2. Sort eligible candidates by score (highest score / lowest cost meeting quality floor)
+    // 2. Sort eligible candidates by score (highest score meeting quality floor)
     eligible.sort((a, b) => b.score - a.score || a.estimatedCost - b.estimatedCost);
 
-    // Fallback to deterministic generator if no model qualifies
+    // Fallback to deterministic generator if no semantic model qualifies
     if (eligible.length === 0) {
       const deterministicModel = MODEL_REGISTRY.find((m) => m.modelId === 'deterministic-generator')!;
       return {
         provider: 'local',
         modelId: deterministicModel.modelId,
-        reason: 'DEGRADED_FALLBACK',
+        reason: 'FREE_ONLY_NO_ELIGIBLE_ROUTE',
         degradedMode: true,
         candidateModels,
         rejectedCandidates,
         estimatedCostUsd: 0,
+        expectedBillableCostUsd: 0,
+        referenceInferenceCostUsd: 0,
+        billingMode,
+        trustLevel: 'FIRST_PARTY',
+        billingClassification: 'FREE_TIER',
       };
     }
 
     const selected = eligible[0];
 
     // 3. Handle Shadow Mode
-    if (mode === 'shadow') {
-      const staticModel = options?.staticModelId || (config.models as any)?.[taskProfile.agentRole] || 'qwen-max';
+    if (routingMode === 'shadow') {
+      const staticModel = options?.staticModelId || (config.models as any)?.[taskProfile.agentRole] || 'openai/gpt-oss-120b';
       const staticCap = MODEL_REGISTRY.find((m) => m.modelId === staticModel) || selected.model;
-      const inCost = staticCap.inputCostPer1M ?? 0;
-      const outCost = staticCap.outputCostPer1M ?? 0;
-      const staticCost =
-        (taskProfile.contextSizeEstimate * 0.75 / 1_000_000) * inCost +
-        (taskProfile.contextSizeEstimate * 0.25 / 1_000_000) * outCost;
 
       return {
         provider: staticCap.provider,
@@ -181,7 +242,12 @@ export class DynamicModelRouter {
         degradedMode: false,
         candidateModels,
         rejectedCandidates,
-        estimatedCostUsd: staticCost,
+        estimatedCostUsd: 0,
+        expectedBillableCostUsd: 0,
+        referenceInferenceCostUsd: selected.referenceCost,
+        billingMode,
+        trustLevel: staticCap.trustLevel,
+        billingClassification: staticCap.billingClassification,
         shadowSelection: {
           provider: selected.model.provider,
           modelId: selected.model.modelId,
@@ -192,8 +258,8 @@ export class DynamicModelRouter {
     }
 
     // 4. Handle Static Mode
-    if (mode === 'static') {
-      const staticModel = options?.staticModelId || (config.models as any)?.[taskProfile.agentRole] || 'qwen-max';
+    if (routingMode === 'static') {
+      const staticModel = options?.staticModelId || (config.models as any)?.[taskProfile.agentRole] || 'openai/gpt-oss-120b';
       const staticCap = MODEL_REGISTRY.find((m) => m.modelId === staticModel) || selected.model;
       return {
         provider: staticCap.provider,
@@ -202,7 +268,12 @@ export class DynamicModelRouter {
         degradedMode: false,
         candidateModels,
         rejectedCandidates,
-        estimatedCostUsd: selected.estimatedCost,
+        estimatedCostUsd: 0,
+        expectedBillableCostUsd: 0,
+        referenceInferenceCostUsd: selected.referenceCost,
+        billingMode,
+        trustLevel: staticCap.trustLevel,
+        billingClassification: staticCap.billingClassification,
       };
     }
 
@@ -214,6 +285,11 @@ export class DynamicModelRouter {
       candidateModels,
       rejectedCandidates,
       estimatedCostUsd: selected.estimatedCost,
+      expectedBillableCostUsd: selected.expectedBillableCost,
+      referenceInferenceCostUsd: selected.referenceCost,
+      billingMode,
+      trustLevel: selected.model.trustLevel,
+      billingClassification: selected.model.billingClassification,
     };
   }
 
@@ -224,14 +300,19 @@ export class DynamicModelRouter {
     const currentCap = MODEL_REGISTRY.find((m) => m.modelId === currentModelId);
     const minTier = (currentCap?.capabilityTier || 2) + 1;
 
-    const higherCandidates = MODEL_REGISTRY.filter(
-      (m) => m.enabled && m.capabilityTier >= minTier && m.modelId !== currentModelId && m.modelId !== 'deterministic-generator'
-    );
+    const higherCandidates = MODEL_REGISTRY.filter((m) => {
+      if (!m.enabled || m.trustLevel === 'DISABLED' || m.modelId === currentModelId || m.modelId === 'deterministic-generator') {
+        return false;
+      }
+      const adapter = providerAdapters.get(m.provider);
+      if (!adapter || !adapter.isConfigured()) return false;
+      if (!providerHealth.isHealthy(m.modelId) || !providerHealth.isHealthy(m.provider)) return false;
+      return m.capabilityTier >= minTier;
+    });
 
     if (higherCandidates.length > 0) {
-      higherCandidates.sort((a, b) => (a.inputCostPer1M ?? 999) - (b.inputCostPer1M ?? 999));
+      higherCandidates.sort((a, b) => b.capabilityTier - a.capabilityTier);
       const chosen = higherCandidates[0];
-      const inCost = chosen.inputCostPer1M ?? 0;
       return {
         provider: chosen.provider,
         modelId: chosen.modelId,
@@ -239,86 +320,76 @@ export class DynamicModelRouter {
         degradedMode: false,
         candidateModels: higherCandidates.map((c) => c.modelId),
         rejectedCandidates: [{ modelId: currentModelId, reason: 'SCHEMA_VALIDATION_FAILED' }],
-        estimatedCostUsd: (taskProfile.contextSizeEstimate / 1_000_000) * inCost,
+        estimatedCostUsd: 0,
+        expectedBillableCostUsd: 0,
+        billingMode: config.inferenceBillingMode,
+        trustLevel: chosen.trustLevel,
+        billingClassification: chosen.billingClassification,
       };
     }
 
-    // If already at max tier, retain max tier
+    // If already at max tier, fallback to normal route
     return this.routeTask(taskProfile);
   }
 
   /**
-   * Persists a routing decision to the database and emits an SSE event.
+   * Records a routing decision event and persists to PostgreSQL model_routing_decisions table.
    */
-  async recordDecision(record: ModelRoutingRecord): Promise<string | null> {
+  async recordDecision(record: ModelRoutingRecord): Promise<void> {
     try {
-      const res = await query(
+      await query(
         `INSERT INTO model_routing_decisions (
-          project_id, agent_role, task_type, task_profile,
-          routing_policy_version, candidate_models, rejected_candidates,
-          selected_provider, selected_model, routing_reason, routing_mode,
-          shadow_selection, estimated_cost_usd, actual_cost_usd,
-          latency_ms, fallback_count, degraded_mode, validation_status,
-          error_message
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-        RETURNING id`,
+          project_id, agent_role, task_type, task_profile, routing_policy_version,
+          candidate_models, rejected_candidates, selected_provider, selected_model,
+          routing_reason, routing_mode, shadow_selection, estimated_cost_usd,
+          actual_cost_usd, latency_ms, fallback_count, degraded_mode,
+          validation_status, error_message, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())`,
         [
           record.projectId,
           record.agentRole,
           record.taskType,
           JSON.stringify(record.taskProfile),
-          record.routingPolicyVersion || ROUTING_POLICY_VERSION,
-          JSON.stringify(record.candidateModels || []),
-          JSON.stringify(record.rejectedCandidates || []),
+          record.routingPolicyVersion,
+          record.candidateModels,
+          JSON.stringify(record.rejectedCandidates),
           record.selectedProvider,
           record.selectedModel,
           record.routingReason,
-          record.routingMode || 'active',
+          record.routingMode,
           record.shadowSelection ? JSON.stringify(record.shadowSelection) : null,
-          record.estimatedCostUsd || 0,
-          record.actualCostUsd || null,
-          record.latencyMs || null,
-          record.fallbackCount || 0,
-          record.degradedMode || false,
-          record.validationStatus || 'passed',
-          record.errorMessage || null,
+          record.estimatedCostUsd,
+          record.actualCostUsd ?? null,
+          record.latencyMs ?? null,
+          record.fallbackCount,
+          record.degradedMode,
+          record.validationStatus,
+          record.errorMessage ?? null,
         ]
       );
 
-      const decisionId = res.rows[0]?.id;
-
-      // Emit real-time event
-      let eventType: 'model.routing.selected' | 'model.routing.fallback' | 'model.routing.degraded' = 'model.routing.selected';
-      if (record.degradedMode) {
-        eventType = 'model.routing.degraded';
-      } else if (record.fallbackCount > 0) {
-        eventType = 'model.routing.fallback';
-      }
-
+      // Emit Phase 4 Event via EventEmitterService
       await EventEmitterService.emit({
         projectId: record.projectId,
-        eventType,
-        stage: 'routing',
+        eventType: record.degradedMode ? 'model.routing.degraded' : 'model.routing.selected',
+        stage: record.taskType,
         actorRole: record.agentRole,
-        summary: `Model route [${record.selectedProvider}/${record.selectedModel}] selected for ${record.agentRole} (${record.routingReason})`,
+        actorName: record.agentRole,
+        summary: `Model routing decision: ${record.selectedProvider}/${record.selectedModel} (${record.routingReason})`,
         payload: {
-          decisionId,
-          agentRole: record.agentRole,
           taskType: record.taskType,
           selectedProvider: record.selectedProvider,
           selectedModel: record.selectedModel,
           routingReason: record.routingReason,
           degradedMode: record.degradedMode,
           fallbackCount: record.fallbackCount,
+          latencyMs: record.latencyMs,
           estimatedCostUsd: record.estimatedCostUsd,
-          actualCostUsd: record.actualCostUsd,
         },
-      }).catch((e) => console.warn('[DynamicModelRouter] Event emit warning:', e));
-
-      return decisionId;
+        correlationId: `${record.projectId}-${record.taskType}-${Date.now()}`,
+      });
     } catch (err: any) {
-      console.error('[DynamicModelRouter] Failed to persist routing decision:', err);
-      return null;
+      console.warn(`[DynamicModelRouter] Failed to persist routing decision (${err.message})`);
     }
   }
 }

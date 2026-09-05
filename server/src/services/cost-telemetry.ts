@@ -57,9 +57,8 @@ export async function recordLlmCall(record: CostRecord): Promise<void> {
 }
 
 /**
- * Compute the USD cost for a single call using the pricing map from config or Model Registry.
- * Deterministic generator and mock return 0.
- * If truly unknown, logs warning and calculates with conservative rate without assuming free.
+ * Compute the actual expected billable USD cost for a single call.
+ * In FREE_ONLY mode, returns 0.00 for FREE_TIER and FREE_CREDITS models.
  */
 export function calculateCost(
   modelId: string,
@@ -71,6 +70,16 @@ export function calculateCost(
   }
 
   const normalizedId = modelId.replace(/[\/\.]/g, '-');
+  const regModel = MODEL_REGISTRY.find(
+    (m) => m.modelId === modelId || m.modelId.replace(/[\/\.]/g, '-') === normalizedId
+  );
+
+  if (config.inferenceBillingMode === 'FREE_ONLY') {
+    if (regModel && (regModel.billingClassification === 'FREE_TIER' || regModel.billingClassification === 'FREE_CREDITS')) {
+      return 0.00;
+    }
+  }
+
   const pricing = config.pricing[modelId] ?? config.pricing[normalizedId];
   if (pricing) {
     return (
@@ -79,10 +88,6 @@ export function calculateCost(
     );
   }
 
-  // Check MODEL_REGISTRY
-  const regModel = MODEL_REGISTRY.find(
-    (m) => m.modelId === modelId || m.modelId.replace(/[\/\.]/g, '-') === normalizedId
-  );
   if (
     regModel &&
     regModel.inputCostPer1M !== null &&
@@ -95,20 +100,49 @@ export function calculateCost(
     );
   }
 
-  // Standard list-price fallbacks for known hackathon models if not configured in env
-  if (normalizedId.includes('20b')) {
-    return (inputTokens / 1_000_000) * 0.20 + (outputTokens / 1_000_000) * 0.40;
+  return 0.00;
+}
+
+/**
+ * Compute reference economic value of tokens based on list pricing.
+ */
+export function calculateReferenceCost(
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number
+): number {
+  if (modelId === 'deterministic-generator' || modelId === 'local' || modelId === 'mock') {
+    return 0;
   }
+
+  const normalizedId = modelId.replace(/[\/\.]/g, '-');
+  const regModel = MODEL_REGISTRY.find(
+    (m) => m.modelId === modelId || m.modelId.replace(/[\/\.]/g, '-') === normalizedId
+  );
+
+  if (regModel?.referenceCostPer1M) {
+    return (
+      (inputTokens / 1_000_000) * regModel.referenceCostPer1M.input +
+      (outputTokens / 1_000_000) * regModel.referenceCostPer1M.output
+    );
+  }
+
   if (normalizedId.includes('120b')) {
     return (inputTokens / 1_000_000) * 0.60 + (outputTokens / 1_000_000) * 1.20;
+  }
+  if (normalizedId.includes('20b')) {
+    return (inputTokens / 1_000_000) * 0.15 + (outputTokens / 1_000_000) * 0.30;
   }
   if (normalizedId.includes('27b')) {
     return (inputTokens / 1_000_000) * 0.80 + (outputTokens / 1_000_000) * 4.00;
   }
+  if (normalizedId.includes('flash')) {
+    return (inputTokens / 1_000_000) * 0.10 + (outputTokens / 1_000_000) * 0.40;
+  }
 
-  console.warn(`[cost-telemetry] Unknown pricing config for model: ${modelId}, using default conservative estimate`);
-  return (inputTokens / 1_000_000) * 0.50 + (outputTokens / 1_000_000) * 1.00;
+  return (inputTokens / 1_000_000) * 0.30 + (outputTokens / 1_000_000) * 0.60;
 }
+
 
 /**
  * Returns the remaining budget (USD) for a project before the hard limit is hit.

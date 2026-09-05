@@ -53,15 +53,17 @@ function parsePort(): number {
   return val;
 }
 
-// Provider selection: 'tabi' (default) or 'groq'
-const modelProvider = process.env.MODEL_PROVIDER || 'tabi';
+// Provider selection: 'groq' (default for free mode), 'gemini', 'openrouter', 'nvidia', 'mistral'
+const modelProvider = process.env.MODEL_PROVIDER || 'groq';
+const inferenceBillingMode = (process.env.INFERENCE_BILLING_MODE as 'FREE_ONLY' | 'STANDARD') || 'FREE_ONLY';
 
 export const config = {
   modelProvider,
+  inferenceBillingMode,
 
-  tabi: {
-    apiKey: process.env.TABI_API_KEY || '',
-    baseUrl: process.env.TABI_BASE_URL || 'https://tabitoken.com/v1',
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    baseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
   },
 
   groq: {
@@ -69,35 +71,36 @@ export const config = {
     baseUrl: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
   },
 
-  models: modelProvider === 'groq'
-    ? {
-        ba: process.env.GROQ_BA_MODEL || 'qwen/qwen3.8-27b',
-        pm: process.env.GROQ_PM_MODEL || 'qwen/qwen3.8-27b',
-        designer: process.env.GROQ_DESIGNER_MODEL || 'qwen/qwen3.8-27b',
-        architect: process.env.GROQ_ARCHITECT_MODEL || 'qwen/qwen3.8-27b',
-        engineer: process.env.GROQ_ENGINEER_MODEL || 'qwen/qwen3.8-27b',
-        codeReview: process.env.GROQ_CODE_REVIEW_MODEL || 'qwen/qwen3.8-27b',
-        qa: process.env.GROQ_QA_MODEL || 'qwen/qwen3.8-27b',
-      }
-    : {
-        // Tabi AI: Normal agents use claude-opus-5, Coding/Architecture/Security/QA use claude-opus-5-thinking
-        ba: process.env.TABI_BA_MODEL || 'claude-opus-5',
-        pm: process.env.TABI_PM_MODEL || 'claude-opus-5',
-        designer: process.env.TABI_DESIGNER_MODEL || 'claude-opus-5-thinking',
-        architect: process.env.TABI_ARCHITECT_MODEL || 'claude-opus-5-thinking',
-        engineer: process.env.TABI_ENGINEER_MODEL || 'claude-opus-5-thinking',
-        codeReview: process.env.TABI_CODE_REVIEW_MODEL || 'claude-opus-5-thinking',
-        qa: process.env.TABI_QA_MODEL || 'claude-opus-5-thinking',
-      },
+  nvidia: {
+    apiKey: process.env.NVIDIA_API_KEY || '',
+    baseUrl: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+  },
 
-  groqModels: {
-    ba: process.env.GROQ_BA_MODEL || 'qwen/qwen3.8-27b',
-    pm: process.env.GROQ_PM_MODEL || 'qwen/qwen3.8-27b',
-    designer: process.env.GROQ_DESIGNER_MODEL || 'qwen/qwen3.8-27b',
-    architect: process.env.GROQ_ARCHITECT_MODEL || 'qwen/qwen3.8-27b',
-    engineer: process.env.GROQ_ENGINEER_MODEL || 'qwen/qwen3.8-27b',
-    codeReview: process.env.GROQ_CODE_REVIEW_MODEL || 'qwen/qwen3.8-27b',
-    qa: process.env.GROQ_QA_MODEL || 'qwen/qwen3.8-27b',
+  mistral: {
+    apiKey: process.env.MISTRAL_API_KEY || '',
+    baseUrl: process.env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1',
+  },
+
+  openrouter: {
+    apiKey: process.env.OPENROUTER_API_KEY || '',
+    baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+  },
+
+  // Legacy/Deprecated Provider (Disabled)
+  tabi: {
+    apiKey: process.env.TABI_API_KEY || '',
+    baseUrl: process.env.TABI_BASE_URL || 'https://tabitoken.com/v1',
+    disabled: true,
+  },
+
+  models: {
+    ba: process.env.GROQ_BA_MODEL || 'openai/gpt-oss-20b',
+    pm: process.env.GROQ_PM_MODEL || 'openai/gpt-oss-20b',
+    designer: process.env.GROQ_DESIGNER_MODEL || 'openai/gpt-oss-20b',
+    architect: process.env.GROQ_ARCHITECT_MODEL || 'openai/gpt-oss-120b',
+    engineer: process.env.GROQ_ENGINEER_MODEL || 'openai/gpt-oss-120b',
+    codeReview: process.env.GROQ_CODE_REVIEW_MODEL || 'openai/gpt-oss-120b',
+    qa: process.env.GROQ_QA_MODEL || 'openai/gpt-oss-120b',
   },
 
   pricing: parsePricing(),
@@ -109,3 +112,4 @@ export const config = {
   },
   port: parsePort(),
 };
+

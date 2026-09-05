@@ -15,15 +15,12 @@ import {
   ROUTING_POLICY_VERSION,
 } from './routing-registry.js';
 import { DeterministicGenerator } from './deterministic-generator.js';
+import { providerAdapters } from './providers/provider-registry.js';
 import type { TaskProfile, RoutingDecision } from '../schemas/routing.js';
-
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
+import type { ChatMessage } from './providers/provider-adapter.interface.js';
 
 export class RoutedModelGateway implements ModelGateway {
-  private deterministicGen = new DeterministicGenerator();
+
 
   async call(request: ModelGatewayRequest): Promise<ModelGatewayResponse> {
     const startTime = Date.now();
@@ -208,7 +205,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
         latencyMs,
         fallbackCount,
         degradedMode: false,
-        validationStatus: 'passed',
+        validationStatus,
       });
 
       return {
@@ -222,25 +219,44 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
         latencyMs,
       };
     } catch (primaryErr: any) {
-      console.warn(
-        `[RoutedModelGateway] Error on primary route ${selectedProvider}/${selectedModel} (${primaryErr.message}). Initiating bounded fallback...`
-      );
-      providerHealth.recordFailure(selectedModel);
-      providerHealth.recordFailure(selectedProvider);
+      console.warn(`[RoutedModelGateway] Primary route ${selectedProvider}/${selectedModel} failed: ${primaryErr.message}`);
+
+      // Parse provider error and update health/quota state
+      const adapter = providerAdapters.get(selectedProvider);
+      if (adapter) {
+        const parsed = adapter.parseError(primaryErr, primaryErr.quotaHeaders);
+        if (parsed.isRateLimit) {
+          providerHealth.recordRateLimit(selectedModel, parsed.retryAfterMs, parsed.message);
+          providerHealth.recordRateLimit(selectedProvider, parsed.retryAfterMs, parsed.message);
+        } else if (parsed.isAuthError) {
+          providerHealth.recordAuthFailure(selectedProvider, parsed.message);
+        } else if (parsed.isBillingError) {
+          providerHealth.recordBillingRequired(selectedModel, parsed.message);
+        } else {
+          providerHealth.recordFailure(selectedModel);
+          providerHealth.recordFailure(selectedProvider);
+        }
+      } else {
+        providerHealth.recordFailure(selectedModel);
+        providerHealth.recordFailure(selectedProvider);
+      }
+
       fallbackCount++;
 
-      // ── Bounded Secondary Fallback ──────────────────────────────────────────
-      const alternativeCandidates = MODEL_REGISTRY.filter(
-        (m) => m.enabled && m.modelId !== selectedModel && m.modelId !== 'deterministic-generator' && providerHealth.isHealthy(m.modelId)
-      );
+      // ── Secondary Fallback: Re-route to next eligible semantic provider ─────
+      const nextDecision = dynamicRouter.routeTask(taskProfile, {
+        previousProvider: selectedProvider,
+      });
 
-      if (alternativeCandidates.length > 0) {
-        const fallbackCandidate = alternativeCandidates[0];
+      if (!nextDecision.degradedMode && nextDecision.modelId !== 'deterministic-generator') {
         try {
-          console.log(`[RoutedModelGateway] Fallback candidate: ${fallbackCandidate.provider}/${fallbackCandidate.modelId}`);
+          console.log(
+            `[RoutedModelGateway] Attempting dynamic multi-provider failover -> ${nextDecision.provider}/${nextDecision.modelId}...`
+          );
+
           const fallbackCompletion = await this.executeProviderCall(
-            fallbackCandidate.provider,
-            fallbackCandidate.modelId,
+            nextDecision.provider,
+            nextDecision.modelId,
             messages,
             request
           );
@@ -251,16 +267,19 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
           if (parseFallback.success) {
             const latencyMs = Date.now() - startTime;
             actualCostUsd = calculateCost(
-              fallbackCandidate.modelId,
+              nextDecision.modelId,
               fallbackCompletion.inputTokens,
               fallbackCompletion.outputTokens
             );
 
+            providerHealth.recordSuccess(nextDecision.modelId);
+            providerHealth.recordSuccess(nextDecision.provider);
+
             await recordLlmCall({
               projectId: request.projectId,
               agentRole: request.agentRole,
-              modelId: fallbackCandidate.modelId,
-              provider: fallbackCandidate.provider,
+              modelId: nextDecision.modelId,
+              provider: nextDecision.provider,
               inputTokens: fallbackCompletion.inputTokens,
               outputTokens: fallbackCompletion.outputTokens,
               costUsd: actualCostUsd,
@@ -278,14 +297,14 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
               taskType: taskProfile.taskType,
               taskProfile,
               routingPolicyVersion: ROUTING_POLICY_VERSION,
-              candidateModels: routingDecision.candidateModels,
-              rejectedCandidates: routingDecision.rejectedCandidates,
-              selectedProvider: fallbackCandidate.provider,
-              selectedModel: fallbackCandidate.modelId,
-              routingReason: 'PROVIDER_UNAVAILABLE',
+              candidateModels: nextDecision.candidateModels,
+              rejectedCandidates: nextDecision.rejectedCandidates,
+              selectedProvider: nextDecision.provider,
+              selectedModel: nextDecision.modelId,
+              routingReason: 'PROVIDER_RATE_LIMITED',
               routingMode: (process.env.ROUTING_MODE as any) || 'active',
-              shadowSelection: routingDecision.shadowSelection,
-              estimatedCostUsd: routingDecision.estimatedCostUsd,
+              shadowSelection: nextDecision.shadowSelection,
+              estimatedCostUsd: nextDecision.estimatedCostUsd,
               actualCostUsd,
               latencyMs,
               fallbackCount,
@@ -296,10 +315,10 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
             return {
               raw: cleanFallback,
               parsed: parseFallback.data,
-              modelId: fallbackCandidate.modelId,
-              provider: fallbackCandidate.provider,
+              modelId: nextDecision.modelId,
+              provider: nextDecision.provider,
               degradedMode: false,
-              routingDecision,
+              routingDecision: nextDecision,
               usage: { inputTokens: fallbackCompletion.inputTokens, outputTokens: fallbackCompletion.outputTokens },
               latencyMs,
             };
@@ -311,7 +330,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       }
 
       // ── Tertiary Fallback: Deterministic Generator (Degraded Mode) ──────────
-      console.warn(`[RoutedModelGateway] All semantic model providers failed. Activating deterministic generator in DEGRADED MODE.`);
+      console.warn(`[RoutedModelGateway] All semantic model providers failed or rate limited. Activating deterministic generator in DEGRADED MODE.`);
       isDegraded = true;
       const fallbackData = this.generateFallbackContent(request);
       const latencyMs = Date.now() - startTime;
@@ -326,7 +345,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
         rejectedCandidates: routingDecision.rejectedCandidates,
         selectedProvider: 'local',
         selectedModel: 'deterministic-generator',
-        routingReason: 'DEGRADED_FALLBACK',
+        routingReason: 'FREE_ONLY_NO_ELIGIBLE_ROUTE',
         routingMode: (process.env.ROUTING_MODE as any) || 'active',
         shadowSelection: routingDecision.shadowSelection,
         estimatedCostUsd: 0,
@@ -360,163 +379,72 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     modelId: string,
     messages: ChatMessage[],
     request: ModelGatewayRequest
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-    if (provider === 'groq') {
-      return this.fetchGroq(modelId, messages, request);
+  ): Promise<{ content: string; inputTokens: number; outputTokens: number; quotaHeaders?: Record<string, string> }> {
+    const adapter = providerAdapters.get(provider);
+    if (!adapter) {
+      throw new Error(`Unsupported or unconfigured provider adapter: '${provider}'`);
     }
-    // Default to Tabi AI
-    return this.fetchTabi(modelId, messages, request);
-  }
 
-  private async fetchTabi(
-    modelId: string,
-    messages: ChatMessage[],
-    request: ModelGatewayRequest
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-    const apiKey = config.tabi.apiKey;
-    const baseUrl = config.tabi.baseUrl || 'https://tabitoken.com/v1';
-    const url = `${baseUrl}/chat/completions`;
-
-    const body: Record<string, unknown> = {
-      model: modelId,
-      messages,
+    return adapter.execute(modelId, messages, {
       temperature: request.temperature ?? 0.2,
-      max_tokens: request.maxTokens ?? 4096,
-    };
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      maxTokens: request.maxTokens ?? 4096,
+      responseFormatJson: true,
     });
+  }
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Tabi AI HTTP ${res.status}: ${errText}`);
+  private stripMarkdownFences(content: string): string {
+    let clean = content.trim();
+    if (clean.startsWith('```json')) {
+      clean = clean.slice(7);
+    } else if (clean.startsWith('```')) {
+      clean = clean.slice(3);
     }
-
-    const data = (await res.json()) as any;
-    const content = data.choices?.[0]?.message?.content || '';
-    const inputTokens = data.usage?.prompt_tokens || Math.round(JSON.stringify(messages).length / 4);
-    const outputTokens = data.usage?.completion_tokens || Math.round(content.length / 4);
-
-    return { content, inputTokens, outputTokens };
-  }
-
-  private async fetchGroq(
-    modelId: string,
-    messages: ChatMessage[],
-    request: ModelGatewayRequest
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-    const apiKey = config.groq.apiKey;
-    const baseUrl = config.groq.baseUrl || 'https://api.groq.com/openai/v1';
-    const url = `${baseUrl}/chat/completions`;
-
-    const body: Record<string, unknown> = {
-      model: modelId,
-      messages,
-      temperature: request.temperature ?? 0.2,
-      max_tokens: request.maxTokens ?? 4096,
-      response_format: { type: 'json_object' },
-    };
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Groq HTTP ${res.status}: ${errText}`);
+    if (clean.endsWith('```')) {
+      clean = clean.slice(0, -3);
     }
-
-    const data = (await res.json()) as any;
-    const content = data.choices?.[0]?.message?.content || '';
-    const inputTokens = data.usage?.prompt_tokens || Math.round(JSON.stringify(messages).length / 4);
-    const outputTokens = data.usage?.completion_tokens || Math.round(content.length / 4);
-
-    return { content, inputTokens, outputTokens };
+    return clean.trim();
   }
 
-  private stripMarkdownFences(text: string): string {
-    const trimmed = text.trim();
-    const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-    return match ? match[1].trim() : trimmed;
-  }
-
-  private parseAndValidate(
-    text: string,
-    schema: z.ZodSchema
-  ): { success: true; data: unknown } | { success: false; error: string } {
+  private parseAndValidate<T>(jsonStr: string, schema: z.ZodSchema<T>): { success: true; data: T } | { success: false; error: string } {
     try {
-      const parsed = JSON.parse(text);
-      const result = schema.safeParse(parsed);
-      if (result.success) {
-        return { success: true, data: result.data };
+      const parsed = JSON.parse(jsonStr);
+      const valResult = schema.safeParse(parsed);
+      if (valResult.success) {
+        return { success: true, data: valResult.data };
       }
-      return { success: false, error: result.error.message };
+      return { success: false, error: JSON.stringify(valResult.error.issues) };
     } catch (e: any) {
-      return { success: false, error: `Invalid JSON: ${e.message}` };
+      return { success: false, error: `Invalid JSON syntax: ${e.message}` };
     }
   }
 
   private generateFallbackContent(request: ModelGatewayRequest): any {
-    const role = request.agentRole;
-    switch (role) {
-      case 'business_analyst':
-      case 'ba': {
-        const hasFacts = request.userPrompt.includes('Confirmed Project Facts:\n-');
-        return DeterministicGenerator.generateBAOutput(request.userPrompt, !hasFacts);
-      }
-      case 'project_manager':
-      case 'pm': {
-        const isRefinement = request.userPrompt.includes('TASK REFINEMENT');
-        if (isRefinement) {
-          return {
-            tasks: DeterministicGenerator.generatePMDeliveryPlan(true).tasks,
-            summary: 'Tasks refined based on approved technical architecture and schema models.',
-          };
-        }
-        const isPureBackend =
-          request.userPrompt.toLowerCase().includes('backend-only') ||
-          request.userPrompt.toLowerCase().includes('api-only') ||
-          request.userPrompt.toLowerCase().includes('no frontend') ||
-          request.userPrompt.toLowerCase().includes('strictly rest api');
-        const requiresUIUX = !isPureBackend;
-        return DeterministicGenerator.generatePMDeliveryPlan(requiresUIUX);
-      }
-      case 'ui_designer':
-      case 'ui_ux_designer':
-      case 'designer':
-        return DeterministicGenerator.generateDesignerOutput(request.userPrompt);
-      case 'solution_architect':
-      case 'architect':
-        return DeterministicGenerator.generateArchitectureOutput();
-      case 'software_engineer':
-      case 'engineer':
-        return DeterministicGenerator.generateEngineerOutput(request.userPrompt);
-      case 'code_reviewer':
-      case 'code_review':
-      case 'codeReview':
-        return DeterministicGenerator.generateCodeReviewOutput(request.userPrompt);
-      case 'qa_engineer':
-      case 'qa':
-        return DeterministicGenerator.generateQAOutput(request.userPrompt);
-      default:
-        return null;
+    const role = request.agentRole.toLowerCase();
+
+    if (role.includes('ba') || role.includes('analyst')) {
+      return DeterministicGenerator.generateBAOutput(request.userPrompt);
     }
+    if (role.includes('pm') || role.includes('planner')) {
+      return DeterministicGenerator.generatePMDeliveryPlan();
+    }
+    if (role.includes('designer') || role.includes('ui') || role.includes('ux')) {
+      return DeterministicGenerator.generateDesignerOutput(request.userPrompt);
+    }
+    if (role.includes('architect')) {
+      return DeterministicGenerator.generateArchitectureOutput();
+    }
+    if (role.includes('engineer') || role.includes('coder')) {
+      return DeterministicGenerator.generateEngineerOutput();
+    }
+    if (role.includes('review')) {
+      return DeterministicGenerator.generateCodeReviewOutput();
+    }
+    if (role.includes('qa') || role.includes('tester')) {
+      return DeterministicGenerator.generateQAOutput();
+    }
+
+    return null;
   }
 }
+
+
