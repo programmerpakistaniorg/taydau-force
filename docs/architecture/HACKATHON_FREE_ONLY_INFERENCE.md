@@ -72,6 +72,7 @@ When enabled, TayDau Force routes **ONLY** through official free developer tiers
 | **NVIDIA NIM** | `meta/llama-3.3-70b-instruct`| **ACTIVE** | `VERIFIED_INFERENCE_PLATFORM` | `FREE_CREDITS` | 131,072 | 32,768 | **$0.00** | $0.59 / $0.79 |
 | **Mistral AI** | `codestral-latest` | **ACTIVE** | `FIRST_PARTY` | `FREE_TIER` | 32,768 | 32,768 | **$0.00** | $0.30 / $0.90 |
 | **OpenRouter** | `qwen/qwen-2.5-coder-32b-instruct:free` | **ACTIVE** | `VERIFIED_INFERENCE_PLATFORM` | `FREE_TIER` | 32,768 | 32,768 | **$0.00** | $0.20 / $0.40 |
+| **OpenRouter** | `z-ai/glm-5.3-flash:free` | **ACTIVE** | `VERIFIED_INFERENCE_PLATFORM` | `FREE_TIER` | 1,310,720 | 32,768 | **$0.00** | $0.075 / $0.25 |
 | **Tabi AI** | `qwen-max` / `plus` / `turbo` | **DISABLED**| `DISABLED` | `PAID` | — | — | — | Unroutable |
 | **Local** | `deterministic-generator` | **FALLBACK** | `FIRST_PARTY` | `FREE_TIER` | 100,000 | 100,000 | **$0.00** | $0.00 / $0.00 |
 
