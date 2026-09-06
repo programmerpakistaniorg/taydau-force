@@ -116,7 +116,7 @@ export type PricingProvenance =
   | 'UNKNOWN';
 
 export interface ModelCapability {
-  provider: 'gemini' | 'groq' | 'nvidia' | 'mistral' | 'openrouter' | 'tabi' | 'local' | 'mock';
+  provider: 'gemini' | 'groq' | 'nvidia' | 'mistral' | 'openrouter' | 'experiential' | 'tabi' | 'local' | 'mock';
   modelId: string;
   displayName: string;
   capabilityTier: number; // 1 (basic) to 4 (elite) - TayDau internal routing policy classification

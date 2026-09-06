@@ -9,6 +9,7 @@ export interface ProviderExecutionOptions {
   temperature?: number;
   maxTokens?: number;
   responseFormatJson?: boolean;
+  idempotencyKey?: string;
 }
 
 export interface ProviderExecutionResult {

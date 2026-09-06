@@ -385,10 +385,15 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       throw new Error(`Unsupported or unconfigured provider adapter: '${provider}'`);
     }
 
+    const attempt = (request as any).attempt || 1;
+    const stepId = request.taskCode || request.purpose || request.agentRole;
+    const idempotencyKey = `taydau:${request.projectId || 'proj'}:${request.agentRole}:${stepId}:${attempt}`;
+
     return adapter.execute(modelId, messages, {
       temperature: request.temperature ?? 0.2,
       maxTokens: request.maxTokens ?? 4096,
       responseFormatJson: true,
+      idempotencyKey,
     });
   }
 
@@ -422,7 +427,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     const role = request.agentRole.toLowerCase();
 
     if (role.includes('ba') || role.includes('analyst')) {
-      return DeterministicGenerator.generateBAOutput(request.userPrompt);
+      return DeterministicGenerator.generateBAOutput(request.userPrompt, request.projectId || 'default-project');
     }
     if (role.includes('pm') || role.includes('planner')) {
       return DeterministicGenerator.generatePMDeliveryPlan();

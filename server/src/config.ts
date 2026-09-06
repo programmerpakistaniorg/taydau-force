@@ -86,6 +86,11 @@ export const config = {
     baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
   },
 
+  experiential: {
+    apiKey: process.env.EXPLABS_API_KEY || '',
+    baseUrl: process.env.EXPLABS_BASE_URL || 'https://api.experientiallabs.ai/v1',
+  },
+
   // Legacy/Deprecated Provider (Disabled)
   tabi: {
     apiKey: process.env.TABI_API_KEY || '',

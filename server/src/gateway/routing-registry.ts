@@ -342,6 +342,140 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     latencyProfileMs: 700,
   },
 
+  // ── Experiential Labs (VERIFIED_INFERENCE_PLATFORM / DYNAMIC PROMOTIONAL FREE) ──
+  {
+    provider: 'experiential',
+    modelId: 'qwen3.8-27b',
+    displayName: 'Qwen 3.8 27B (Experiential Canonical Slug)',
+    capabilityTier: 3,
+    codeTier: 3,
+    reasoningTier: 3,
+    structuredOutputTier: 4,
+    providerContextLimit: 131072,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
+    referenceCostPer1M: { input: 0.80, output: 4.00 },
+    pricingProvenance: 'FREE_TIER_QUOTA',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'FREE_TIER',
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 600,
+  },
+  {
+    provider: 'experiential',
+    modelId: 'qwen-3.8-27b',
+    displayName: 'Qwen 3.8 27B (Experiential Hyphenated Alias)',
+    capabilityTier: 3,
+    codeTier: 3,
+    reasoningTier: 3,
+    structuredOutputTier: 4,
+    providerContextLimit: 131072,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
+    referenceCostPer1M: { input: 0.80, output: 4.00 },
+    pricingProvenance: 'FREE_TIER_QUOTA',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'FREE_TIER',
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 600,
+  },
+  {
+    provider: 'experiential',
+    modelId: 'deepseek-v4-flash',
+    displayName: 'DeepSeek V4 Flash (Experiential Promotional Free)',
+    capabilityTier: 3,
+    codeTier: 3,
+    reasoningTier: 3,
+    structuredOutputTier: 4,
+    providerContextLimit: 65536,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
+    referenceCostPer1M: { input: 0.15, output: 0.60 },
+    pricingProvenance: 'FREE_TIER_QUOTA',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'FREE_TIER',
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 500,
+  },
+  {
+    provider: 'experiential',
+    modelId: 'gpt-5.6-luna',
+    displayName: 'GPT-5.6 Luna (Experiential Promotional Free)',
+    capabilityTier: 4,
+    codeTier: 4,
+    reasoningTier: 4,
+    structuredOutputTier: 4,
+    providerContextLimit: 131072,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
+    referenceCostPer1M: { input: 0.75, output: 3.00 },
+    pricingProvenance: 'FREE_TIER_QUOTA',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'FREE_TIER',
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 650,
+  },
+  {
+    provider: 'experiential',
+    modelId: 'gpt-6-astra',
+    displayName: 'GPT-6 Astra (Experiential Promotional Free)',
+    capabilityTier: 4,
+    codeTier: 4,
+    reasoningTier: 4,
+    structuredOutputTier: 4,
+    providerContextLimit: 131072,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
+    referenceCostPer1M: { input: 1.25, output: 5.00 },
+    pricingProvenance: 'FREE_TIER_QUOTA',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'FREE_TIER',
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 750,
+  },
+  {
+    provider: 'experiential',
+    modelId: 'claude-fable-5.1',
+    displayName: 'Claude Fable 5.1 (Experiential Paid Catalog)',
+    capabilityTier: 4,
+    codeTier: 4,
+    reasoningTier: 4,
+    structuredOutputTier: 4,
+    providerContextLimit: 200000,
+    routingContextLimit: 32768,
+    maxContextTokens: 32768,
+    inputCostPer1M: 3.00,
+    outputCostPer1M: 15.00,
+    expectedBillableCostPer1M: 3.00,
+    referenceCostPer1M: { input: 3.00, output: 15.00 },
+    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
+    trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
+    billingClassification: 'PAID', // Ineligible in FREE_ONLY
+    dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
+    enabled: true,
+    latencyProfileMs: 800,
+  },
+
   // ── Historical Legacy Tabi AI (DISABLED / UNROUTABLE) ─────────────────────
   {
     provider: 'tabi',
@@ -677,3 +811,75 @@ class ProviderHealthTracker {
 }
 
 export const providerHealth = new ProviderHealthTracker();
+
+/**
+ * Dynamically updates the billing classification of a registered model.
+ * Automatically enables/disables eligibility under FREE_ONLY mode with ZERO code redeployment.
+ */
+export function updateModelBillingStatus(
+  modelId: string,
+  billingClassification: BillingClassification,
+  provider?: string
+): boolean {
+  // Prioritize exact match first, then provider-scoped suffix match
+  const model = MODEL_REGISTRY.find(m => {
+    if (provider && m.provider !== provider) return false;
+    return m.modelId === modelId;
+  }) || MODEL_REGISTRY.find(m => {
+    if (provider && m.provider !== provider) return false;
+    return m.modelId.endsWith(`/${modelId}`);
+  });
+
+  if (model) {
+    model.billingClassification = billingClassification;
+    if (billingClassification === 'PAID') {
+      model.expectedBillableCostPer1M = model.referenceCostPer1M?.input ?? 1.0;
+    } else if (billingClassification === 'FREE_TIER' || billingClassification === 'FREE_CREDITS') {
+      model.expectedBillableCostPer1M = 0.0;
+    }
+    return true;
+  }
+  return false;
+}
+
+
+/**
+ * Synchronizes Experiential catalog status against live /v1/models response.
+ */
+export function syncExperientialCatalogStatus(discoveredModelIds: string[], promotionalFreeIds?: string[]): {
+  activeModels: string[];
+  freeEligibleCount: number;
+} {
+  const discoveredSet = new Set(discoveredModelIds.map(id => id.toLowerCase()));
+  const freeSet = promotionalFreeIds ? new Set(promotionalFreeIds.map(id => id.toLowerCase())) : null;
+
+  let freeCount = 0;
+  const active: string[] = [];
+
+  for (const model of MODEL_REGISTRY) {
+    if (model.provider === 'experiential') {
+      const isPresent = discoveredSet.has(model.modelId.toLowerCase()) || 
+                        Array.from(discoveredSet).some(d => d.includes(model.modelId.toLowerCase()));
+      
+      if (!isPresent) {
+        model.enabled = false;
+      } else {
+        model.enabled = true;
+        active.push(model.modelId);
+
+        // If explicit promotional free list provided, sync billing classification
+        if (freeSet) {
+          const isFree = freeSet.has(model.modelId.toLowerCase()) ||
+                         Array.from(freeSet).some(f => f.includes(model.modelId.toLowerCase()));
+          model.billingClassification = isFree ? 'FREE_TIER' : 'PAID';
+        }
+
+        if (model.billingClassification === 'FREE_TIER' || model.billingClassification === 'FREE_CREDITS') {
+          freeCount++;
+        }
+      }
+    }
+  }
+
+  return { activeModels: active, freeEligibleCount: freeCount };
+}

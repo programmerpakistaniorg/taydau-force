@@ -4,6 +4,7 @@ import { GeminiAdapter } from './gemini-adapter.js';
 import { NvidiaAdapter } from './nvidia-adapter.js';
 import { MistralAdapter } from './mistral-adapter.js';
 import { OpenRouterAdapter } from './openrouter-adapter.js';
+import { ExperientialAdapter } from './experiential-adapter.js';
 
 class ProviderAdapterRegistry {
   private adapters: Map<string, ProviderAdapter> = new Map();
@@ -14,6 +15,7 @@ class ProviderAdapterRegistry {
     this.register(new NvidiaAdapter());
     this.register(new MistralAdapter());
     this.register(new OpenRouterAdapter());
+    this.register(new ExperientialAdapter());
   }
 
   register(adapter: ProviderAdapter): void {
@@ -39,6 +41,59 @@ class ProviderAdapterRegistry {
     }
     return results;
   }
+
+  async getProviderPreflightReport() {
+    const report: Array<{
+      providerId: string;
+      trustLevel: string;
+      configured: boolean;
+      connection: 'VERIFIED' | 'AUTH_FAILED' | 'NOT_CONFIGURED' | 'UNAVAILABLE';
+      error?: string;
+      callableModelsCount: number;
+      models: string[];
+    }> = [];
+
+    for (const adapter of this.getAll()) {
+      const configured = adapter.isConfigured();
+      if (!configured) {
+        report.push({
+          providerId: adapter.providerId,
+          trustLevel: adapter.trustLevel,
+          configured: false,
+          connection: 'NOT_CONFIGURED',
+          callableModelsCount: 0,
+          models: [],
+        });
+        continue;
+      }
+
+      try {
+        const val = await adapter.validateConnection();
+        const models = await adapter.listModels();
+        report.push({
+          providerId: adapter.providerId,
+          trustLevel: adapter.trustLevel,
+          configured: true,
+          connection: val.ok ? 'VERIFIED' : val.error?.includes('auth') || val.error?.includes('401') || val.error?.includes('403') ? 'AUTH_FAILED' : 'UNAVAILABLE',
+          error: val.error,
+          callableModelsCount: models.length,
+          models,
+        });
+      } catch (err: any) {
+        report.push({
+          providerId: adapter.providerId,
+          trustLevel: adapter.trustLevel,
+          configured: true,
+          connection: 'UNAVAILABLE',
+          error: err.message,
+          callableModelsCount: 0,
+          models: [],
+        });
+      }
+    }
+    return report;
+  }
 }
 
 export const providerAdapters = new ProviderAdapterRegistry();
+
