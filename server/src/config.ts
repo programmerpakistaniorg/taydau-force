@@ -91,6 +91,26 @@ export const config = {
     baseUrl: process.env.EXPLABS_BASE_URL || 'https://api.experientiallabs.ai/v1',
   },
 
+  localLlamacpp: {
+    enabled: process.env.LOCAL_LLM_ENABLED !== 'false',
+    llamaServerPath: process.env.LLAMA_SERVER_PATH || 'C:\\llama.cpp\\llama-server.exe',
+    autostart: process.env.LOCAL_LLM_AUTOSTART === 'true',
+    qwen: {
+      baseUrl: process.env.LOCAL_QWEN_BASE_URL || 'http://127.0.0.1:8081',
+      modelId: process.env.LOCAL_QWEN_MODEL_ID || 'qwen3.5-9b',
+      ggufPath: process.env.LOCAL_QWEN_GGUF_PATH || 'C:\\Users\\fxsip\\.cache\\huggingface\\hub\\models--unsloth--Qwen3.5-9B-GGUF\\snapshots\\3885219b6810b007914f3a7950a8d1b469d598a5\\Qwen3.5-9B-Q3_K_M.gguf',
+      mmprojPath: process.env.LOCAL_QWEN_MMPROJ_PATH || 'C:\\Users\\fxsip\\.cache\\huggingface\\hub\\models--unsloth--Qwen3.5-9B-GGUF\\snapshots\\3885219b6810b007914f3a7950a8d1b469d598a5\\mmproj-F16.gguf',
+      port: 8081,
+    },
+    glm: {
+      baseUrl: process.env.LOCAL_GLM_BASE_URL || 'http://127.0.0.1:8082',
+      modelId: process.env.LOCAL_GLM_MODEL_ID || 'glm-4.1v-9b-thinking',
+      ggufPath: process.env.LOCAL_GLM_GGUF_PATH || 'C:\\Users\\fxsip\\.cache\\huggingface\\hub\\models--unsloth--GLM-4.1V-9B-Thinking-GGUF\\snapshots\\9bc8e3b4f651e6f4846a8d9680d9525a445596e9\\GLM-4.1V-9B-Thinking-Q3_K_S.gguf',
+      mmprojPath: process.env.LOCAL_GLM_MMPROJ_PATH || '',
+      port: 8082,
+    },
+  },
+
   // Legacy/Deprecated Provider (Disabled)
   tabi: {
     apiKey: process.env.TABI_API_KEY || '',

@@ -206,11 +206,33 @@ export class DynamicModelRouter {
       });
     }
 
-    // 2. Sort eligible candidates by score (highest score meeting quality floor)
-    eligible.sort((a, b) => b.score - a.score || a.estimatedCost - b.estimatedCost);
+    // 2. Separate eligible candidates into Cloud Semantic and Local Semantic
+    const cloudEligible: typeof eligible = [];
+    const localEligible: typeof eligible = [];
+
+    for (const item of eligible) {
+      if (item.model.provider === 'local_llamacpp') {
+        localEligible.push(item);
+      } else {
+        cloudEligible.push(item);
+      }
+    }
+
+    // Sort candidates by score (highest score meeting quality floor)
+    cloudEligible.sort((a, b) => b.score - a.score || a.estimatedCost - b.estimatedCost);
+    localEligible.sort((a, b) => b.score - a.score || a.estimatedCost - b.estimatedCost);
+
+    let selected: typeof eligible[0] | null = null;
+
+    if (cloudEligible.length > 0) {
+      selected = cloudEligible[0];
+    } else if (localEligible.length > 0) {
+      selected = localEligible[0];
+      selected.reason = 'CLOUD_POOL_UNAVAILABLE_LOCAL_SEMANTIC_FALLBACK';
+    }
 
     // Fallback to deterministic generator if no semantic model qualifies
-    if (eligible.length === 0) {
+    if (!selected) {
       const deterministicModel = MODEL_REGISTRY.find((m) => m.modelId === 'deterministic-generator')!;
       return {
         provider: 'local',
@@ -227,8 +249,6 @@ export class DynamicModelRouter {
         billingClassification: 'FREE_TIER',
       };
     }
-
-    const selected = eligible[0];
 
     // 3. Handle Shadow Mode
     if (routingMode === 'shadow') {

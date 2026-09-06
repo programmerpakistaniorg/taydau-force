@@ -10,6 +10,7 @@ export interface ProviderExecutionOptions {
   maxTokens?: number;
   responseFormatJson?: boolean;
   idempotencyKey?: string;
+  timeoutMs?: number;
 }
 
 export interface ProviderExecutionResult {

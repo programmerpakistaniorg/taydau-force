@@ -167,46 +167,48 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       const latencyMs = Date.now() - startTime;
       actualCostUsd = calculateCost(selectedModel, totalInputTokens, totalOutputTokens);
 
-      // Record successful decision & telemetry
+      // Record successful decision & telemetry (non-blocking / resilient to DB errors)
       providerHealth.recordSuccess(selectedModel);
       providerHealth.recordSuccess(selectedProvider);
 
-      await recordLlmCall({
-        projectId: request.projectId,
-        agentRole: request.agentRole,
-        modelId: selectedModel,
-        provider: selectedProvider,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        costUsd: actualCostUsd,
-        latencyMs,
-        purpose: request.purpose,
-        taskCode: request.taskCode,
-        requirementCode: request.requirementCode,
-        retryCount: fallbackCount,
-        success: true,
-      });
+      try {
+        await recordLlmCall({
+          projectId: request.projectId,
+          agentRole: request.agentRole,
+          modelId: selectedModel,
+          provider: selectedProvider,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          costUsd: actualCostUsd,
+          latencyMs,
+          purpose: request.purpose,
+          taskCode: request.taskCode,
+          requirementCode: request.requirementCode,
+          retryCount: fallbackCount,
+          success: true,
+        }).catch(() => {});
 
-      await dynamicRouter.recordDecision({
-        projectId: request.projectId,
-        agentRole: request.agentRole,
-        taskType: taskProfile.taskType,
-        taskProfile,
-        routingPolicyVersion: ROUTING_POLICY_VERSION,
-        candidateModels: routingDecision.candidateModels,
-        rejectedCandidates: routingDecision.rejectedCandidates,
-        selectedProvider,
-        selectedModel,
-        routingReason: routingDecision.reason,
-        routingMode: (process.env.ROUTING_MODE as any) || 'active',
-        shadowSelection: routingDecision.shadowSelection,
-        estimatedCostUsd: routingDecision.estimatedCostUsd,
-        actualCostUsd,
-        latencyMs,
-        fallbackCount,
-        degradedMode: false,
-        validationStatus,
-      });
+        await dynamicRouter.recordDecision({
+          projectId: request.projectId,
+          agentRole: request.agentRole,
+          taskType: taskProfile.taskType,
+          taskProfile,
+          routingPolicyVersion: ROUTING_POLICY_VERSION,
+          candidateModels: routingDecision.candidateModels,
+          rejectedCandidates: routingDecision.rejectedCandidates,
+          selectedProvider,
+          selectedModel,
+          routingReason: routingDecision.reason,
+          routingMode: (process.env.ROUTING_MODE as any) || 'active',
+          shadowSelection: routingDecision.shadowSelection,
+          estimatedCostUsd: routingDecision.estimatedCostUsd,
+          actualCostUsd,
+          latencyMs,
+          fallbackCount,
+          degradedMode: false,
+          validationStatus,
+        }).catch(() => {});
+      } catch {}
 
       return {
         raw: cleanContent,
@@ -275,42 +277,44 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
             providerHealth.recordSuccess(nextDecision.modelId);
             providerHealth.recordSuccess(nextDecision.provider);
 
-            await recordLlmCall({
-              projectId: request.projectId,
-              agentRole: request.agentRole,
-              modelId: nextDecision.modelId,
-              provider: nextDecision.provider,
-              inputTokens: fallbackCompletion.inputTokens,
-              outputTokens: fallbackCompletion.outputTokens,
-              costUsd: actualCostUsd,
-              latencyMs,
-              purpose: request.purpose,
-              taskCode: request.taskCode,
-              requirementCode: request.requirementCode,
-              retryCount: fallbackCount,
-              success: true,
-            });
+            try {
+              await recordLlmCall({
+                projectId: request.projectId,
+                agentRole: request.agentRole,
+                modelId: nextDecision.modelId,
+                provider: nextDecision.provider,
+                inputTokens: fallbackCompletion.inputTokens,
+                outputTokens: fallbackCompletion.outputTokens,
+                costUsd: actualCostUsd,
+                latencyMs,
+                purpose: request.purpose,
+                taskCode: request.taskCode,
+                requirementCode: request.requirementCode,
+                retryCount: fallbackCount,
+                success: true,
+              }).catch(() => {});
 
-            await dynamicRouter.recordDecision({
-              projectId: request.projectId,
-              agentRole: request.agentRole,
-              taskType: taskProfile.taskType,
-              taskProfile,
-              routingPolicyVersion: ROUTING_POLICY_VERSION,
-              candidateModels: nextDecision.candidateModels,
-              rejectedCandidates: nextDecision.rejectedCandidates,
-              selectedProvider: nextDecision.provider,
-              selectedModel: nextDecision.modelId,
-              routingReason: 'PROVIDER_RATE_LIMITED',
-              routingMode: (process.env.ROUTING_MODE as any) || 'active',
-              shadowSelection: nextDecision.shadowSelection,
-              estimatedCostUsd: nextDecision.estimatedCostUsd,
-              actualCostUsd,
-              latencyMs,
-              fallbackCount,
-              degradedMode: false,
-              validationStatus: 'passed',
-            });
+              await dynamicRouter.recordDecision({
+                projectId: request.projectId,
+                agentRole: request.agentRole,
+                taskType: taskProfile.taskType,
+                taskProfile,
+                routingPolicyVersion: ROUTING_POLICY_VERSION,
+                candidateModels: nextDecision.candidateModels,
+                rejectedCandidates: nextDecision.rejectedCandidates,
+                selectedProvider: nextDecision.provider,
+                selectedModel: nextDecision.modelId,
+                routingReason: 'PROVIDER_RATE_LIMITED',
+                routingMode: (process.env.ROUTING_MODE as any) || 'active',
+                shadowSelection: nextDecision.shadowSelection,
+                estimatedCostUsd: nextDecision.estimatedCostUsd,
+                actualCostUsd,
+                latencyMs,
+                fallbackCount,
+                degradedMode: false,
+                validationStatus: 'passed',
+              }).catch(() => {});
+            } catch {}
 
             return {
               raw: cleanFallback,
@@ -335,27 +339,29 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       const fallbackData = this.generateFallbackContent(request);
       const latencyMs = Date.now() - startTime;
 
-      await dynamicRouter.recordDecision({
-        projectId: request.projectId,
-        agentRole: request.agentRole,
-        taskType: taskProfile.taskType,
-        taskProfile,
-        routingPolicyVersion: ROUTING_POLICY_VERSION,
-        candidateModels: routingDecision.candidateModels,
-        rejectedCandidates: routingDecision.rejectedCandidates,
-        selectedProvider: 'local',
-        selectedModel: 'deterministic-generator',
-        routingReason: 'FREE_ONLY_NO_ELIGIBLE_ROUTE',
-        routingMode: (process.env.ROUTING_MODE as any) || 'active',
-        shadowSelection: routingDecision.shadowSelection,
-        estimatedCostUsd: 0,
-        actualCostUsd: 0,
-        latencyMs,
-        fallbackCount,
-        degradedMode: true,
-        validationStatus: 'passed',
-        errorMessage: primaryErr.message,
-      });
+      try {
+        await dynamicRouter.recordDecision({
+          projectId: request.projectId,
+          agentRole: request.agentRole,
+          taskType: taskProfile.taskType,
+          taskProfile,
+          routingPolicyVersion: ROUTING_POLICY_VERSION,
+          candidateModels: routingDecision.candidateModels,
+          rejectedCandidates: routingDecision.rejectedCandidates,
+          selectedProvider: 'local',
+          selectedModel: 'deterministic-generator',
+          routingReason: 'FREE_ONLY_NO_ELIGIBLE_ROUTE',
+          routingMode: (process.env.ROUTING_MODE as any) || 'active',
+          shadowSelection: routingDecision.shadowSelection,
+          estimatedCostUsd: 0,
+          actualCostUsd: 0,
+          latencyMs,
+          fallbackCount,
+          degradedMode: true,
+          validationStatus: 'passed',
+          errorMessage: primaryErr.message,
+        }).catch(() => {});
+      } catch {}
 
       if (fallbackData !== null) {
         return {
@@ -419,6 +425,22 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       }
       return { success: false, error: JSON.stringify(valResult.error.issues) };
     } catch (e: any) {
+      // Try extracting embedded JSON object from anywhere in the output (e.g. after thinking text)
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        for (let i = 0; i < lastBrace; i++) {
+          if (jsonStr[i] === '{') {
+            const candidate = jsonStr.substring(i, lastBrace + 1);
+            try {
+              const candidateParsed = JSON.parse(candidate);
+              const valResult = schema.safeParse(candidateParsed);
+              if (valResult.success) {
+                return { success: true, data: valResult.data };
+              }
+            } catch {}
+          }
+        }
+      }
       return { success: false, error: `Invalid JSON syntax: ${e.message}` };
     }
   }

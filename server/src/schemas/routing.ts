@@ -26,6 +26,7 @@ export type CapabilityLevel = z.infer<typeof CapabilityLevelSchema>;
 export const ProviderTrustSchema = z.enum([
   'FIRST_PARTY',
   'VERIFIED_INFERENCE_PLATFORM',
+  'LOCAL_TRUSTED',
   'EXPERIMENTAL',
   'DISABLED',
 ]);
@@ -34,6 +35,7 @@ export type ProviderTrust = z.infer<typeof ProviderTrustSchema>;
 export const BillingClassificationSchema = z.enum([
   'FREE_TIER',
   'FREE_CREDITS',
+  'LOCAL',
   'PAID',
   'UNKNOWN',
 ]);
@@ -42,6 +44,7 @@ export type BillingClassification = z.infer<typeof BillingClassificationSchema>;
 export const DataPolicySchema = z.enum([
   'PUBLIC_OR_SYNTHETIC_ONLY',
   'STANDARD',
+  'LOCAL_ISOLATED',
   'UNKNOWN',
 ]);
 export type DataPolicy = z.infer<typeof DataPolicySchema>;
@@ -66,6 +69,7 @@ export const RoutingReasonCodeSchema = z.enum([
   'LOWER_COST_ELIGIBLE',
   'FREE_TIER_SELECTED',
   'FREE_CREDITS_SELECTED',
+  'CLOUD_POOL_UNAVAILABLE_LOCAL_SEMANTIC_FALLBACK',
   'PROVIDER_UNAVAILABLE',
   'PROVIDER_RATE_LIMITED',
   'QUOTA_EXHAUSTED',
@@ -113,10 +117,11 @@ export type PricingProvenance =
   | 'ADAPTER_CONFIGURED_PRICE'
   | 'FREE_TIER_QUOTA'
   | 'ACCOUNT_FREE_CREDITS'
+  | 'LOCAL_COMPUTE'
   | 'UNKNOWN';
 
 export interface ModelCapability {
-  provider: 'gemini' | 'groq' | 'nvidia' | 'mistral' | 'openrouter' | 'experiential' | 'tabi' | 'local' | 'mock';
+  provider: 'gemini' | 'groq' | 'nvidia' | 'mistral' | 'openrouter' | 'experiential' | 'tabi' | 'local' | 'local_llamacpp' | 'mock';
   modelId: string;
   displayName: string;
   capabilityTier: number; // 1 (basic) to 4 (elite) - TayDau internal routing policy classification

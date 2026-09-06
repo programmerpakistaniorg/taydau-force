@@ -5,6 +5,7 @@ import { NvidiaAdapter } from './nvidia-adapter.js';
 import { MistralAdapter } from './mistral-adapter.js';
 import { OpenRouterAdapter } from './openrouter-adapter.js';
 import { ExperientialAdapter } from './experiential-adapter.js';
+import { LocalLlamaCppAdapter } from './local-llamacpp-adapter.js';
 
 class ProviderAdapterRegistry {
   private adapters: Map<string, ProviderAdapter> = new Map();
@@ -16,6 +17,7 @@ class ProviderAdapterRegistry {
     this.register(new MistralAdapter());
     this.register(new OpenRouterAdapter());
     this.register(new ExperientialAdapter());
+    this.register(new LocalLlamaCppAdapter());
   }
 
   register(adapter: ProviderAdapter): void {
