@@ -6,7 +6,11 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
-  Edit3
+  Edit3,
+  CheckSquare,
+  ListChecks,
+  CircleDot,
+  FileText
 } from 'lucide-react';
 import { ClientInteraction } from '../../types/api';
 import { ROLE_REGISTRY, type RoleKey } from '../../config/roles';
@@ -33,6 +37,27 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
   const modalRef = useRef<HTMLDivElement>(null);
   const prevInteractionsKeyRef = useRef<string>('');
 
+  // Helper to determine if an interaction is multi-choice
+  const checkIsMultiChoice = (item: ClientInteraction): boolean => {
+    if (item.interactionType === 'multi_choice') return true;
+    if (item.interactionType === 'single_choice' || item.interactionType === 'free_text') return false;
+    
+    // Semantic heuristic fallback if type was not explicitly set by older prompts
+    const qLower = (item.question || '').toLowerCase();
+    const isMultiQuestion =
+      qLower.includes('what specific') ||
+      qLower.includes('which specific') ||
+      qLower.includes('select all') ||
+      qLower.includes('what information') ||
+      qLower.includes('collect') ||
+      qLower.includes('features') ||
+      qLower.includes('fields') ||
+      qLower.includes('channels') ||
+      qLower.includes('integrations') ||
+      qLower.includes('methods');
+    return isMultiQuestion;
+  };
+
   // Stabilize interaction batch key to avoid resetting answers on each background polling tick
   const interactionsKey = interactions?.map((i) => i.id).sort().join(',') || '';
 
@@ -45,7 +70,18 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
           const updated = { ...prev };
           interactions.forEach((item) => {
             if (updated[item.id] === undefined) {
-              updated[item.id] = item.recommendedOption || (item.options && item.options[0]) || '';
+              const isMulti = checkIsMultiChoice(item);
+              if (isMulti) {
+                if (item.recommendedOption) {
+                  updated[item.id] = [item.recommendedOption];
+                } else if (item.options && item.options.length > 0) {
+                  updated[item.id] = [item.options[0]];
+                } else {
+                  updated[item.id] = [];
+                }
+              } else {
+                updated[item.id] = item.recommendedOption || (item.options && item.options[0]) || '';
+              }
             }
           });
           return updated;
@@ -77,10 +113,14 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
   const roleKey = (currentInteraction.agentRole as RoleKey) || 'business_analyst';
   const roleDef = ROLE_REGISTRY[roleKey] || ROLE_REGISTRY.business_analyst;
 
-  const isCustomActive = Boolean(useCustomMode[currentInteraction.id]);
+  const isMultiChoice = checkIsMultiChoice(currentInteraction);
+  const hasOptions = Array.isArray(currentInteraction.options) && currentInteraction.options.length > 0;
+  const isCustomActive = Boolean(useCustomMode[currentInteraction.id]) || (!hasOptions && currentInteraction.interactionType !== 'single_choice');
+
+  const rawAnswer = answers[currentInteraction.id];
   const currentAnswer = isCustomActive
-    ? customAnswers[currentInteraction.id] || ''
-    : answers[currentInteraction.id] || '';
+    ? customAnswers[currentInteraction.id] || (typeof rawAnswer === 'string' ? rawAnswer : '')
+    : rawAnswer;
 
   const getRoleGreeting = (role: string) => {
     switch (role) {
@@ -99,8 +139,29 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
     }
   };
 
-  const handleSelectOption = (opt: string) => {
+  const handleSelectSingleOption = (opt: string) => {
     setAnswers((prev) => ({ ...prev, [currentInteraction.id]: opt }));
+    setUseCustomMode((prev) => ({ ...prev, [currentInteraction.id]: false }));
+  };
+
+  const handleToggleMultiOption = (opt: string) => {
+    setAnswers((prev) => {
+      const currentList: string[] = Array.isArray(prev[currentInteraction.id])
+        ? prev[currentInteraction.id]
+        : typeof prev[currentInteraction.id] === 'string' && prev[currentInteraction.id]
+        ? [prev[currentInteraction.id]]
+        : [];
+      
+      const exists = currentList.includes(opt);
+      const nextList = exists
+        ? currentList.filter((item) => item !== opt)
+        : [...currentList, opt];
+
+      return {
+        ...prev,
+        [currentInteraction.id]: nextList,
+      };
+    });
     setUseCustomMode((prev) => ({ ...prev, [currentInteraction.id]: false }));
   };
 
@@ -122,23 +183,45 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
     });
   };
 
+  // Determine whether current question answer is valid to proceed
+  const isAnswerValid = (): boolean => {
+    if (isCustomActive || !hasOptions) {
+      const textVal = (customAnswers[currentInteraction.id] || (typeof rawAnswer === 'string' ? rawAnswer : '')).trim();
+      return textVal.length > 0;
+    }
+    if (isMultiChoice) {
+      return Array.isArray(rawAnswer) && rawAnswer.length > 0;
+    }
+    return typeof rawAnswer === 'string' && rawAnswer.trim().length > 0;
+  };
+
   const handleNextOrSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalAnswer = isCustomActive
-      ? (customAnswers[currentInteraction.id] || '').trim()
-      : answers[currentInteraction.id];
-
-    if (!finalAnswer) return;
+    if (!isAnswerValid()) return;
 
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       // Final submission of all answers sequentially
       for (const interaction of interactions) {
-        const ans = useCustomMode[interaction.id]
-          ? (customAnswers[interaction.id] || '').trim()
-          : answers[interaction.id] || interaction.recommendedOption || (interaction.options && interaction.options[0]);
-        if (ans) {
+        const isMulti = checkIsMultiChoice(interaction);
+        const itemHasOptions = Array.isArray(interaction.options) && interaction.options.length > 0;
+        const itemCustomActive = Boolean(useCustomMode[interaction.id]) || !itemHasOptions;
+
+        let ans: any;
+        if (itemCustomActive) {
+          ans = (customAnswers[interaction.id] || (typeof answers[interaction.id] === 'string' ? answers[interaction.id] : '')).trim();
+        } else if (isMulti) {
+          ans = Array.isArray(answers[interaction.id])
+            ? answers[interaction.id]
+            : interaction.recommendedOption
+            ? [interaction.recommendedOption]
+            : (interaction.options && interaction.options.length > 0 ? [interaction.options[0]] : []);
+        } else {
+          ans = answers[interaction.id] || interaction.recommendedOption || (interaction.options && interaction.options[0]) || '';
+        }
+
+        if (ans && (Array.isArray(ans) ? ans.length > 0 : String(ans).trim().length > 0)) {
           await onSubmitAnswer(interaction.id, ans);
         }
       }
@@ -148,7 +231,15 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
 
   const handleAcceptAllRecommended = async () => {
     for (const interaction of interactions) {
-      const rec = interaction.recommendedOption || (interaction.options && interaction.options[0]);
+      const isMulti = checkIsMultiChoice(interaction);
+      let rec: any;
+      if (isMulti) {
+        rec = interaction.recommendedOption
+          ? [interaction.recommendedOption]
+          : (interaction.options && interaction.options.length > 0 ? [interaction.options[0]] : ['Confirmed']);
+      } else {
+        rec = interaction.recommendedOption || (interaction.options && interaction.options[0]) || 'Confirmed';
+      }
       if (rec) {
         await onSubmitAnswer(interaction.id, rec);
       }
@@ -156,7 +247,7 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
     onClose();
   };
 
-  const allHaveRecommendations = interactions.every((i) => Boolean(i.recommendedOption));
+  const allHaveRecommendations = interactions.every((i) => Boolean(i.recommendedOption) || (i.options && i.options.length > 0));
 
   return (
     <div
@@ -233,10 +324,22 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
         <form onSubmit={handleNextOrSubmit} className="flex-1 flex flex-col min-h-0">
           {/* Scrollable Question Body */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-            {/* Question Text */}
+            {/* Question Text & Mode Badge */}
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 mb-1">
-                Decision Point #{currentIndex + 1}
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                  Decision Point #{currentIndex + 1}
+                </span>
+                {hasOptions && !isCustomActive && (
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1 border ${
+                    isMultiChoice
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {isMultiChoice ? <ListChecks className="w-3 h-3" /> : <CircleDot className="w-3 h-3" />}
+                    <span>{isMultiChoice ? 'Multi-Select (Choose 1 or more)' : 'Single Choice'}</span>
+                  </span>
+                )}
               </div>
               <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                 {currentInteraction.question}
@@ -254,48 +357,91 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
               )}
             </div>
 
-            {/* Options Grid */}
-            {currentInteraction.options && currentInteraction.options.length > 0 && !isCustomActive && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                {currentInteraction.options.map((opt) => {
-                  const isSelected = !isCustomActive && answers[currentInteraction.id] === opt;
-                  const isRecommended = currentInteraction.recommendedOption === opt;
+            {/* Options Grid (When options are available and custom mode is not open) */}
+            {hasOptions && !isCustomActive ? (
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {currentInteraction.options.map((opt) => {
+                    const isSelected = isMultiChoice
+                      ? Array.isArray(rawAnswer) && rawAnswer.includes(opt)
+                      : rawAnswer === opt;
+                    const isRecommended = currentInteraction.recommendedOption === opt;
 
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => handleSelectOption(opt)}
-                      className={`group relative flex items-start justify-between p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/90 text-indigo-950 font-medium shadow-xs ring-2 ring-indigo-500/20'
-                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-800 hover:bg-slate-50/70'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2.5 pr-2">
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                            isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 group-hover:border-slate-400'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          if (isMultiChoice) {
+                            handleToggleMultiOption(opt);
+                          } else {
+                            handleSelectSingleOption(opt);
+                          }
+                        }}
+                        className={`group relative flex items-start justify-between p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/90 text-indigo-950 font-medium shadow-xs ring-2 ring-indigo-500/20'
+                            : 'border-slate-200 hover:border-slate-300 bg-white text-slate-800 hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5 pr-2">
+                          <div
+                            className={`flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                              isMultiChoice ? 'w-4 h-4 rounded-md border-2' : 'w-4 h-4 rounded-full border-2'
+                            } ${
+                              isSelected
+                                ? 'border-indigo-600 bg-indigo-600 text-white'
+                                : 'border-slate-300 group-hover:border-slate-400 bg-white'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                          </div>
+                          <span className="text-xs sm:text-sm leading-snug">{opt}</span>
                         </div>
-                        <span className="text-xs sm:text-sm leading-snug">{opt}</span>
-                      </div>
 
-                      {isRecommended && (
-                        <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-700 bg-indigo-100/90 border border-indigo-200 px-1.5 py-0.5 rounded-md shrink-0">
-                          Recommended
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                        {isRecommended && (
+                          <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-700 bg-indigo-100/90 border border-indigo-200 px-1.5 py-0.5 rounded-md shrink-0">
+                            Recommended
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {isMultiChoice && Array.isArray(rawAnswer) && rawAnswer.length > 0 && (
+                  <p className="text-[11px] text-indigo-600 font-semibold pt-1">
+                    ✓ {rawAnswer.length} option{rawAnswer.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {/* Direct Input fallback when NO options are available */}
+            {!hasOptions && !isCustomActive && (
+              <div className="pt-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Please provide your specific requirements or preferences:</span>
+                </label>
+                <textarea
+                  value={
+                    typeof rawAnswer === 'string'
+                      ? rawAnswer
+                      : customAnswers[currentInteraction.id] || ''
+                  }
+                  onChange={(e) => handleCustomTextChange(e.target.value)}
+                  placeholder="Type your answer, specific target users, or workflow details here..."
+                  rows={4}
+                  className="w-full text-xs sm:text-sm p-3.5 border-2 border-indigo-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 bg-white shadow-xs resize-none"
+                  autoFocus
+                  required
+                />
               </div>
             )}
 
-            {/* Custom Answer View */}
-            {currentInteraction.allowCustom && (
+            {/* Custom Answer Toggle & View when options exist */}
+            {hasOptions && (
               <div className="pt-1">
                 <button
                   type="button"
@@ -312,11 +458,11 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
 
                 {isCustomActive && (
                   <textarea
-                    value={customAnswers[currentInteraction.id] || ''}
+                    value={customAnswers[currentInteraction.id] || (typeof rawAnswer === 'string' ? rawAnswer : '')}
                     onChange={(e) => handleCustomTextChange(e.target.value)}
                     placeholder="Describe your specific workflow, rules, or requirements in detail..."
                     rows={3}
-                    className="w-full text-xs sm:text-sm p-3 border-2 border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 bg-white shadow-xs resize-none"
+                    className="w-full text-xs sm:text-sm p-3.5 border-2 border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 bg-white shadow-xs resize-none"
                     autoFocus
                     required
                   />
@@ -356,7 +502,7 @@ export const SpecialistQuestionModal: React.FC<SpecialistQuestionModalProps> = (
 
               <button
                 type="submit"
-                disabled={isLoading || !currentAnswer.toString().trim()}
+                disabled={isLoading || !isAnswerValid()}
                 className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 <span>
