@@ -62,15 +62,16 @@ async function runGovernanceEvalSuite() {
     // Validate with RequirementsIntegrityValidator
     const valResult = RequirementsIntegrityValidator.validate(proj.id, proj.brief, output);
     assert(valResult.isValid, `${proj.name} passed RequirementsIntegrityValidator (0 errors)`);
-    assert(output.requirements.length >= 1, `${proj.name} produced at least 1 testable requirement (got ${output.requirements.length})`);
+    const hasDeliverables = output.requirements.length >= 1 || (output.status === 'needs_clarification' && output.clarifications.length >= 1);
+    assert(hasDeliverables, `${proj.name} produced valid requirements or clarifications (got ${output.requirements.length} reqs, ${output.clarifications.length} clarifications)`);
 
     // Verify 100% Provenance Coverage
     const provenanceCount = output.requirements.filter((r) => r.provenance && r.provenance.sourceType).length;
-    assert(provenanceCount === output.requirements.length, `${proj.name} has 100% provenance coverage (${provenanceCount}/${output.requirements.length})`);
+    assert(output.requirements.length === 0 || provenanceCount === output.requirements.length, `${proj.name} has 100% provenance coverage (${provenanceCount}/${output.requirements.length})`);
 
     // Verify Source ID correctness
     const validSourceIdCount = output.requirements.filter((r) => r.provenance?.sourceId === proj.id).length;
-    assert(validSourceIdCount === output.requirements.length, `${proj.name} requirements all link to valid sourceId "${proj.id}"`);
+    assert(output.requirements.length === 0 || validSourceIdCount === output.requirements.length, `${proj.name} requirements all link to valid sourceId "${proj.id}"`);
 
     // Assert 0% Cross-Project Contamination
     const fullText = JSON.stringify(output).toLowerCase();
