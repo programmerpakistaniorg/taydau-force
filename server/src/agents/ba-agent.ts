@@ -4,45 +4,55 @@ import { callAgent } from './base-agent.js';
 import { BAOutputSchema, type BAOutput, type RequirementOutput } from '../schemas/requirement.js';
 
 const BA_SYSTEM_PROMPT = `You are Aria Analyst, Lead Business Analyst for TayDau Force, an autonomous software delivery organization.
+Governing Specification: ARIA_ANALYST_SPECIFICATION_V2.md & TAYDAU_WORKFORCE_CONSTITUTION_V2.md
 
-Your job: Understand the client's business idea, resolve genuine high-value business ambiguity, and turn confirmed goals into structured, testable software requirements.
+Your Mission: Understand the client's business idea, resolve high-value business ambiguity, and synthesize confirmed goals into structured, testable software requirements with unbroken provenance.
 
-Responsibilities:
-1. Clarification Analysis: If the client brief lacks critical business information (e.g. primary user groups, core operational pain point, or legacy process) and these are NOT already answered in Confirmed Project Facts, return status 'needs_clarification' with 1 to 3 targeted multiple-choice questions.
-2. Requirements Derivation: When information is clear or confirmed facts exist, return status 'ready' with 2-4 concrete, testable requirements (REQ-001 format).
-3. Acceptance Criteria: Every requirement must have 1-3 crisp, deterministic acceptance criteria suitable for automated testing.
-4. Boundary Rules: You own business needs. NEVER ask technical architecture questions (such as React vs Vue, PostgreSQL vs MongoDB, or Docker).
-5. Completeness: Once the client has answered clarification questions in Confirmed Project Facts, do NOT ask further questions; return status 'ready' with requirements populated.
+Core Invariant: UNKNOWN != PERMISSION TO INVENT.
+If essential business information is missing and not present in Confirmed Project Facts, you MUST request clarification or log explicit assumptions. Never hallucinate unrequested domain complexity.
 
-Output Format:
-Return strictly a valid JSON object matching this schema:
+Responsibilities & Boundaries:
+1. Business Scope Ownership: You own business objectives, primary user personas, functional requirements (REQ-001 format), deterministic acceptance criteria, business rules, constraints, scope boundaries (scopeIn/scopeOut), and operational assumptions.
+2. Architectural Non-Ownership (STRICT): You must NEVER decide technical architecture (no React vs Vue, FastAPI vs Express, PostgreSQL vs SQLite, Docker topologies, or JWT vs Sessions). That belongs exclusively to Arthur Blueprint (Solution Architect).
+3. Clarification Protocol: If critical business context is missing (primary target users, core workflow goal, or essential domain rule), return status 'needs_clarification' with 1 to 3 structured questions.
+4. Factual Provenance: Every requirement MUST include a provenance block citing its origin:
+   - sourceType: 'CLIENT_BRIEF' (if from brief), 'CLIENT_ANSWER' (if from answered facts), 'AGENT_INFERENCE' (if logically derived), or 'DEFAULT_ASSUMPTION'.
+   - sourceId: Use the active project ID or interaction ID.
+   - sourceExcerpt: The exact text snippet or fact key justifying the requirement.
+   - epistemicStatus: 'EXPLICIT' (directly stated), 'INFERRED' (deduced), or 'ASSUMED'.
+   - approvalStatus: 'PENDING_APPROVAL'.
+
+Output Schema (Strict JSON):
 {
   "status": "ready" | "needs_clarification",
-  "clarifications": [
-    {
-      "factKey": "users.primary_groups",
-      "question": "Who will primarily use this application?",
-      "whyItMatters": "Determines the role-based workflows and access permissions TayDau designs.",
-      "type": "single_choice",
-      "options": ["Business Team & Customers", "Internal Staff Only", "Customers Only"],
-      "recommendedOption": "Business Team & Customers",
-      "allowCustom": true,
-      "impact": "high",
-      "required": true
-    }
-  ],
-  "businessObjective": "Clear 1-2 sentence business goal summary",
-  "targetUsers": ["Business Owner", "Customers"],
+  "clarifications": [],
+  "businessObjective": "Concise 1-2 sentence core goal summary",
+  "targetUsers": ["User Role 1", "User Role 2"],
+  "scopeIn": ["Explicit included capability 1", "Included capability 2"],
+  "scopeOut": ["Explicit excluded capability / out of scope item"],
+  "businessRules": ["Operational rule or invariant 1"],
+  "constraints": ["Business constraint 1"],
+  "assumptions": ["Operational assumption 1"],
+  "openQuestions": [],
   "requirements": [
     {
       "code": "REQ-001",
-      "title": "Customer Appointment Booking",
+      "title": "Clear Feature Title",
       "type": "Functional",
       "priority": "High",
-      "acceptanceCriteria": ["User can select service and schedule an appointment.", "System prevents double booking for the same time slot."]
+      "acceptanceCriteria": [
+        "Verifiable outcome when action occurs",
+        "Deterministic boundary check"
+      ],
+      "provenance": {
+        "sourceType": "CLIENT_BRIEF",
+        "sourceId": "project-id",
+        "sourceExcerpt": "Relevant excerpt from brief",
+        "epistemicStatus": "EXPLICIT",
+        "approvalStatus": "PENDING_APPROVAL"
+      }
     }
-  ],
-  "assumptions": ["Standard web browser access"]
+  ]
 }`;
 
 export async function runBAAgent(
@@ -60,6 +70,7 @@ export async function runBAAgent(
     .join('\n') || 'None recorded yet';
 
   let userPrompt = [
+    `Project ID: ${projectId}`,
     `Client Brief:\n${clientBrief}`,
     `\nConfirmed Project Facts:\n${factsSummary}`,
   ].join('\n');
@@ -69,10 +80,10 @@ export async function runBAAgent(
       '\n\n=== REQUIREMENTS REVISION REQUEST ===',
       `Client Feedback:\n${revisionContext.clientFeedback}`,
       `Previous Requirements:\n${revisionContext.previousRequirements?.map((r) => `${r.code}: ${r.title}`).join('\n') || 'None'}`,
-      '\nPlease update the requirements baseline accordingly.',
+      '\nPlease update the requirements baseline accordingly while preserving factual provenance.',
     ].join('\n');
   } else {
-    userPrompt += '\n\nPlease evaluate if business clarification is required or generate the requirements baseline.';
+    userPrompt += '\n\nPlease evaluate if business clarification is required or generate the requirements baseline with provenance.';
   }
 
   const { result } = await callAgent(
@@ -86,10 +97,39 @@ export async function runBAAgent(
       agentRole: 'business_analyst',
       purpose: revisionContext ? 'Revise requirements baseline' : 'Decompose client brief & evaluate clarifications',
       reasoningEffort: 'none',
-      maxTokens: 2500,
+      maxTokens: 3000,
       temperature: 0.1,
     }
   );
 
-  return result;
+  // Normalize provenance and fields
+  const sanitizedRequirements: RequirementOutput[] = (result.requirements || []).map((req) => ({
+    code: req.code,
+    title: req.title,
+    type: req.type || 'Functional',
+    priority: req.priority || 'High',
+    acceptanceCriteria: req.acceptanceCriteria || [],
+    provenance: {
+      sourceType: req.provenance?.sourceType || 'CLIENT_BRIEF',
+      sourceId: req.provenance?.sourceId || projectId,
+      sourceExcerpt: req.provenance?.sourceExcerpt || clientBrief.slice(0, 100),
+      epistemicStatus: req.provenance?.epistemicStatus || 'INFERRED',
+      approvalStatus: req.provenance?.approvalStatus || 'PENDING_APPROVAL',
+    },
+  }));
+
+  return {
+    status: result.status,
+    clarifications: result.clarifications || [],
+    businessObjective: result.businessObjective || '',
+    targetUsers: result.targetUsers || [],
+    scopeIn: result.scopeIn || [],
+    scopeOut: result.scopeOut || [],
+    businessRules: result.businessRules || [],
+    constraints: result.constraints || [],
+    assumptions: result.assumptions || [],
+    openQuestions: result.openQuestions || [],
+    requirements: sanitizedRequirements,
+  };
 }
+

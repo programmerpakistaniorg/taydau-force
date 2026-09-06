@@ -7,7 +7,7 @@ import type { CodeReviewOutput } from '../schemas/code-review.js';
 import type { QAOutput } from '../schemas/qa-artifact.js';
 
 export class DeterministicGenerator {
-  static generateBAOutput(brief: string, hasClarifications: boolean = false): BAOutput {
+  static generateBAOutput(brief: string, projectId: string = 'default-project', hasClarifications: boolean = false): BAOutput {
     if (hasClarifications) {
       return {
         status: 'needs_clarification',
@@ -26,6 +26,12 @@ export class DeterministicGenerator {
         ],
         businessObjective: `Deliver autonomous software delivery solution for: ${brief.slice(0, 80)}`,
         targetUsers: ['Store Manager', 'Staff', 'Customer'],
+        scopeIn: ['Core workflow operations', 'User authentication and role validation'],
+        scopeOut: ['Third-party legacy integrations not requested in brief'],
+        businessRules: ['Sensitive state changes must be verified against user role permissions'],
+        constraints: ['Operational data must be persisted securely'],
+        assumptions: ['Modern web browser environment with RESTful backend integration'],
+        openQuestions: [],
         requirements: [
           {
             code: 'REQ-001',
@@ -36,9 +42,15 @@ export class DeterministicGenerator {
               'User can register, authenticate, and manage profile information.',
               'Role-based access is verified for sensitive actions.',
             ],
+            provenance: {
+              sourceType: 'CLIENT_BRIEF',
+              sourceId: projectId,
+              sourceExcerpt: brief.slice(0, 100),
+              epistemicStatus: 'INFERRED',
+              approvalStatus: 'PENDING_APPROVAL',
+            },
           },
         ],
-        assumptions: ['Modern web browser environment with RESTful backend integration'],
       };
     }
 
@@ -47,6 +59,12 @@ export class DeterministicGenerator {
       clarifications: [],
       businessObjective: `Deliver autonomous software delivery solution for: ${brief.slice(0, 80)}`,
       targetUsers: ['Store Manager', 'Staff', 'Customer'],
+      scopeIn: ['Core workflow operations', 'User authentication and role validation'],
+      scopeOut: ['Third-party legacy integrations not requested in brief'],
+      businessRules: ['Sensitive state changes must be verified against user role permissions'],
+      constraints: ['Operational data must be persisted securely'],
+      assumptions: ['Modern web browser environment with RESTful backend integration'],
+      openQuestions: [],
       requirements: [
         {
           code: 'REQ-001',
@@ -57,6 +75,13 @@ export class DeterministicGenerator {
             'User can register, authenticate, and manage profile information.',
             'Role-based access is verified for sensitive actions.',
           ],
+          provenance: {
+            sourceType: 'CLIENT_BRIEF',
+            sourceId: projectId,
+            sourceExcerpt: brief.slice(0, 100),
+            epistemicStatus: 'INFERRED',
+            approvalStatus: 'PENDING_APPROVAL',
+          },
         },
         {
           code: 'REQ-002',
@@ -67,6 +92,13 @@ export class DeterministicGenerator {
             'Staff can view real-time status and operational dashboard.',
             'State transitions validate business constraints before persisting.',
           ],
+          provenance: {
+            sourceType: 'CLIENT_BRIEF',
+            sourceId: projectId,
+            sourceExcerpt: brief.slice(0, 100),
+            epistemicStatus: 'INFERRED',
+            approvalStatus: 'PENDING_APPROVAL',
+          },
         },
         {
           code: 'REQ-003',
@@ -77,9 +109,15 @@ export class DeterministicGenerator {
             'All input parameters are validated against strict type schemas.',
             'Data access queries use parameterized SQL without injection vectors.',
           ],
+          provenance: {
+            sourceType: 'CLIENT_BRIEF',
+            sourceId: projectId,
+            sourceExcerpt: brief.slice(0, 100),
+            epistemicStatus: 'INFERRED',
+            approvalStatus: 'PENDING_APPROVAL',
+          },
         },
       ],
-      assumptions: ['Modern web browser environment with RESTful backend integration'],
     };
   }
 

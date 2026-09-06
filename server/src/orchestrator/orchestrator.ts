@@ -18,6 +18,7 @@ import { runCodeReviewAgent } from '../agents/code-review-agent.js';
 import { runSecurityGate } from '../services/security-gate.js';
 import { validateEngineerArtifacts } from '../services/artifact-validator.js';
 import { validateQAArtifacts } from '../services/qa-validator.js';
+import { RequirementsIntegrityValidator } from '../validators/requirements-integrity-validator.js';
 import {
   materializeWorkspace,
   cleanupWorkspace,
@@ -235,11 +236,28 @@ async function executeBAStep(
       });
     }
 
+    // Deterministic Inter-Stage Validation: Requirements Integrity Validator
+    const valResult = RequirementsIntegrityValidator.validate(projectId, clientBrief, baResult, confirmedFacts);
+    if (!valResult.isValid) {
+      console.error(`[orchestrator] RequirementsIntegrityValidator failed for project ${projectId}:`, valResult.errors);
+      await WorkflowService.failStage(
+        projectId,
+        'business_analysis',
+        'REQUIREMENTS_INTEGRITY_VIOLATION',
+        `Aria Analyst output failed integrity validation: ${valResult.errors.join('; ')}`,
+        'business_analyst'
+      );
+      return;
+    }
+
+    // Use sanitized & validated baseline output
+    const validatedBaseline = valResult.sanitizedOutput;
+
     let createdApprovalId = '';
     await withTransaction(async (client) => {
       await client.query(`DELETE FROM requirements WHERE project_id = $1`, [projectId]);
 
-      for (const req of baResult.requirements) {
+      for (const req of validatedBaseline.requirements) {
         await client.query(
           `INSERT INTO requirements (project_id, code, title, type, priority, acceptance_criteria, status)
            VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
@@ -258,7 +276,7 @@ async function executeBAStep(
         `INSERT INTO requirement_baselines (project_id, version, status, snapshot_jsonb)
          VALUES ($1, 1, 'pending_approval', $2)
          RETURNING id`,
-        [projectId, JSON.stringify(baResult)]
+        [projectId, JSON.stringify(validatedBaseline)]
       );
       const baselineId = baselineRes.rows[0].id;
 

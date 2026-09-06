@@ -311,7 +311,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       case 'business_analyst':
       case 'ba': {
         const hasFacts = request.userPrompt.includes('Confirmed Project Facts:\n-');
-        return DeterministicGenerator.generateBAOutput(request.userPrompt, !hasFacts);
+        return DeterministicGenerator.generateBAOutput(request.userPrompt, request.projectId || 'default-project', !hasFacts);
       }
       case 'project_manager':
       case 'pm': {
