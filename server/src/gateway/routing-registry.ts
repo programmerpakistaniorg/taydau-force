@@ -347,11 +347,11 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'experiential',
     modelId: 'qwen3.8-27b',
     displayName: 'Qwen 3.8 27B (Experiential Canonical Slug)',
-    capabilityTier: 3,
+    capabilityTier: 4,
     codeTier: 3,
-    reasoningTier: 3,
+    reasoningTier: 4,
     structuredOutputTier: 4,
-    providerContextLimit: 131072,
+    providerContextLimit: 1000000,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.00,
@@ -369,11 +369,11 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     provider: 'experiential',
     modelId: 'qwen-3.8-27b',
     displayName: 'Qwen 3.8 27B (Experiential Hyphenated Alias)',
-    capabilityTier: 3,
+    capabilityTier: 4,
     codeTier: 3,
-    reasoningTier: 3,
+    reasoningTier: 4,
     structuredOutputTier: 4,
-    providerContextLimit: 131072,
+    providerContextLimit: 1000000,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.00,
@@ -395,7 +395,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     codeTier: 3,
     reasoningTier: 3,
     structuredOutputTier: 4,
-    providerContextLimit: 65536,
+    providerContextLimit: 1048576,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.00,
@@ -417,7 +417,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     codeTier: 4,
     reasoningTier: 4,
     structuredOutputTier: 4,
-    providerContextLimit: 131072,
+    providerContextLimit: 1050000,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.00,
@@ -439,7 +439,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     codeTier: 4,
     reasoningTier: 4,
     structuredOutputTier: 4,
-    providerContextLimit: 131072,
+    providerContextLimit: 1050000,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
     inputCostPer1M: 0.00,
@@ -456,21 +456,21 @@ export const MODEL_REGISTRY: ModelCapability[] = [
   {
     provider: 'experiential',
     modelId: 'claude-fable-5.1',
-    displayName: 'Claude Fable 5.1 (Experiential Paid Catalog)',
+    displayName: 'Claude Fable 5.1 (Experiential Free Daily Tier)',
     capabilityTier: 4,
     codeTier: 4,
     reasoningTier: 4,
-    structuredOutputTier: 4,
-    providerContextLimit: 200000,
+    structuredOutputTier: 3,
+    providerContextLimit: 1000000,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
-    inputCostPer1M: 3.00,
-    outputCostPer1M: 15.00,
-    expectedBillableCostPer1M: 3.00,
+    inputCostPer1M: 0.00,
+    outputCostPer1M: 0.00,
+    expectedBillableCostPer1M: 0.00,
     referenceCostPer1M: { input: 3.00, output: 15.00 },
-    pricingProvenance: 'PUBLIC_PROVIDER_PRICE',
+    pricingProvenance: 'FREE_TIER_QUOTA',
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
-    billingClassification: 'PAID', // Ineligible in FREE_ONLY
+    billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
     enabled: true,
     latencyProfileMs: 800,
@@ -844,22 +844,34 @@ export function updateModelBillingStatus(
 
 
 /**
- * Synchronizes Experiential catalog status against live /v1/models response.
+ * Synchronizes Experiential catalog status against live /v1/models response and /api/models metadata.
  */
-export function syncExperientialCatalogStatus(discoveredModelIds: string[], promotionalFreeIds?: string[]): {
+export function syncExperientialCatalogStatus(
+  discoveredModelIds: string[],
+  promotionalFreeOrCatalog?: string[] | Record<string, { isPromotionalFree: boolean; contextWindow?: number; inputCostPer1M?: number; outputCostPer1M?: number; pricingProvenance?: string }>
+): {
   activeModels: string[];
   freeEligibleCount: number;
 } {
   const discoveredSet = new Set(discoveredModelIds.map(id => id.toLowerCase()));
-  const freeSet = promotionalFreeIds ? new Set(promotionalFreeIds.map(id => id.toLowerCase())) : null;
+  
+  let freeSet: Set<string> | null = null;
+  let catalogMap: Record<string, { isPromotionalFree: boolean; contextWindow?: number; inputCostPer1M?: number; outputCostPer1M?: number; pricingProvenance?: string }> | null = null;
+
+  if (Array.isArray(promotionalFreeOrCatalog)) {
+    freeSet = new Set(promotionalFreeOrCatalog.map(id => id.toLowerCase()));
+  } else if (promotionalFreeOrCatalog && typeof promotionalFreeOrCatalog === 'object') {
+    catalogMap = promotionalFreeOrCatalog;
+  }
 
   let freeCount = 0;
   const active: string[] = [];
 
   for (const model of MODEL_REGISTRY) {
     if (model.provider === 'experiential') {
-      const isPresent = discoveredSet.has(model.modelId.toLowerCase()) || 
-                        Array.from(discoveredSet).some(d => d.includes(model.modelId.toLowerCase()));
+      const lowerId = model.modelId.toLowerCase();
+      const isPresent = discoveredSet.has(lowerId) || 
+                        Array.from(discoveredSet).some(d => d.includes(lowerId));
       
       if (!isPresent) {
         model.enabled = false;
@@ -867,11 +879,21 @@ export function syncExperientialCatalogStatus(discoveredModelIds: string[], prom
         model.enabled = true;
         active.push(model.modelId);
 
-        // If explicit promotional free list provided, sync billing classification
-        if (freeSet) {
-          const isFree = freeSet.has(model.modelId.toLowerCase()) ||
-                         Array.from(freeSet).some(f => f.includes(model.modelId.toLowerCase()));
+        if (catalogMap) {
+          const catItem = catalogMap[model.modelId] || catalogMap[lowerId];
+          if (catItem) {
+            model.billingClassification = catItem.isPromotionalFree ? 'FREE_TIER' : 'PAID';
+            if (catItem.contextWindow) model.providerContextLimit = catItem.contextWindow;
+            if (catItem.pricingProvenance) model.pricingProvenance = catItem.pricingProvenance as any;
+            model.inputCostPer1M = catItem.inputCostPer1M ?? (catItem.isPromotionalFree ? 0 : 1.0);
+            model.outputCostPer1M = catItem.outputCostPer1M ?? (catItem.isPromotionalFree ? 0 : 2.0);
+            model.expectedBillableCostPer1M = catItem.isPromotionalFree ? 0.0 : model.inputCostPer1M;
+          }
+        } else if (freeSet) {
+          const isFree = freeSet.has(lowerId) ||
+                         Array.from(freeSet).some(f => f.includes(lowerId));
           model.billingClassification = isFree ? 'FREE_TIER' : 'PAID';
+          model.expectedBillableCostPer1M = isFree ? 0.0 : 1.0;
         }
 
         if (model.billingClassification === 'FREE_TIER' || model.billingClassification === 'FREE_CREDITS') {

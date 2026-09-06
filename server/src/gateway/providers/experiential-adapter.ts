@@ -7,13 +7,19 @@ import {
   ProviderExecutionResult,
 } from './provider-adapter.interface.js';
 
-export interface ExperientialModelMetadata {
+export interface ExperientialLiveCatalogItem {
   id: string;
-  isPromotionalFree?: boolean;
-  pricing?: {
-    inputCostPer1M?: number;
-    outputCostPer1M?: number;
-  };
+  slug: string;
+  displayName: string;
+  isPromotionalFree: boolean;
+  contextWindow: number;
+  maxOutputTokens: number;
+  supportsStructuredOutputs: boolean;
+  supportsTemperature: boolean;
+  inputCostPer1M: number;
+  outputCostPer1M: number;
+  pricingProvenance: string;
+  lastVerified: string;
 }
 
 export class ExperientialAdapter implements ProviderAdapter {
@@ -23,6 +29,7 @@ export class ExperientialAdapter implements ProviderAdapter {
 
   // Cached dynamic model discovery (5 min TTL)
   private cachedModels: string[] | null = null;
+  private cachedCatalog: Record<string, ExperientialLiveCatalogItem> | null = null;
   private cacheExpiresAt = 0;
   private readonly CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -45,12 +52,13 @@ export class ExperientialAdapter implements ProviderAdapter {
    */
   invalidateCache(): void {
     this.cachedModels = null;
+    this.cachedCatalog = null;
     this.cacheExpiresAt = 0;
   }
 
   /**
    * Dynamic Model Discovery via GET /v1/models with TTL caching.
-   * Does NOT consume inference tokens.
+   * Proves CALLABILITY to this specific API key.
    */
   async listModels(forceRefresh = false): Promise<string[]> {
     const now = Date.now();
@@ -86,6 +94,76 @@ export class ExperientialAdapter implements ProviderAdapter {
     }
   }
 
+  /**
+   * Dynamic Live Catalog Metadata via GET /api/models with promotions and pricing.
+   * Proves COMMERCIAL METADATA, PROMOTIONAL FREE TIER, and CONTEXT LIMITS.
+   */
+  async fetchLiveCatalog(forceRefresh = false): Promise<Record<string, ExperientialLiveCatalogItem>> {
+    const now = Date.now();
+    if (!forceRefresh && this.cachedCatalog && now < this.cacheExpiresAt) {
+      return this.cachedCatalog;
+    }
+
+    if (!this.isConfigured()) {
+      return {};
+    }
+
+    try {
+      const apiKey = config.experiential.apiKey;
+      const url = 'https://api.experientiallabs.ai/api/models?limit=500';
+      const headers: Record<string, string> = {
+        'User-Agent': 'TayDau-Force/1.0',
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      };
+
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) {
+        return {};
+      }
+
+      const data = (await res.json()) as any;
+      const freeSlugs = new Set<string>();
+
+      for (const promo of data.promotions || []) {
+        if (promo.free === true) {
+          for (const s of promo.slugs || []) freeSlugs.add(s.toLowerCase());
+        }
+      }
+
+      const catalog: Record<string, ExperientialLiveCatalogItem> = {};
+      const verifiedTimestamp = new Date().toISOString();
+
+      for (const item of data.models || []) {
+        const slug = item.model?.slug || item.slug;
+        if (!slug) continue;
+        const lowerSlug = slug.toLowerCase();
+        const isPromotionalFree = freeSlugs.has(lowerSlug);
+
+        catalog[slug] = {
+          id: item.model?.id || slug,
+          slug,
+          displayName: item.model?.display_name || slug,
+          isPromotionalFree,
+          contextWindow: item.model?.context_window || 131072,
+          maxOutputTokens: item.model?.max_output_tokens || 32768,
+          supportsStructuredOutputs: Boolean(item.model?.supported_params?.structured_outputs || item.model?.supported_params?.response_format),
+          supportsTemperature: item.model?.supported_params?.temperature !== false,
+          inputCostPer1M: isPromotionalFree ? 0.0 : 1.0,
+          outputCostPer1M: isPromotionalFree ? 0.0 : 2.0,
+          pricingProvenance: isPromotionalFree ? 'LIVE_EXPERIENTIAL_PROMOTIONAL_FREE' : 'LIVE_EXPERIENTIAL_CATALOG_PAID',
+          lastVerified: verifiedTimestamp,
+        };
+      }
+
+      this.cachedCatalog = catalog;
+      this.cacheExpiresAt = now + this.CACHE_TTL_MS;
+      return catalog;
+    } catch {
+      return {};
+    }
+  }
+
   async validateConnection(): Promise<{ ok: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { ok: false, error: 'EXPLABS_API_KEY is not configured in environment.' };
@@ -117,9 +195,23 @@ export class ExperientialAdapter implements ProviderAdapter {
     const body: Record<string, unknown> = {
       model: modelId,
       messages,
-      temperature: options?.temperature ?? 0.2,
-      max_tokens: options?.maxTokens ?? 4096,
+      max_tokens: options?.maxTokens ?? 2048,
     };
+
+    // Parameter Adaptation: temperature handling per model support
+    const lowerModel = modelId.toLowerCase();
+    const isReasoningNoTemp = lowerModel.includes('gpt-6') || lowerModel.includes('gpt-5.6') || lowerModel.includes('astra') || lowerModel.includes('luna');
+    const isClaudeFable = lowerModel.includes('claude-fable');
+
+    if (isReasoningNoTemp) {
+      // Omit temperature entirely for models that reject temperature parameter
+    } else if (isClaudeFable) {
+      body.temperature = 1.0;
+    } else if (options?.temperature !== undefined) {
+      body.temperature = options.temperature;
+    } else {
+      body.temperature = 0.2;
+    }
 
     if (options?.responseFormatJson !== false) {
       body.response_format = { type: 'json_object' };
@@ -287,3 +379,6 @@ export class ExperientialAdapter implements ProviderAdapter {
     };
   }
 }
+
+export const experientialAdapter = new ExperientialAdapter();
+
