@@ -11,13 +11,27 @@ export class DesignGateway {
   private primaryProvider: DesignProvider;
   private fallbackProvider: DesignProvider;
   private activeProviderName: string = 'taydau_fallback';
+  private primaryCooldownUntil: number = 0;
 
   constructor(stitchApiKey?: string, stitchBaseUrl?: string) {
     this.primaryProvider = new StitchDesignProvider(stitchApiKey, stitchBaseUrl);
     this.fallbackProvider = new TayDauDesignProvider();
   }
 
+  markPrimaryFailed(reason?: string) {
+    this.primaryCooldownUntil = Date.now() + 60_000;
+    this.activeProviderName = 'taydau_fallback';
+    if (reason) {
+      console.warn(`[DesignGateway] Primary design provider disabled for 60s: ${reason}`);
+    }
+  }
+
   async getActiveProvider(): Promise<DesignProvider> {
+    if (Date.now() < this.primaryCooldownUntil) {
+      this.activeProviderName = 'taydau_fallback';
+      return this.fallbackProvider;
+    }
+
     try {
       const stitchAvailable = await this.primaryProvider.isAvailable();
       if (stitchAvailable) {
@@ -41,6 +55,7 @@ export class DesignGateway {
       const res = await provider.createProject(projectName, description);
       return { ...res, provider: provider.name };
     } catch (err: any) {
+      this.markPrimaryFailed(err.message);
       console.warn(`[DesignGateway] Primary provider '${provider.name}' failed to create project. Falling back to TayDau internal renderer.`);
       const fallbackRes = await this.fallbackProvider.createProject(projectName, description);
       this.activeProviderName = 'taydau_fallback';
@@ -55,7 +70,8 @@ export class DesignGateway {
         const res = await provider.createDesignSystem(providerProjectId, brandSpec);
         return { ...res, provider: provider.name };
       }
-    } catch (err) {
+    } catch (err: any) {
+      this.markPrimaryFailed(err.message);
       console.warn(`[DesignGateway] createDesignSystem failed on ${provider.name}. Falling back.`);
     }
 
@@ -79,6 +95,7 @@ export class DesignGateway {
       const res = await provider.generateScreen(providerProjectId, screenPrompt, options);
       return { ...res, provider: provider.name };
     } catch (err: any) {
+      this.markPrimaryFailed(err.message);
       console.warn(`[DesignGateway] generateScreen failed on ${provider.name} (${err.message}). Using TayDau fallback renderer.`);
       const fallbackRes = await this.fallbackProvider.generateScreen(providerProjectId, screenPrompt, options);
       return { ...fallbackRes, provider: this.fallbackProvider.name };

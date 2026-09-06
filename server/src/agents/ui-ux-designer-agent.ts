@@ -105,7 +105,7 @@ export async function runUIUXDesignerAgent(
 
   const { result } = await callAgent(
     gateway,
-    config.models.architect,
+    config.models.designer,
     DESIGNER_SYSTEM_PROMPT,
     userPrompt,
     UIUXDesignerOutputSchema,
@@ -121,6 +121,7 @@ export async function runUIUXDesignerAgent(
 
   return {
     ...result,
+    clarifications: result.clarifications || [],
     summary: result.summary || result.designSpec?.productExperienceSummary || 'Complete UI/UX wireframe design specification',
   };
 }

@@ -463,26 +463,32 @@ export const Overview: React.FC = () => {
               <p className="text-xs text-blue-700">
                 {pendingApproval.artifactType === 'requirements'
                   ? 'Aria Analyst has synthesized testable requirements. Review and approve to proceed.'
-                  : 'Sofia Designer has synthesized visual screen designs. Review to proceed.'}
+                  : 'Sofia Designer has synthesized visual screen designs. Review and approve to proceed.'}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (pendingApproval.artifactType === 'design') {
-                navigate('/architecture');
-              } else {
-                setIsApprovalModalOpen(true);
-              }
-            }}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
-          >
-            {pendingApproval.artifactType === 'requirements'
-              ? 'Review Requirements →'
-              : 'Review Design Screens →'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsApprovalModalOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
+            >
+              {pendingApproval.artifactType === 'requirements'
+                ? 'Review Requirements →'
+                : 'Review Design Screens →'}
+            </button>
+            {pendingApproval.artifactType === 'design' && (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={isActionInProgress}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                ✓ Quick Approve & Continue
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1381,8 +1387,8 @@ export const Overview: React.FC = () => {
       {/* 5. APPROVAL MODAL OVERLAYS */}
       {/* ========================================================================= */}
       {isApprovalModalOpen && pendingApproval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="max-w-4xl w-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="max-w-5xl w-full max-h-[90vh] overflow-y-auto flex flex-col relative animate-in zoom-in-95 duration-150 rounded-2xl">
             {pendingApproval.artifactType === 'requirements' &&
               project?.requirementBaselines?.[0] &&
               project && (
@@ -1394,6 +1400,27 @@ export const Overview: React.FC = () => {
                   onClose={() => setIsApprovalModalOpen(false)}
                   isLoading={isActionInProgress}
                 />
+              )}
+            {pendingApproval.artifactType === 'design' &&
+              project?.designSpecs?.[0] &&
+              project && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsApprovalModalOpen(false)}
+                    className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm cursor-pointer shadow-xs"
+                    title="Close design preview"
+                  >
+                    ✕
+                  </button>
+                  <DesignReviewCard
+                    designSpec={project.designSpecs[0]}
+                    project={project}
+                    onApprove={handleApprove}
+                    onRequestChanges={handleRequestChanges}
+                    isLoading={isActionInProgress}
+                  />
+                </div>
               )}
           </div>
         </div>

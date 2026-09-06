@@ -39,6 +39,7 @@ export class StitchDesignProvider implements DesignProvider {
           arguments: args,
         },
       }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) {
@@ -152,6 +153,7 @@ export class StitchDesignProvider implements DesignProvider {
         headers: {
           'X-Goog-Api-Key': this.apiKey,
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       let htmlContent = '';
@@ -169,7 +171,9 @@ export class StitchDesignProvider implements DesignProvider {
 
           if (matched.htmlCode?.downloadUrl) {
             try {
-              const htmlResp = await fetch(matched.htmlCode.downloadUrl);
+              const htmlResp = await fetch(matched.htmlCode.downloadUrl, {
+                signal: AbortSignal.timeout(8000),
+              });
               if (htmlResp.ok) {
                 htmlContent = await htmlResp.text();
               }
@@ -228,6 +232,7 @@ export class StitchDesignProvider implements DesignProvider {
 
       const screensRes = await fetch(`${this.restBaseUrl}/projects/${cleanId}/screens`, {
         headers: { 'X-Goog-Api-Key': this.apiKey },
+        signal: AbortSignal.timeout(8000),
       });
 
       let htmlContent = '';
@@ -243,7 +248,9 @@ export class StitchDesignProvider implements DesignProvider {
           imageUrl = latest.screenshot?.downloadUrl;
           if (latest.htmlCode?.downloadUrl) {
             try {
-              const htmlResp = await fetch(latest.htmlCode.downloadUrl);
+              const htmlResp = await fetch(latest.htmlCode.downloadUrl, {
+                signal: AbortSignal.timeout(8000),
+              });
               if (htmlResp.ok) {
                 htmlContent = await htmlResp.text();
               }
@@ -303,6 +310,7 @@ export class StitchDesignProvider implements DesignProvider {
 
       const screensRes = await fetch(`${this.restBaseUrl}/projects/${cleanId}/screens`, {
         headers: { 'X-Goog-Api-Key': this.apiKey },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!screensRes.ok) return [];

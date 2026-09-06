@@ -17,7 +17,7 @@ export async function callAgent<T>(
   modelId: string,
   systemPrompt: string,
   userPrompt: string,
-  responseSchema: z.ZodSchema<T>,
+  responseSchema: z.ZodType<T, any, any>,
   context: AgentCallContext
 ): Promise<{ result: T; raw: string; usage: { inputTokens: number; outputTokens: number }; latencyMs: number }> {
   const response = await gateway.call({
