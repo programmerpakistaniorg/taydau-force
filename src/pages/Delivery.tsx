@@ -34,6 +34,7 @@ import { Modal } from '../components/common/Modal';
 import { useSimulation } from '../context/SimulationContext';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { NoProjectState } from '../components/common/NoProjectState';
+import { API_BASE } from '../services/api';
 
 export const Delivery: React.FC = () => {
   const { currentStep, requirements: simRequirements } = useSimulation();
@@ -47,7 +48,7 @@ export const Delivery: React.FC = () => {
   const fetchGitStatus = async () => {
     if (!project?.id) return;
     try {
-      const res = await fetch(`/api/projects/${project.id}/delivery/git/status`);
+      const res = await fetch(`${API_BASE}/projects/${project.id}/delivery/git/status`);
       if (res.ok) {
         const data = await res.json();
         setGitDelivery(data.deliveryStatus !== 'none' ? data : null);
@@ -69,7 +70,7 @@ export const Delivery: React.FC = () => {
     if (!project?.id) return;
     setIsPreparingGit(true);
     try {
-      const res = await fetch(`/api/projects/${project.id}/delivery/git/prepare`, {
+      const res = await fetch(`${API_BASE}/projects/${project.id}/delivery/git/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allowUnverified: true }),
@@ -88,7 +89,7 @@ export const Delivery: React.FC = () => {
     if (!project?.id || !gitDelivery?.deliveryId || !remoteUrlInput) return;
     setIsPushingGit(true);
     try {
-      const res = await fetch(`/api/projects/${project.id}/delivery/git/push`, {
+      const res = await fetch(`${API_BASE}/projects/${project.id}/delivery/git/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

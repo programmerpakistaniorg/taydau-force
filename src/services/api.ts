@@ -1,6 +1,6 @@
 import type { FullProjectResponse, ProjectSummary } from '../types/api';
 
-const API_BASE = '/api';
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   const res = await fetch(`${API_BASE}/projects`);

@@ -16,6 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useLiveProject } from '../../context/LiveProjectContext';
+import { API_BASE } from '../../services/api';
 
 interface LivePreviewFrameProps {
   projectId: string;
@@ -31,7 +32,7 @@ export const LivePreviewFrame: React.FC<LivePreviewFrameProps> = ({ projectId })
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/preview/status`);
+      const res = await fetch(`${API_BASE}/projects/${projectId}/preview/status`);
       if (res.ok) {
         const data = await res.json();
         setPreviewStatus(data);
@@ -50,7 +51,7 @@ export const LivePreviewFrame: React.FC<LivePreviewFrameProps> = ({ projectId })
   const handleStart = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/preview/start`, {
+      const res = await fetch(`${API_BASE}/projects/${projectId}/preview/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -68,7 +69,7 @@ export const LivePreviewFrame: React.FC<LivePreviewFrameProps> = ({ projectId })
   const handleStop = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/preview/stop`, {
+      const res = await fetch(`${API_BASE}/projects/${projectId}/preview/stop`, {
         method: 'POST',
       });
       if (res.ok) {
