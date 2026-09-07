@@ -201,7 +201,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
 
     // Construct SSE URL (API base URL)
-    const sseUrl = `/api/projects/${activeProjectId}/events${lastEventIdRef.current ? `?lastEventId=${lastEventIdRef.current}` : ''}`;
+    const sseUrl = `${api.API_BASE}/projects/${activeProjectId}/events${lastEventIdRef.current ? `?lastEventId=${lastEventIdRef.current}` : ''}`;
     const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
 
