@@ -1,4 +1,5 @@
 import { config } from '../../config.js';
+import type { QuotaSignal } from '../../schemas/quota.js';
 import {
   ChatMessage,
   ParsedProviderError,
@@ -48,6 +49,47 @@ export class MistralAdapter implements ProviderAdapter {
     }
   }
 
+  extractQuotaSignal(headers?: Headers | Record<string, string>, modelId?: string, error?: any): QuotaSignal {
+    const rawHeaders: Record<string, string> = {};
+    if (headers) {
+      if (typeof (headers as any).entries === 'function') {
+        for (const [k, v] of (headers as any).entries()) {
+          rawHeaders[k.toLowerCase()] = v;
+        }
+      } else {
+        for (const [k, v] of Object.entries(headers)) {
+          rawHeaders[k.toLowerCase()] = String(v);
+        }
+      }
+    }
+
+    const now = Date.now();
+    const source = error ? 'PROVIDER_ERROR_SIGNAL' : (Object.keys(rawHeaders).length > 0 ? 'LIVE_RESPONSE_HEADER' : 'STATIC_FALLBACK');
+
+    const constraints: QuotaSignal['constraints'] = {};
+    if (rawHeaders['ratelimit-remaining-req']) {
+      constraints.RPM = {
+        remaining: parseInt(rawHeaders['ratelimit-remaining-req'], 10),
+      };
+    }
+
+    const isRateLimit = Boolean(error && error.status === 429);
+    const isDailyLimit = Boolean(error && (error.status === 402 || (typeof error.message === 'string' && error.message.toLowerCase().includes('quota'))));
+
+    return {
+      provider: 'mistral',
+      modelId,
+      source,
+      observedAt: now,
+      constraints,
+      rawHeaders,
+      isRateLimit,
+      isDailyLimit,
+      isAuthError: error?.status === 401 || error?.status === 403,
+      isBillingError: error?.status === 402,
+    };
+  }
+
   async execute(
     modelId: string,
     messages: ChatMessage[],
@@ -78,26 +120,30 @@ export class MistralAdapter implements ProviderAdapter {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(options?.timeoutMs || 60_000),
     });
 
     const quotaHeaders: Record<string, string> = {};
     for (const [key, val] of res.headers.entries()) {
       if (key.includes('ratelimit') || key.includes('retry-after') || key.includes('quota')) {
-        quotaHeaders[key] = val;
+        quotaHeaders[key.toLowerCase()] = val;
       }
     }
+
+    const quotaSignal = this.extractQuotaSignal(quotaHeaders, modelId);
 
     if (!res.ok) {
       const errText = await res.text();
       const parsedErr = this.parseError(
         { status: res.status, statusText: res.statusText, message: errText },
-        quotaHeaders
+        quotaHeaders,
+        modelId
       );
       const error: any = new Error(`Mistral HTTP ${res.status}: ${errText}`);
       error.parsed = parsedErr;
       error.status = res.status;
       error.quotaHeaders = quotaHeaders;
+      error.quotaSignal = parsedErr.quotaSignal;
       throw error;
     }
 
@@ -106,10 +152,10 @@ export class MistralAdapter implements ProviderAdapter {
     const inputTokens = data.usage?.prompt_tokens || Math.round(JSON.stringify(messages).length / 4);
     const outputTokens = data.usage?.completion_tokens || Math.round(content.length / 4);
 
-    return { content, inputTokens, outputTokens, quotaHeaders };
+    return { content, inputTokens, outputTokens, quotaHeaders, quotaSignal };
   }
 
-  parseError(err: any, headers?: Headers | Record<string, string>): ParsedProviderError {
+  parseError(err: any, headers?: Headers | Record<string, string>, modelId?: string): ParsedProviderError {
     const status = err.status || (typeof err.message === 'string' && err.message.match(/HTTP\s+(\d+)/)?.[1]);
     const statusCode = status ? parseInt(String(status), 10) : 0;
     const message = err.message || 'Unknown Mistral error';
@@ -125,6 +171,8 @@ export class MistralAdapter implements ProviderAdapter {
       }
     }
 
+    const quotaSignal = this.extractQuotaSignal(headers, modelId, { status: statusCode, message });
+
     if (statusCode === 429) {
       return {
         quotaState: 'RATE_LIMITED',
@@ -135,6 +183,7 @@ export class MistralAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: true,
         message: `Mistral rate limit exceeded (HTTP 429). Retry after ${retryAfterMs || 30000}ms.`,
+        quotaSignal,
       };
     }
 
@@ -147,18 +196,20 @@ export class MistralAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: false,
         message: 'Mistral authentication failed (HTTP 401/403). Invalid API key.',
+        quotaSignal,
       };
     }
 
-    if (statusCode === 402 || message.toLowerCase().includes('quota') || message.toLowerCase().includes('billing')) {
+    if (statusCode === 402 || message.toLowerCase().includes('billing')) {
       return {
-        quotaState: 'DAILY_QUOTA_EXHAUSTED',
+        quotaState: 'BILLING_REQUIRED',
         isAuthError: false,
         isBillingError: true,
         isRateLimit: false,
         isModelNotFound: false,
         isTransient: false,
-        message: 'Mistral free quota exhausted (HTTP 402).',
+        message: 'Mistral requires active billing payment (HTTP 402).',
+        quotaSignal,
       };
     }
 
@@ -171,6 +222,7 @@ export class MistralAdapter implements ProviderAdapter {
         isModelNotFound: true,
         isTransient: false,
         message: 'Requested Mistral model not found or deprecated.',
+        quotaSignal,
       };
     }
 
@@ -183,6 +235,7 @@ export class MistralAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: true,
         message: `Mistral service outage (HTTP ${statusCode}).`,
+        quotaSignal,
       };
     }
 
@@ -194,6 +247,7 @@ export class MistralAdapter implements ProviderAdapter {
       isModelNotFound: false,
       isTransient: true,
       message,
+      quotaSignal,
     };
   }
 }

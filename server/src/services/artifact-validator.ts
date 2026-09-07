@@ -7,7 +7,24 @@ export interface ValidationResult {
   totalSizeBytes: number;
 }
 
-const ALLOWED_EXTENSIONS = new Set(['.py', '.txt', '.toml', '.md', '.json']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.py',
+  '.txt',
+  '.toml',
+  '.md',
+  '.json',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.css',
+  '.html',
+  '.svg',
+  '.sql',
+  '.ini',
+  '.yml',
+  '.yaml',
+]);
 const PROHIBITED_EXTENSIONS = new Set(['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.bin', '.ps1']);
 const ALLOWED_PACKAGES = new Set([
   'fastapi',
@@ -18,11 +35,12 @@ const ALLOWED_PACKAGES = new Set([
   'pytest',
   'httpx',
   'python-dotenv',
-]);
-const PROHIBITED_PACKAGES = new Set([
   'psycopg2',
   'psycopg2-binary',
   'asyncpg',
+  'email-validator',
+]);
+const PROHIBITED_PACKAGES = new Set([
   'redis',
   'boto3',
   'pymongo',
@@ -30,9 +48,9 @@ const PROHIBITED_PACKAGES = new Set([
   'kafka-python',
 ]);
 
-const MAX_FILES = 15;
+const MAX_FILES = 35;
 const MAX_FILE_SIZE_BYTES = 50_000;
-const MAX_TOTAL_SIZE_BYTES = 200_000;
+const MAX_TOTAL_SIZE_BYTES = 500_000;
 
 export function validateEngineerArtifacts(
   output: EngineerOutput,
@@ -101,20 +119,48 @@ export function validateEngineerArtifacts(
 
     // Block sensitive/hidden files
     const basename = path.posix.basename(normalized);
-    if (basename.startsWith('.env') || basename.toLowerCase().includes('apikey') || basename.toLowerCase().includes('secret')) {
+    if ((basename.startsWith('.env') && basename !== '.env.example') || basename.toLowerCase().includes('apikey') || basename.toLowerCase().includes('secret')) {
       errors.push(`Prohibited sensitive filename: '${normalized}'`);
     }
 
     // Extension checks
     const ext = path.posix.extname(normalized).toLowerCase();
-    if (PROHIBITED_EXTENSIONS.has(ext)) {
+    const isSpecialConfigFile =
+      basename === 'Dockerfile' ||
+      basename.startsWith('Dockerfile.') ||
+      basename === 'docker-compose.yml' ||
+      basename === '.env.example' ||
+      basename === '.gitignore';
+
+    if (ext && PROHIBITED_EXTENSIONS.has(ext)) {
       errors.push(`Prohibited executable extension '${ext}' in path: '${normalized}'`);
+    } else if (ext && !ALLOWED_EXTENSIONS.has(ext) && !isSpecialConfigFile) {
+      errors.push(`Unsupported file extension '${ext}' in path: '${normalized}'`);
     }
 
-    // Path prefix check: Must start with app/ or be requirements.txt / pyproject.toml
-    const isAppFile = normalized.startsWith('app/');
-    const isManifest = normalized === 'requirements.txt' || normalized === 'pyproject.toml' || normalized === 'README.md';
-    const isTestFile = normalized.startsWith('tests/') || basename.startsWith('test_');
+    // Path prefix check: Must start with allowed directories or be a root manifest/config
+    const isAppOrServiceFile =
+      normalized.startsWith('app/') ||
+      normalized.startsWith('frontend/') ||
+      normalized.startsWith('backend/') ||
+      normalized.startsWith('database/') ||
+      normalized.startsWith('alembic/') ||
+      normalized.startsWith('docs/') ||
+      normalized.startsWith('.github/');
+
+    const isManifestOrRootConfig =
+      normalized === 'requirements.txt' ||
+      normalized === 'pyproject.toml' ||
+      normalized === 'package.json' ||
+      normalized === 'tsconfig.json' ||
+      normalized === 'vite.config.ts' ||
+      normalized === 'index.html' ||
+      normalized === 'README.md' ||
+      normalized === 'API.md' ||
+      normalized === 'alembic.ini' ||
+      isSpecialConfigFile;
+
+    const isTestFile = normalized.startsWith('tests/') || normalized.startsWith('qa/') || basename.startsWith('test_');
 
     if (isTestFile) {
       errors.push(
@@ -122,8 +168,8 @@ export function validateEngineerArtifacts(
       );
     }
 
-    if (!isAppFile && !isManifest) {
-      errors.push(`Path outside allowed directories ('app/' or root manifest): '${normalized}'`);
+    if (!isAppOrServiceFile && !isManifestOrRootConfig) {
+      errors.push(`Path outside allowed directories ('frontend/', 'backend/', 'app/', 'database/', or root manifest): '${normalized}'`);
     }
 
     // Related task codes check

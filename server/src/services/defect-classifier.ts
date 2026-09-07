@@ -100,10 +100,37 @@ export class DefectClassifier {
       };
     }
 
-    // 4. QA Artifact Syntax / Import / Collection Failure
+    // 4. Check if collection failure was caused by application code vs test artifact
     const combinedLogs = `${sandboxResult.stdout}\n${sandboxResult.stderr}`;
-    const hasCollectionError = sandboxResult.exitCode === 4 || sandboxResult.exitCode === 5 ||
-      /syntaxerror|importerror|modulenotfounderror|usageerror/i.test(combinedLogs) && (sandboxResult.testsPassed === 0 && sandboxResult.testsFailed === 0);
+    const isAppCodeError =
+      /File ["'].*?(app|backend)\/.*?[.]py/i.test(combinedLogs) ||
+      /(?:app|backend)\/(?:routes|models|schemas|main|database|crud)[^:]*:[0-9]+: in/i.test(combinedLogs);
+
+    if (isAppCodeError) {
+      const firstFailing = sandboxResult.failingTests?.[0];
+      const sig = this.generateSignature(
+        projectId,
+        'engineer',
+        firstFailing?.testName || 'app_runtime_error',
+        combinedLogs.slice(0, 200)
+      );
+      return {
+        taxonomy: 'product_defect',
+        routingTarget: 'engineer',
+        failureSignature: sig,
+        title: 'Application Runtime / Import Defect',
+        summary: `Application source code failed during import/startup: ${combinedLogs.split('\n').filter((l) => l.includes('Error:')).pop() || 'Runtime error in application code'}`,
+        evidence: { exitCode: sandboxResult.exitCode, logs: combinedLogs.slice(-2000) },
+        isBlocking: true,
+      };
+    }
+
+    const hasCollectionError =
+      sandboxResult.exitCode === 4 ||
+      sandboxResult.exitCode === 5 ||
+      (/syntaxerror|importerror|modulenotfounderror|usageerror/i.test(combinedLogs) &&
+        sandboxResult.testsPassed === 0 &&
+        sandboxResult.testsFailed === 0);
 
     if (hasCollectionError || sandboxResult.status === 'qa_error') {
       const firstFailing = sandboxResult.failingTests?.[0];

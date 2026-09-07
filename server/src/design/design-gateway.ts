@@ -7,6 +7,21 @@ import type {
 import { StitchDesignProvider } from './stitch-design-provider.js';
 import { TayDauDesignProvider } from './taydau-design-provider.js';
 
+export interface GenerateScreenOptions {
+  screenKey?: string;
+  screenName?: string;
+  deviceType?: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'AGNOSTIC';
+  designSystemId?: string;
+  purpose?: string;
+  sections?: string[];
+  primaryActions?: string[];
+  wireframeElements?: string[];
+  brandColors?: { primary?: string; secondary?: string; background?: string; surface?: string; text?: string };
+  isDegraded?: boolean;
+  isDiagnosticOnly?: boolean;
+  targetProjectId?: string;
+}
+
 export class DesignGateway {
   private primaryProvider: DesignProvider;
   private fallbackProvider: DesignProvider;
@@ -82,13 +97,7 @@ export class DesignGateway {
   async generateScreen(
     providerProjectId: string,
     screenPrompt: string,
-    options?: {
-      screenKey?: string;
-      screenName?: string;
-      deviceType?: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'AGNOSTIC';
-      designSystemId?: string;
-      purpose?: string;
-    }
+    options?: GenerateScreenOptions
   ): Promise<GeneratedScreenResult & { provider: string }> {
     const provider = await this.getActiveProvider();
     try {
@@ -106,7 +115,15 @@ export class DesignGateway {
     providerProjectId: string,
     screenId: string,
     editPrompt: string,
-    options?: { screenKey?: string; screenName?: string; purpose?: string }
+    options?: {
+      screenKey?: string;
+      screenName?: string;
+      purpose?: string;
+      sections?: string[];
+      primaryActions?: string[];
+      wireframeElements?: string[];
+      brandColors?: { primary?: string; secondary?: string; background?: string; surface?: string; text?: string };
+    }
   ): Promise<GeneratedScreenResult & { provider: string }> {
     const provider = await this.getActiveProvider();
     try {

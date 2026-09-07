@@ -65,6 +65,31 @@ export const DesignSystemSchema = z.object({
   componentPrinciples: z.array(z.string()).default([]),
 });
 
+/**
+ * Structured 16-field DesignRead capturing Sofia's holistic domain, audience, and constraint analysis.
+ * Differentiates client-explicit confirmed facts from inferred design choices.
+ */
+export const DesignReadSchema = z.object({
+  productBusiness: z.string(),
+  domain: z.string(),
+  primaryAudience: z.string(),
+  surfaceMode: z.string(), // e.g. 'Desktop Web', 'Responsive Portal', 'Mobile App'
+  primaryUserGoal: z.string(),
+  businessGoal: z.string(),
+  primaryCTA: z.string(),
+  brandPersonality: z.string(),
+  contentDensity: z.enum(['compact', 'balanced', 'spacious']).default('balanced'),
+  visualDirection: z.string(),
+  devicePriority: z.enum(['desktop_first', 'mobile_first', 'responsive']).default('responsive'),
+  accessibility: z.string().default('WCAG 2.1 AA compliant contrast and navigable keyboard flow'),
+  motionLevel: z.enum(['none', 'subtle', 'expressive']).default('subtle'),
+  suppliedAssets: z.array(z.string()).default([]),
+  assumptions: z.array(z.string()).default([]),
+  explicitAvoidances: z.array(z.string()).default([]),
+  clientExplicitFacts: z.record(z.any()).default({}),
+  inferredChoices: z.record(z.string()).default({}),
+});
+
 export const DesignBriefSchema = z.object({
   projectSummary: z.string(),
   businessGoal: z.string(),
@@ -99,6 +124,20 @@ export const DesignBriefSchema = z.object({
   assumptions: z.array(z.string()).default([]),
 });
 
+export const DesignProvenanceSchema = z.object({
+  projectId: z.string(),
+  generatedBy: z.string(),
+  isDegraded: z.boolean().default(false),
+  fallbackReason: z.string().optional(),
+  validatedAt: z.string(),
+  screenCount: z.number(),
+  lineageConfirmed: z.boolean().default(true),
+  requirementsBaselineId: z.string().optional(),
+  status: z.enum(['candidate', 'validated_canonical', 'rejected', 'diagnostic_only']).default('candidate'),
+  approvable: z.boolean().default(true),
+  canonicalDesign: z.boolean().default(true),
+});
+
 export const DesignSpecSchema = z.object({
   productExperienceSummary: z.string(),
   uxGoals: z.array(z.string()).default([]),
@@ -119,7 +158,9 @@ export const DesignSpecSchema = z.object({
   emptyStates: z.array(z.string()).default([]),
   errorStates: z.array(z.string()).default([]),
   assumptions: z.array(z.string()).default([]),
+  designRead: DesignReadSchema.optional(),
   designBrief: DesignBriefSchema.optional(),
+  provenance: DesignProvenanceSchema.optional(),
 });
 
 export const UIUXDesignerOutputSchema = z.object({
@@ -132,6 +173,8 @@ export const UIUXDesignerOutputSchema = z.object({
 export type ClarificationQuestion = z.infer<typeof ClarificationQuestionSchema>;
 export type DesignScreen = z.infer<typeof DesignScreenSchema>;
 export type DesignSystem = z.infer<typeof DesignSystemSchema>;
+export type DesignRead = z.infer<typeof DesignReadSchema>;
 export type DesignBrief = z.infer<typeof DesignBriefSchema>;
+export type DesignProvenance = z.infer<typeof DesignProvenanceSchema>;
 export type DesignSpec = z.infer<typeof DesignSpecSchema>;
 export type UIUXDesignerOutput = z.infer<typeof UIUXDesignerOutputSchema>;

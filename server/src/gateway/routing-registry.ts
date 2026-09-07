@@ -30,6 +30,8 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     providerContextLimit: 131072,
     routingContextLimit: 32768,
     maxContextTokens: 32768,
+    accountTpmLimit: 8000,
+    quotaProvenance: 'GROQ_FREE_TIER_PREVIEW_8K_TPM',
     inputCostPer1M: 0.00,
     outputCostPer1M: 0.00,
     expectedBillableCostPer1M: 0.00,
@@ -38,7 +40,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Groq models returning 400/404 — disabled for demo
     latencyProfileMs: 300,
   },
   {
@@ -60,7 +62,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Groq disabled
     latencyProfileMs: 200,
   },
   {
@@ -82,7 +84,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Groq disabled
     latencyProfileMs: 650,
   },
   {
@@ -104,7 +106,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Groq disabled
     latencyProfileMs: 600,
   },
   {
@@ -126,7 +128,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Groq disabled
     allowedTaskTypes: [
       'requirements_synthesis',
       'project_planning',
@@ -156,7 +158,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'FIRST_PARTY',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Gemini returning 404
     latencyProfileMs: 800,
   },
   {
@@ -178,7 +180,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'FIRST_PARTY',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Gemini returning 404
     latencyProfileMs: 650,
   },
 
@@ -202,7 +204,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_CREDITS',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: NVIDIA NIM not verified
     latencyProfileMs: 700,
   },
 
@@ -272,7 +274,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: OpenRouter free models returning 404
     latencyProfileMs: 900,
   },
   {
@@ -294,7 +296,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: OpenRouter free models returning 404
     latencyProfileMs: 950,
   },
   {
@@ -316,7 +318,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: OpenRouter free models returning 404
     latencyProfileMs: 700,
   },
   {
@@ -338,7 +340,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: OpenRouter disabled
     latencyProfileMs: 700,
   },
 
@@ -362,7 +364,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Experiential times out, use Mistral directly
     latencyProfileMs: 600,
   },
   {
@@ -384,7 +386,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Duplicate alias
     latencyProfileMs: 600,
   },
   {
@@ -406,7 +408,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Not verified
     latencyProfileMs: 500,
   },
   {
@@ -428,7 +430,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Not verified
     latencyProfileMs: 650,
   },
   {
@@ -450,7 +452,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Not verified
     latencyProfileMs: 750,
   },
   {
@@ -472,7 +474,7 @@ export const MODEL_REGISTRY: ModelCapability[] = [
     trustLevel: 'VERIFIED_INFERENCE_PLATFORM',
     billingClassification: 'FREE_TIER',
     dataPolicy: 'PUBLIC_OR_SYNTHETIC_ONLY',
-    enabled: true,
+    enabled: false, // HACKATHON: Not verified
     latencyProfileMs: 800,
   },
 
@@ -814,6 +816,11 @@ class ProviderHealthTracker {
   private failureCounts: Map<string, { count: number; lastFailureTime: number }> = new Map();
   private readonly FAILURE_THRESHOLD = 3;
   private readonly DEFAULT_COOLDOWN_MS = 60_000;
+
+  resetHealth(): void {
+    this.quotaStates.clear();
+    this.failureCounts.clear();
+  }
 
   recordSuccess(providerOrModel: string): void {
     this.failureCounts.delete(providerOrModel);

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { config } from '../config.js';
@@ -14,18 +15,22 @@ import {
   MODEL_REGISTRY,
   ROUTING_POLICY_VERSION,
 } from './routing-registry.js';
+import { quotaGovernor } from './quota-governor.js';
 import { DeterministicGenerator } from './deterministic-generator.js';
 import { providerAdapters } from './providers/provider-registry.js';
-import type { TaskProfile, RoutingDecision } from '../schemas/routing.js';
-import type { ChatMessage } from './providers/provider-adapter.interface.js';
+import type { TaskProfile, RoutingDecision, TaskType, ModelCapability } from '../schemas/routing.js';
+import type { TaskQuotaDemand, QuotaReservation } from '../schemas/quota.js';
+import type { ChatMessage, ProviderExecutionResult } from './providers/provider-adapter.interface.js';
 
 export class RoutedModelGateway implements ModelGateway {
-
-
   async call(request: ModelGatewayRequest): Promise<ModelGatewayResponse> {
     const startTime = Date.now();
     const taskProfile: TaskProfile =
       request.taskProfile || inferTaskProfile(request.agentRole, request.purpose);
+
+    const taskType = (taskProfile.taskType || 'ui_ux_design') as TaskType;
+    const reservedOutput = taskProfile.reservedOutputTokens ?? 1500;
+    const totalTokens = taskProfile.contextSizeEstimate + reservedOutput;
 
     // 1. Dynamic Routing Decision
     const routingDecision: RoutingDecision = dynamicRouter.routeTask(taskProfile, {
@@ -95,12 +100,89 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
         };
       }
 
-      // ── Primary Attempt with Selected Route ────────────────────────────────
+      // ── Primary Route Execution with Predictive Quota Reservation ──────────
+      const primaryCap = MODEL_REGISTRY.find(
+        (m) => m.provider === selectedProvider && m.modelId === selectedModel
+      ) || MODEL_REGISTRY.find((m) => m.modelId === selectedModel);
+
+      const timeoutMs = this.getBoundedTimeoutMs(
+        selectedProvider,
+        taskType,
+        reservedOutput,
+        request.maxTokens
+      );
+
+      const demand: TaskQuotaDemand = {
+        estimatedInputTokens: Math.round(taskProfile.contextSizeEstimate * 0.75),
+        reservedOutputTokens: reservedOutput,
+        totalTokens,
+        requests: 1,
+        concurrencyUnits: 1,
+        timeoutMs,
+      };
+
+      let activeReservation: QuotaReservation | undefined;
+
+      if (primaryCap) {
+        const reserveRes = quotaGovernor.tryReserve(primaryCap, demand, {
+          workflowRunId: request.workflowRunId,
+          stepRunId: request.stepRunId,
+          invocationId: request.invocationId,
+          attempt: request.attempt,
+        });
+
+        if (!reserveRes.success) {
+          throw new Error(
+            `PREFLIGHT_ADMISSION_REJECTED: ${reserveRes.rejectionReason || 'Quota constraints exceeded'}`
+          );
+        }
+
+        activeReservation = reserveRes.reservation;
+        if (activeReservation) {
+          quotaGovernor.commitReservation(activeReservation.reservationId);
+        }
+      }
+
       console.log(
         `[RoutedModelGateway] Executing task [${taskProfile.taskType}] for ${request.agentRole} via ${selectedProvider}/${selectedModel} (${routingDecision.reason})...`
       );
 
-      let completion = await this.executeProviderCall(selectedProvider, selectedModel, messages, request);
+      let completion: ProviderExecutionResult;
+      try {
+        completion = await this.executeProviderCall(
+          selectedProvider,
+          selectedModel,
+          messages,
+          request
+        );
+
+        if (activeReservation) {
+          quotaGovernor.reconcileReservation(
+            activeReservation.reservationId,
+            { inputTokens: completion.inputTokens, outputTokens: completion.outputTokens },
+            completion.quotaSignal
+          );
+        }
+      } catch (execErr: any) {
+        if (activeReservation) {
+          const isTimeout =
+            execErr.name === 'TimeoutError' ||
+            execErr.name === 'AbortError' ||
+            execErr.message?.toLowerCase().includes('timeout');
+
+          quotaGovernor.releaseReservation(
+            activeReservation.reservationId,
+            isTimeout ? 'timeout' : 'error',
+            { unknownConsumption: isTimeout }
+          );
+
+          if (execErr.quotaSignal) {
+            quotaGovernor.recordSignal(execErr.quotaSignal);
+          }
+        }
+        throw execErr;
+      }
+
       totalInputTokens += completion.inputTokens;
       totalOutputTokens += completion.outputTokens;
 
@@ -227,6 +309,10 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       const adapter = providerAdapters.get(selectedProvider);
       if (adapter) {
         const parsed = adapter.parseError(primaryErr, primaryErr.quotaHeaders);
+        if (parsed.quotaSignal) {
+          quotaGovernor.recordSignal(parsed.quotaSignal);
+        }
+
         if (parsed.isRateLimit) {
           providerHealth.recordRateLimit(selectedModel, parsed.retryAfterMs, parsed.message);
           providerHealth.recordRateLimit(selectedProvider, parsed.retryAfterMs, parsed.message);
@@ -256,12 +342,82 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
             `[RoutedModelGateway] Attempting dynamic multi-provider failover -> ${nextDecision.provider}/${nextDecision.modelId}...`
           );
 
-          const fallbackCompletion = await this.executeProviderCall(
+          const secCap = MODEL_REGISTRY.find(
+            (m) => m.provider === nextDecision.provider && m.modelId === nextDecision.modelId
+          ) || MODEL_REGISTRY.find((m) => m.modelId === nextDecision.modelId);
+
+          const secTimeoutMs = this.getBoundedTimeoutMs(
             nextDecision.provider,
-            nextDecision.modelId,
-            messages,
-            request
+            taskType,
+            reservedOutput,
+            request.maxTokens
           );
+
+          const secDemand: TaskQuotaDemand = {
+            estimatedInputTokens: Math.round(taskProfile.contextSizeEstimate * 0.75),
+            reservedOutputTokens: reservedOutput,
+            totalTokens,
+            requests: 1,
+            concurrencyUnits: 1,
+            timeoutMs: secTimeoutMs,
+          };
+
+          let secReservation: QuotaReservation | undefined;
+          if (secCap) {
+            const secReserveRes = quotaGovernor.tryReserve(secCap, secDemand, {
+              workflowRunId: request.workflowRunId,
+              stepRunId: request.stepRunId,
+              invocationId: request.invocationId,
+              attempt: request.attempt,
+            });
+
+            if (!secReserveRes.success) {
+              throw new Error(
+                `SECONDARY_ADMISSION_REJECTED: ${secReserveRes.rejectionReason || 'Quota constraints exceeded'}`
+              );
+            }
+
+            secReservation = secReserveRes.reservation;
+            if (secReservation) {
+              quotaGovernor.commitReservation(secReservation.reservationId);
+            }
+          }
+
+          let fallbackCompletion: ProviderExecutionResult;
+          try {
+            fallbackCompletion = await this.executeProviderCall(
+              nextDecision.provider,
+              nextDecision.modelId,
+              messages,
+              request
+            );
+
+            if (secReservation) {
+              quotaGovernor.reconcileReservation(
+                secReservation.reservationId,
+                { inputTokens: fallbackCompletion.inputTokens, outputTokens: fallbackCompletion.outputTokens },
+                fallbackCompletion.quotaSignal
+              );
+            }
+          } catch (secExecErr: any) {
+            if (secReservation) {
+              const isTimeout =
+                secExecErr.name === 'TimeoutError' ||
+                secExecErr.name === 'AbortError' ||
+                secExecErr.message?.toLowerCase().includes('timeout');
+
+              quotaGovernor.releaseReservation(
+                secReservation.reservationId,
+                isTimeout ? 'timeout' : 'error',
+                { unknownConsumption: isTimeout }
+              );
+
+              if (secExecErr.quotaSignal) {
+                quotaGovernor.recordSignal(secExecErr.quotaSignal);
+              }
+            }
+            throw secExecErr;
+          }
 
           const cleanFallback = this.stripMarkdownFences(fallbackCompletion.content);
           const parseFallback = this.parseAndValidate(cleanFallback, request.responseSchema);
@@ -334,7 +490,9 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
       }
 
       // ── Tertiary Fallback: Deterministic Generator (Degraded Mode) ──────────
-      console.warn(`[RoutedModelGateway] All semantic model providers failed or rate limited. Activating deterministic generator in DEGRADED MODE.`);
+      console.warn(
+        `[RoutedModelGateway] All semantic model providers failed or rate limited. Activating deterministic generator in DEGRADED MODE.`
+      );
       isDegraded = true;
       const fallbackData = this.generateFallbackContent(request);
       const latencyMs = Date.now() - startTime;
@@ -380,26 +538,73 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     }
   }
 
+  private getBoundedTimeoutMs(
+    provider: string,
+    taskType: TaskType,
+    reservedOutputTokens?: number,
+    maxTokens?: number
+  ): number {
+    const isDesignOrCode = taskType === 'ui_ux_design' || taskType === 'fullstack_code_generation';
+    if (provider === 'local_llamacpp' || provider === 'local') {
+      // Measured local Qwen3.5-9B-GGUF throughput is approximately 2.4–2.5 tokens/sec.
+      // Compute bounded adaptive timeout based on expected output token budget + prompt eval overhead.
+      const expectedOutputTokens = reservedOutputTokens || maxTokens || (isDesignOrCode ? 2048 : 1024);
+      const estimatedGenerationSec = Math.ceil(expectedOutputTokens / 2.4);
+      const promptEvalOverheadSec = 25;
+      const adaptiveSec = estimatedGenerationSec + promptEvalOverheadSec;
+      const floorSec = isDesignOrCode ? 180 : 90;
+      const hardCapSec = 600; // 10-minute maximum bounded limit
+      return Math.min(Math.max(adaptiveSec, floorSec), hardCapSec) * 1000;
+    }
+    if (provider === 'experiential') {
+      return isDesignOrCode ? 45_000 : 40_000;
+    }
+    // Cloud providers (Groq, Google AI Studio, Mistral, OpenRouter, NVIDIA)
+    return isDesignOrCode ? 90_000 : 45_000;
+  }
+
   private async executeProviderCall(
     provider: string,
     modelId: string,
     messages: ChatMessage[],
     request: ModelGatewayRequest
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number; quotaHeaders?: Record<string, string> }> {
+  ): Promise<ProviderExecutionResult> {
     const adapter = providerAdapters.get(provider);
     if (!adapter) {
       throw new Error(`Unsupported or unconfigured provider adapter: '${provider}'`);
     }
 
-    const attempt = (request as any).attempt || 1;
+    if (!request.projectId) {
+      throw new Error(
+        `Execution error: ModelGatewayRequest requires a valid projectId for governed execution and idempotency tracking.`
+      );
+    }
+
+    const attempt = request.attempt ?? (request as any).attempt ?? 1;
+    const executionRunId = request.workflowRunId || request.stepRunId || request.invocationId || '';
     const stepId = request.taskCode || request.purpose || request.agentRole;
-    const idempotencyKey = `taydau:${request.projectId || 'proj'}:${request.agentRole}:${stepId}:${attempt}`;
+    const promptHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(messages))
+      .digest('hex')
+      .slice(0, 12);
+    const runSegment = executionRunId ? `:${executionRunId}` : '';
+    const idempotencyKey = `taydau:${request.projectId}${runSegment}:${request.agentRole}:${stepId}:${promptHash}:${attempt}`;
+
+    const taskType = (request.taskProfile?.taskType || 'ui_ux_design') as TaskType;
+    const timeoutMs = this.getBoundedTimeoutMs(
+      provider,
+      taskType,
+      request.taskProfile?.reservedOutputTokens,
+      request.maxTokens
+    );
 
     return adapter.execute(modelId, messages, {
       temperature: request.temperature ?? 0.2,
       maxTokens: request.maxTokens ?? 4096,
       responseFormatJson: true,
       idempotencyKey,
+      timeoutMs,
     });
   }
 
@@ -416,7 +621,10 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     return clean.trim();
   }
 
-  private parseAndValidate<T>(jsonStr: string, schema: z.ZodSchema<T>): { success: true; data: T } | { success: false; error: string } {
+  private parseAndValidate<T>(
+    jsonStr: string,
+    schema: z.ZodSchema<T>
+  ): { success: true; data: T } | { success: false; error: string } {
     try {
       const parsed = JSON.parse(jsonStr);
       const valResult = schema.safeParse(parsed);
@@ -448,30 +656,31 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
   private generateFallbackContent(request: ModelGatewayRequest): any {
     const role = request.agentRole.toLowerCase();
 
-    if (role.includes('ba') || role.includes('analyst')) {
-      return DeterministicGenerator.generateBAOutput(request.userPrompt, request.projectId || 'default-project');
+    if (role.includes('ba') || role.includes('analyst') || role.includes('business')) {
+      return DeterministicGenerator.generateBAOutput(
+        request.userPrompt,
+        request.projectId || 'default-project'
+      );
     }
-    if (role.includes('pm') || role.includes('planner')) {
+    if (role.includes('pm') || role.includes('planner') || role.includes('project') || role.includes('manager')) {
       return DeterministicGenerator.generatePMDeliveryPlan();
     }
-    if (role.includes('designer') || role.includes('ui') || role.includes('ux')) {
+    if (role.includes('designer') || role.includes('ui') || role.includes('ux') || role.includes('design')) {
       return DeterministicGenerator.generateDesignerOutput(request.userPrompt);
     }
-    if (role.includes('architect')) {
+    if (role.includes('architect') || role.includes('architecture') || role.includes('solution')) {
       return DeterministicGenerator.generateArchitectureOutput();
     }
-    if (role.includes('engineer') || role.includes('coder')) {
-      return DeterministicGenerator.generateEngineerOutput();
+    if (role.includes('engineer') || role.includes('coder') || role.includes('developer') || role.includes('code')) {
+      return DeterministicGenerator.generateEngineerOutput(request.userPrompt);
     }
-    if (role.includes('review')) {
-      return DeterministicGenerator.generateCodeReviewOutput();
+    if (role.includes('review') || role.includes('reviewer')) {
+      return DeterministicGenerator.generateCodeReviewOutput(request.userPrompt);
     }
-    if (role.includes('qa') || role.includes('tester')) {
-      return DeterministicGenerator.generateQAOutput();
+    if (role.includes('qa') || role.includes('tester') || role.includes('test') || role.includes('quality')) {
+      return DeterministicGenerator.generateQAOutput(request.userPrompt);
     }
 
     return null;
   }
 }
-
-

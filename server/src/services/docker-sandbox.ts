@@ -80,6 +80,42 @@ export async function materializeWorkspace(
     await fs.writeFile(targetPath, sanitizeContent(file.content), 'utf8');
   }
 
+  // Ensure Python package __init__.py files exist and export module contents
+  const pythonDirs = [
+    'app',
+    'app/routes',
+    'app/models',
+    'app/schemas',
+    'backend/app',
+    'backend/app/routes',
+    'backend/app/models',
+    'backend/app/schemas',
+  ];
+  for (const relDir of pythonDirs) {
+    const dirPath = path.join(baseDir, relDir);
+    try {
+      const stats = await fs.stat(dirPath);
+      if (stats.isDirectory()) {
+        const initPath = path.join(dirPath, '__init__.py');
+        let initExists = false;
+        try {
+          await fs.access(initPath);
+          initExists = true;
+        } catch {
+          initExists = false;
+        }
+        if (!initExists) {
+          const files = await fs.readdir(dirPath);
+          const pyFiles = files.filter((f) => f.endsWith('.py') && f !== '__init__.py');
+          const exports = pyFiles.map((f) => `from .${f.replace('.py', '')} import *`).join('\n');
+          await fs.writeFile(initPath, exports + '\n', 'utf8');
+        }
+      }
+    } catch {
+      // directory does not exist, ignore
+    }
+  }
+
   return baseDir;
 }
 
@@ -168,7 +204,7 @@ export async function executeSandboxTests(
     '--tmpfs', '/workspace:rw,size=128m,uid=10001,gid=10001,mode=1777',
     '-v', `${hostMountPath}:/app_source:ro`,
     SANDBOX_IMAGE,
-    'sh', '-c', 'cp -rf /app_source/. /workspace/ 2>/dev/null || true; cd /workspace && pytest -v --tb=short'
+    'sh', '-c', 'cp -rf /app_source/. /workspace/ 2>/dev/null || true; [ -d /workspace/backend/app ] && cp -rf /workspace/backend/app /workspace/app 2>/dev/null || true; cd /workspace && export DATABASE_URL="sqlite:////tmp/test.db" && export PYTHONPATH="/workspace:/workspace/backend:/workspace/app:$PYTHONPATH" && pytest -v --tb=short'
   ];
 
   return new Promise<SandboxExecutionResult>((resolve) => {

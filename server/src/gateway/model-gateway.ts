@@ -30,7 +30,7 @@ export interface ModelGatewayRequest {
   /** Version of the routing policy */
   routingPolicyVersion?: string;
 
-  // ── Cost telemetry context ──────────────────────────────────────────────
+  // ── Cost telemetry & execution context ───────────────────────────────────
   /** Project this call belongs to */
   projectId: string;
   /** Agent role that initiated the call (ba, pm, architect, engineer, qa…) */
@@ -41,6 +41,14 @@ export interface ModelGatewayRequest {
   taskCode?: string;
   /** Optional requirement code for traceability */
   requirementCode?: string;
+  /** Workflow run identifier for execution-level idempotency isolation */
+  workflowRunId?: string;
+  /** Step run identifier for step-level idempotency isolation */
+  stepRunId?: string;
+  /** Invocation or interaction ID */
+  invocationId?: string;
+  /** Attempt count for logical retry differentiation */
+  attempt?: number;
 }
 
 export interface ModelGatewayResponse {

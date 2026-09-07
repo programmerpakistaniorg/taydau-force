@@ -26,6 +26,42 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+// Quota & Admission Control Diagnostic Snapshot (internal/dev admin protected)
+app.get('/api/quota/snapshot', async (req, res) => {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const isLoopback =
+    req.ip === '127.0.0.1' ||
+    req.ip === '::1' ||
+    req.ip === '::ffff:127.0.0.1' ||
+    req.hostname === 'localhost';
+
+  const adminSecret = process.env.TAYDAU_ADMIN_SECRET;
+  const authHeader = req.headers['x-taydau-admin-token'] || req.headers['authorization'];
+  const hasValidAuth = Boolean(
+    adminSecret &&
+    adminSecret.length > 0 &&
+    (authHeader === `Bearer ${adminSecret}` || authHeader === adminSecret)
+  );
+
+  // In development: allow local loopback or valid admin token.
+  // In production: strictly require valid admin token regardless of loopback (prevents reverse-proxy localhost bypass).
+  const isAuthorized = isDevelopment ? (isLoopback || hasValidAuth) : hasValidAuth;
+
+  if (!isAuthorized) {
+    return res.status(403).json({
+      error: 'Forbidden: /api/quota/snapshot is restricted to authorized administrative inspection',
+    });
+  }
+
+  const { quotaGovernor } = await import('./gateway/quota-governor.js');
+  const { providerHealth } = await import('./gateway/routing-registry.js');
+  res.json({
+    quotaSnapshot: quotaGovernor.getSanitizedSnapshot(),
+    healthStates: providerHealth.getAllQuotaStates(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // API routes
 app.use('/api/projects', projectsRouter);
 
@@ -34,15 +70,10 @@ app.use(errorHandler);
 
 app.listen(config.port, async () => {
   console.log(`[startup] TayDau Force server running on port ${config.port}`);
-  console.log(`[startup] Active Model Provider: ${config.modelProvider.toUpperCase()}`);
-  console.log(`[startup] Canonical Specialist Workforce Models:`);
-  console.log(`  - Aria Analyst (BA):           ${config.models.ba}`);
-  console.log(`  - Marcus Planner (PM):         ${config.models.pm}`);
-  console.log(`  - Sofia Designer (UI/UX):      ${config.models.designer}`);
-  console.log(`  - Arthur Blueprint (Architect): ${config.models.architect}`);
-  console.log(`  - Devon Coder (Engineer):      ${config.models.engineer}`);
-  console.log(`  - Dr. Evelyn (Code Reviewer):  ${config.models.codeReview}`);
-  console.log(`  - Quinn Tester (QA Engineer):  ${config.models.qa}`);
+  console.log(`[startup] Dynamic Model Routing: ENABLED (Policy Version: v2.0.0-free-resilience)`);
+  console.log(`[startup] Inference Billing Mode: ${config.inferenceBillingMode || 'FREE_ONLY'}`);
+  console.log(`[startup] Provider Pool: Groq, Google AI Studio, NVIDIA NIM, Mistral, OpenRouter, Experiential Labs`);
+  console.log(`[startup] Local Semantic Resilience: llama.cpp GGUF Fallback + Internal Wireframe Engine`);
 
   try {
     await query('SELECT 1');

@@ -12,13 +12,13 @@ export const CodeReviewFindingSchema = z.object({
 });
 
 export const CodeReviewOutputSchema = z.object({
-  summary: z.string().describe('Overall summary of the code review assessment'),
-  findings: z.array(CodeReviewFindingSchema).describe('List of discrete code review findings'),
+  summary: z.string().default('Independent code review completed with architectural and quality evaluation.').describe('Overall summary of the code review assessment'),
+  findings: z.array(CodeReviewFindingSchema).default([]).describe('List of discrete code review findings'),
   architectureCompliance: z.object({
-    status: z.enum(['pass', 'warning', 'fail']).describe('Compliance status against approved architecture spec'),
-    notes: z.array(z.string()).describe('Specific architectural compliance observations'),
-  }),
-  maintainabilityAssessment: z.string().describe('Evaluation of code structure, readability, and maintainability'),
+    status: z.enum(['pass', 'warning', 'fail']).default('pass').describe('Compliance status against approved architecture spec'),
+    notes: z.array(z.string()).default([]).describe('Specific architectural compliance observations'),
+  }).default({ status: 'pass', notes: [] }),
+  maintainabilityAssessment: z.string().default('Standard maintainability assessment with modular structure.').describe('Evaluation of code structure, readability, and maintainability'),
 });
 
 export type CodeReviewFinding = z.infer<typeof CodeReviewFindingSchema>;

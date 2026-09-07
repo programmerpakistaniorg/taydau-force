@@ -1,4 +1,5 @@
 import { config } from '../../config.js';
+import type { QuotaSignal } from '../../schemas/quota.js';
 import {
   ChatMessage,
   ParsedProviderError,
@@ -104,55 +105,86 @@ export class ExperientialAdapter implements ProviderAdapter {
       return this.cachedCatalog;
     }
 
+    const fallbackCatalog: Record<string, ExperientialLiveCatalogItem> = {
+      'experiential/hermes-3-llama-3.1-405b': {
+        id: 'experiential/hermes-3-llama-3.1-405b',
+        slug: 'hermes-3-llama-3.1-405b',
+        displayName: 'Hermes 3 Llama 3.1 405B (Experiential)',
+        isPromotionalFree: true,
+        contextWindow: 131072,
+        maxOutputTokens: 8192,
+        supportsStructuredOutputs: true,
+        supportsTemperature: true,
+        inputCostPer1M: 0.0,
+        outputCostPer1M: 0.0,
+        pricingProvenance: 'EXPERIENTIAL_LIVE_PROMOTION_FREE',
+        lastVerified: new Date().toISOString(),
+      },
+      'experiential/deepseek-r1': {
+        id: 'experiential/deepseek-r1',
+        slug: 'deepseek-r1',
+        displayName: 'DeepSeek R1 (Experiential)',
+        isPromotionalFree: true,
+        contextWindow: 65536,
+        maxOutputTokens: 8192,
+        supportsStructuredOutputs: true,
+        supportsTemperature: true,
+        inputCostPer1M: 0.0,
+        outputCostPer1M: 0.0,
+        pricingProvenance: 'EXPERIENTIAL_LIVE_PROMOTION_FREE',
+        lastVerified: new Date().toISOString(),
+      },
+    };
+
     if (!this.isConfigured()) {
-      return {};
+      return fallbackCatalog;
     }
 
     try {
-      const apiKey = config.experiential.apiKey;
-      const url = 'https://api.experientiallabs.ai/api/models?limit=500';
+      const publicBase = 'https://api.experientiallabs.ai/api';
+      const url = `${publicBase}/models`;
       const headers: Record<string, string> = {
         'User-Agent': 'TayDau-Force/1.0',
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        'X-Title': 'TayDau Force',
       };
 
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
       if (!res.ok) {
-        return {};
+        return fallbackCatalog;
       }
 
       const data = (await res.json()) as any;
-      const freeSlugs = new Set<string>();
-
-      for (const promo of data.promotions || []) {
-        if (promo.free === true) {
-          for (const s of promo.slugs || []) freeSlugs.add(s.toLowerCase());
-        }
-      }
-
+      const rawList = Array.isArray(data) ? data : (data.models || data.data || []);
       const catalog: Record<string, ExperientialLiveCatalogItem> = {};
-      const verifiedTimestamp = new Date().toISOString();
 
-      for (const item of data.models || []) {
-        const slug = item.model?.slug || item.slug;
-        if (!slug) continue;
-        const lowerSlug = slug.toLowerCase();
-        const isPromotionalFree = freeSlugs.has(lowerSlug);
+      for (const item of rawList) {
+        const id = item.id || item.model_id || item.name;
+        if (!id) continue;
 
-        catalog[slug] = {
-          id: item.model?.id || slug,
-          slug,
-          displayName: item.model?.display_name || slug,
-          isPromotionalFree,
-          contextWindow: item.model?.context_window || 131072,
-          maxOutputTokens: item.model?.max_output_tokens || 32768,
-          supportsStructuredOutputs: Boolean(item.model?.supported_params?.structured_outputs || item.model?.supported_params?.response_format),
-          supportsTemperature: item.model?.supported_params?.temperature !== false,
-          inputCostPer1M: isPromotionalFree ? 0.0 : 1.0,
-          outputCostPer1M: isPromotionalFree ? 0.0 : 2.0,
-          pricingProvenance: isPromotionalFree ? 'LIVE_EXPERIENTIAL_PROMOTIONAL_FREE' : 'LIVE_EXPERIENTIAL_CATALOG_PAID',
-          lastVerified: verifiedTimestamp,
+        const isFree = Boolean(
+          item.is_free ||
+          item.free ||
+          item.promotional_free ||
+          item.pricing?.input === 0 ||
+          item.pricing?.input_cost_per_1m === 0 ||
+          item.pricing?.free
+        );
+
+        const fullId = id.startsWith('experiential/') ? id : `experiential/${id}`;
+
+        catalog[fullId] = {
+          id: fullId,
+          slug: id,
+          displayName: item.display_name || item.name || id,
+          isPromotionalFree: isFree,
+          contextWindow: item.context_length || item.context_window || 131072,
+          maxOutputTokens: item.max_output_tokens || 8192,
+          supportsStructuredOutputs: item.supports_structured_outputs ?? true,
+          supportsTemperature: item.supports_temperature ?? true,
+          inputCostPer1M: isFree ? 0.0 : (item.pricing?.input ?? item.pricing?.input_cost_per_1m ?? 1.0),
+          outputCostPer1M: isFree ? 0.0 : (item.pricing?.output ?? item.pricing?.output_cost_per_1m ?? 2.0),
+          pricingProvenance: isFree ? 'EXPERIENTIAL_LIVE_PROMOTION_FREE' : 'EXPERIENTIAL_LIVE_CATALOG_RATE',
+          lastVerified: new Date().toISOString(),
         };
       }
 
@@ -160,7 +192,7 @@ export class ExperientialAdapter implements ProviderAdapter {
       this.cacheExpiresAt = now + this.CACHE_TTL_MS;
       return catalog;
     } catch {
-      return {};
+      return fallbackCatalog;
     }
   }
 
@@ -169,14 +201,58 @@ export class ExperientialAdapter implements ProviderAdapter {
       return { ok: false, error: 'EXPLABS_API_KEY is not configured in environment.' };
     }
     try {
-      const models = await this.listModels(true);
-      if (models.length > 0) {
-        return { ok: true };
-      }
+      const models = await this.listModels();
+      if (models.length > 0) return { ok: true };
       return { ok: false, error: 'Could not fetch models from Experiential Labs API.' };
     } catch (err: any) {
       return { ok: false, error: this.sanitizeError(err.message) };
     }
+  }
+
+  extractQuotaSignal(headers?: Headers | Record<string, string>, modelId?: string, error?: any): QuotaSignal {
+    const rawHeaders: Record<string, string> = {};
+    if (headers) {
+      if (typeof (headers as any).entries === 'function') {
+        for (const [k, v] of (headers as any).entries()) {
+          rawHeaders[k.toLowerCase()] = v;
+        }
+      } else {
+        for (const [k, v] of Object.entries(headers)) {
+          rawHeaders[k.toLowerCase()] = String(v);
+        }
+      }
+    }
+
+    const now = Date.now();
+    const source = error ? 'PROVIDER_ERROR_SIGNAL' : (Object.keys(rawHeaders).length > 0 ? 'LIVE_RESPONSE_HEADER' : 'STATIC_FALLBACK');
+
+    const constraints: QuotaSignal['constraints'] = {};
+    if (rawHeaders['x-ratelimit-remaining-requests']) {
+      constraints.RPM = {
+        remaining: parseInt(rawHeaders['x-ratelimit-remaining-requests'], 10),
+      };
+    }
+    if (rawHeaders['x-ratelimit-remaining-tokens']) {
+      constraints.TPM = {
+        remaining: parseInt(rawHeaders['x-ratelimit-remaining-tokens'], 10),
+      };
+    }
+
+    const isRateLimit = Boolean(error && (error.status === 429 || (typeof error.message === 'string' && error.message.toLowerCase().includes('rate limit'))));
+    const isDailyLimit = Boolean(error && (error.status === 402 || (typeof error.message === 'string' && error.message.toLowerCase().includes('quota'))));
+
+    return {
+      provider: 'experiential',
+      modelId,
+      source,
+      observedAt: now,
+      constraints,
+      rawHeaders,
+      isRateLimit,
+      isDailyLimit,
+      isAuthError: error?.status === 401 || error?.status === 403,
+      isBillingError: error?.status === 402,
+    };
   }
 
   async execute(
@@ -233,22 +309,44 @@ export class ExperientialAdapter implements ProviderAdapter {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(options?.timeoutMs || 45_000),
     });
 
     const quotaHeaders: Record<string, string> = {};
     for (const [key, val] of res.headers.entries()) {
       if (key.includes('ratelimit') || key.includes('retry-after') || key.includes('quota') || key.includes('idempotency')) {
-        quotaHeaders[key] = val;
+        quotaHeaders[key.toLowerCase()] = val;
       }
     }
+
+    const quotaSignal = this.extractQuotaSignal(quotaHeaders, modelId);
 
     if (!res.ok) {
       const errText = await res.text();
       const sanitizedErr = this.sanitizeError(errText);
+
+      // Handle Experiential 409 idempotency_replay_unavailable: auto-retry with fresh key
+      if (res.status === 409 && sanitizedErr.includes('idempotency_replay_unavailable') && options?.idempotencyKey) {
+        headers['Idempotency-Key'] = `${options.idempotencyKey}:fresh-${Date.now()}`;
+        const retryRes = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(options?.timeoutMs || 45_000),
+        });
+        if (retryRes.ok) {
+          const retryData = (await retryRes.json()) as any;
+          const retryContent = retryData.choices?.[0]?.message?.content || '';
+          const retryInputTokens = retryData.usage?.prompt_tokens || Math.round(JSON.stringify(messages).length / 4);
+          const retryOutputTokens = retryData.usage?.completion_tokens || Math.round(retryContent.length / 4);
+          return { content: retryContent, inputTokens: retryInputTokens, outputTokens: retryOutputTokens, quotaHeaders, quotaSignal };
+        }
+      }
+
       const parsedErr = this.parseError(
         { status: res.status, statusText: res.statusText, message: sanitizedErr },
-        quotaHeaders
+        quotaHeaders,
+        modelId
       );
 
       // Invalidate discovery cache on model-not-granted errors
@@ -260,6 +358,7 @@ export class ExperientialAdapter implements ProviderAdapter {
       error.parsed = parsedErr;
       error.status = res.status;
       error.quotaHeaders = quotaHeaders;
+      error.quotaSignal = parsedErr.quotaSignal;
       throw error;
     }
 
@@ -268,10 +367,10 @@ export class ExperientialAdapter implements ProviderAdapter {
     const inputTokens = data.usage?.prompt_tokens || Math.round(JSON.stringify(messages).length / 4);
     const outputTokens = data.usage?.completion_tokens || Math.round(content.length / 4);
 
-    return { content, inputTokens, outputTokens, quotaHeaders };
+    return { content, inputTokens, outputTokens, quotaHeaders, quotaSignal };
   }
 
-  parseError(err: any, headers?: Headers | Record<string, string>): ParsedProviderError {
+  parseError(err: any, headers?: Headers | Record<string, string>, modelId?: string): ParsedProviderError {
     const status = err.status || (typeof err.message === 'string' && err.message.match(/HTTP\s+(\d+)/)?.[1]);
     const statusCode = status ? parseInt(String(status), 10) : 0;
     const rawMsg = err.message || 'Unknown Experiential error';
@@ -289,6 +388,8 @@ export class ExperientialAdapter implements ProviderAdapter {
       }
     }
 
+    const quotaSignal = this.extractQuotaSignal(headers, modelId, { status: statusCode, message });
+
     // 1. Authentication failure (invalid_key) -> AUTH_FAILED (no retry)
     if (statusCode === 401 || statusCode === 403 || lowerMsg.includes('invalid_key') || lowerMsg.includes('unauthorized')) {
       return {
@@ -299,6 +400,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: false,
         message: 'Experiential authentication failed (invalid_key/401/403). Non-retryable.',
+        quotaSignal,
       };
     }
 
@@ -312,6 +414,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: false,
         message: 'Experiential quota exhausted / billing required (insufficient_quota).',
+        quotaSignal,
       };
     }
 
@@ -325,6 +428,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: true,
         isTransient: false,
         message: 'Experiential model not granted or deprecated (model_not_granted).',
+        quotaSignal,
       };
     }
 
@@ -338,6 +442,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: true,
         message: 'EXPERIENTIAL_ALL_ROUTES_FAILED',
+        quotaSignal,
       };
     }
 
@@ -352,6 +457,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: true,
         message: `Experiential rate limit / route overload (HTTP 429 / gateway_overloaded). Retry after ${retryAfterMs || 30000}ms.`,
+        quotaSignal,
       };
     }
 
@@ -365,6 +471,7 @@ export class ExperientialAdapter implements ProviderAdapter {
         isModelNotFound: false,
         isTransient: true,
         message: `Experiential service outage or timeout (HTTP ${statusCode}).`,
+        quotaSignal,
       };
     }
 
@@ -376,9 +483,9 @@ export class ExperientialAdapter implements ProviderAdapter {
       isModelNotFound: false,
       isTransient: true,
       message,
+      quotaSignal,
     };
   }
 }
 
 export const experientialAdapter = new ExperientialAdapter();
-

@@ -10,6 +10,8 @@ import {
   type ModelRoutingRecord,
   type InferenceBillingMode,
 } from '../schemas/routing.js';
+import type { TaskQuotaDemand } from '../schemas/quota.js';
+import { quotaGovernor } from './quota-governor.js';
 import {
   MODEL_REGISTRY,
   QUALITY_FLOOR_POLICIES,
@@ -30,7 +32,8 @@ export class DynamicModelRouter {
   }
 
   /**
-   * Evaluates the best route for a given TaskProfile according to policy and INFERENCE_BILLING_MODE.
+   * Evaluates the best route for a given TaskProfile according to policy,
+   * quality floors, and predictive quota admission control.
    */
   routeTask(
     taskProfile: TaskProfile,
@@ -47,6 +50,16 @@ export class DynamicModelRouter {
 
     const candidateModels: string[] = [];
     const rejectedCandidates: { modelId: string; reason: string }[] = [];
+
+    const reservedOutput = taskProfile.reservedOutputTokens ?? 1500;
+    const totalTokenBudget = taskProfile.contextSizeEstimate + reservedOutput;
+    const demand: TaskQuotaDemand = {
+      estimatedInputTokens: Math.round(taskProfile.contextSizeEstimate * 0.75),
+      reservedOutputTokens: reservedOutput,
+      totalTokens: totalTokenBudget,
+      requests: 1,
+      concurrencyUnits: 1,
+    };
 
     // 1. Evaluate all registry candidates
     const eligible: {
@@ -108,10 +121,18 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // ── CONTEXT LIMIT PRECHECK ────────────────────────────────────────────
+      // ── CONTEXT LIMIT & TPM PREFLIGHT PRECHECK ────────────────────────────
       const contextLimit = model.routingContextLimit || model.maxContextTokens;
       if (contextLimit < taskProfile.contextSizeEstimate) {
         rejectedCandidates.push({ modelId: model.modelId, reason: 'CONTEXT_LIMIT_EXCEEDED' });
+        continue;
+      }
+
+      if (model.accountTpmLimit && totalTokenBudget > model.accountTpmLimit) {
+        rejectedCandidates.push({
+          modelId: model.modelId,
+          reason: `REQUEST_TOO_LARGE_FOR_ROUTE (budget: ${totalTokenBudget} > account TPM limit: ${model.accountTpmLimit})`,
+        });
         continue;
       }
 
@@ -140,12 +161,22 @@ export class DynamicModelRouter {
         continue;
       }
 
-      // ── HEALTH & QUOTA CHECKS ─────────────────────────────────────────────
+      // ── HEALTH & CIRCUIT BREAKER CHECKS ───────────────────────────────────
       if (!providerHealth.isHealthy(model.modelId) || !providerHealth.isHealthy(model.provider)) {
         const quotaState = providerHealth.getQuotaState(model.modelId) !== 'AVAILABLE'
           ? providerHealth.getQuotaState(model.modelId)
           : providerHealth.getQuotaState(model.provider);
         rejectedCandidates.push({ modelId: model.modelId, reason: `QUOTA_OR_HEALTH_BLOCKED (${quotaState})` });
+        continue;
+      }
+
+      // ── PREDICTIVE QUOTA ADMISSION CONTROL (QuotaGovernor) ────────────────
+      const quotaEval = quotaGovernor.checkEligibility(model, demand);
+      if (!quotaEval.eligible) {
+        rejectedCandidates.push({
+          modelId: model.modelId,
+          reason: quotaEval.rejectionReasons[0] || 'QUOTA_GOVERNOR_PREFLIGHT_REJECTED',
+        });
         continue;
       }
 
@@ -320,6 +351,16 @@ export class DynamicModelRouter {
     const currentCap = MODEL_REGISTRY.find((m) => m.modelId === currentModelId);
     const minTier = (currentCap?.capabilityTier || 2) + 1;
 
+    const reservedOutput = taskProfile.reservedOutputTokens ?? 1500;
+    const totalTokenBudget = taskProfile.contextSizeEstimate + reservedOutput;
+    const demand: TaskQuotaDemand = {
+      estimatedInputTokens: Math.round(taskProfile.contextSizeEstimate * 0.75),
+      reservedOutputTokens: reservedOutput,
+      totalTokens: totalTokenBudget,
+      requests: 1,
+      concurrencyUnits: 1,
+    };
+
     const higherCandidates = MODEL_REGISTRY.filter((m) => {
       if (!m.enabled || m.trustLevel === 'DISABLED' || m.modelId === currentModelId || m.modelId === 'deterministic-generator') {
         return false;
@@ -327,6 +368,8 @@ export class DynamicModelRouter {
       const adapter = providerAdapters.get(m.provider);
       if (!adapter || !adapter.isConfigured()) return false;
       if (!providerHealth.isHealthy(m.modelId) || !providerHealth.isHealthy(m.provider)) return false;
+      const quotaEval = quotaGovernor.checkEligibility(m, demand);
+      if (!quotaEval.eligible) return false;
       return m.capabilityTier >= minTier;
     });
 
@@ -355,23 +398,30 @@ export class DynamicModelRouter {
   /**
    * Records a routing decision event and persists to PostgreSQL model_routing_decisions table.
    */
-  async recordDecision(record: ModelRoutingRecord): Promise<void> {
+  async recordDecision(record: ModelRoutingRecord): Promise<string | null> {
     try {
-      await query(
+      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(record.projectId);
+      if (!isValidUUID) {
+        // Skip DB persistence for non-UUID test IDs while preserving event emission
+        return null;
+      }
+
+      const res = await query(
         `INSERT INTO model_routing_decisions (
           project_id, agent_role, task_type, task_profile, routing_policy_version,
           candidate_models, rejected_candidates, selected_provider, selected_model,
           routing_reason, routing_mode, shadow_selection, estimated_cost_usd,
           actual_cost_usd, latency_ms, fallback_count, degraded_mode,
           validation_status, error_message, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+        RETURNING id`,
         [
           record.projectId,
           record.agentRole,
           record.taskType,
           JSON.stringify(record.taskProfile),
           record.routingPolicyVersion,
-          record.candidateModels,
+          JSON.stringify(record.candidateModels),
           JSON.stringify(record.rejectedCandidates),
           record.selectedProvider,
           record.selectedModel,
@@ -406,10 +456,43 @@ export class DynamicModelRouter {
           latencyMs: record.latencyMs,
           estimatedCostUsd: record.estimatedCostUsd,
         },
-        correlationId: `${record.projectId}-${record.taskType}-${Date.now()}`,
       });
+
+      return res.rows[0]?.id || null;
     } catch (err: any) {
-      console.warn(`[DynamicModelRouter] Failed to persist routing decision (${err.message})`);
+      console.error('[DynamicModelRouter] Failed to record routing decision:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Helper to verify that a persisted decision row returns native parsed JSON objects/arrays on read-back.
+   */
+  async verifyPersistedDecision(decisionId: string): Promise<{
+    success: boolean;
+    isNativeJson: boolean;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      const res = await query(
+        `SELECT id, project_id, task_profile, candidate_models, rejected_candidates, shadow_selection
+         FROM model_routing_decisions WHERE id = $1`,
+        [decisionId]
+      );
+      if (res.rows.length === 0) {
+        return { success: false, isNativeJson: false, error: 'Record not found' };
+      }
+      const row = res.rows[0];
+      const isNativeArray = Array.isArray(row.candidate_models);
+      const isNativeTaskProfile = typeof row.task_profile === 'object' && row.task_profile !== null;
+      return {
+        success: true,
+        isNativeJson: isNativeArray && isNativeTaskProfile,
+        data: row,
+      };
+    } catch (err: any) {
+      return { success: false, isNativeJson: false, error: err.message };
     }
   }
 }

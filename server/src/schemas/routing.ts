@@ -76,6 +76,8 @@ export const RoutingReasonCodeSchema = z.enum([
   'AUTH_FAILED',
   'BILLING_REQUIRED',
   'CONTEXT_LIMIT',
+  'REQUEST_TOO_LARGE_FOR_ROUTE',
+  'TPM_QUOTA_EXCEEDED',
   'SCHEMA_FAILURE_ESCALATION',
   'VERIFICATION_CRITICAL',
   'BUDGET_PRESSURE',
@@ -97,6 +99,7 @@ export interface TaskProfile {
   reasoningRequirement: 'none' | 'low' | 'medium' | 'high';
   codeGenerationRequirement: 'none' | 'low' | 'medium' | 'high';
   contextSizeEstimate: number;
+  reservedOutputTokens?: number;
   latencySensitivity: 'low' | 'medium' | 'high';
   verificationCriticality: 'low' | 'medium' | 'high' | 'critical';
   confidentiality?: 'PUBLIC_OR_SYNTHETIC' | 'INTERNAL' | 'RESTRICTED';
@@ -128,9 +131,11 @@ export interface ModelCapability {
   codeTier: number; // 1 to 4 - TayDau internal routing policy classification
   reasoningTier: number; // 1 to 4 - TayDau internal routing policy classification
   structuredOutputTier: number; // 1 to 4
-  providerContextLimit: number; // Actual configured/provider capability
-  routingContextLimit: number; // Conservative TayDau policy routing cap
-  maxContextTokens: number; // Backwards compatible alias to routingContextLimit
+  providerContextLimit: number; // Architectural model context limit
+  routingContextLimit: number; // Policy routing limit
+  maxContextTokens: number; // Backwards compatible alias
+  accountTpmLimit?: number; // Account tier TPM limit (e.g. 8000 on Groq free preview)
+  quotaProvenance?: string;
   inputCostPer1M: number | null;
   outputCostPer1M: number | null;
   expectedBillableCostPer1M?: number; // 0 for FREE_TIER / FREE_CREDITS
@@ -198,4 +203,3 @@ export interface ModelRoutingRecord {
   errorMessage?: string | null;
   createdAt?: string;
 }
-

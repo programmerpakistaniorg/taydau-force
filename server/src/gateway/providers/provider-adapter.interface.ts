@@ -1,4 +1,5 @@
 import { ProviderTrust, QuotaState, BillingClassification } from '../../schemas/routing.js';
+import type { QuotaSignal, NormalizedQuotaSignal } from '../../schemas/quota.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -18,6 +19,8 @@ export interface ProviderExecutionResult {
   inputTokens: number;
   outputTokens: number;
   quotaHeaders?: Record<string, string>;
+  quotaSignal?: QuotaSignal;
+  quotaSignals?: NormalizedQuotaSignal[];
 }
 
 export interface ParsedProviderError {
@@ -29,6 +32,8 @@ export interface ParsedProviderError {
   isModelNotFound: boolean;
   isTransient: boolean;
   message: string;
+  quotaSignal?: QuotaSignal;
+  quotaSignals?: NormalizedQuotaSignal[];
 }
 
 export interface ProviderAdapter {
@@ -45,4 +50,6 @@ export interface ProviderAdapter {
     options?: ProviderExecutionOptions
   ): Promise<ProviderExecutionResult>;
   parseError(err: any, headers?: Headers | Record<string, string>): ParsedProviderError;
+  extractQuotaSignal?(headers: Headers | Record<string, string>, modelId?: string, error?: any): QuotaSignal;
+  extractNormalizedQuotaSignals?(headers: Headers | Record<string, string>, modelId?: string, error?: any): NormalizedQuotaSignal[];
 }

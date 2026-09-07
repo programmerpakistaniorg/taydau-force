@@ -139,7 +139,7 @@ Please analyze the root cause of this defect and generate the complete, correcte
       purpose: `Rework implementation to resolve defect ${ctx.defect.code} (Attempt ${ctx.reworkAttempt || 1})`,
       taskCode: ctx.defect.code,
       reasoningEffort: 'medium',
-      maxTokens: 3500,
+      maxTokens: 10000,
       temperature: 0.1,
     }
   );
