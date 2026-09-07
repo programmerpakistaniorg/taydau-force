@@ -13,7 +13,7 @@
   <a href="https://taydau-force.vercel.app" target="_blank">
     <img src="https://img.shields.io/badge/Live%20Demo-taydau--force.vercel.app-blue?style=for-the-badge&logo=vercel" alt="Live Demo" />
   </a>
-  <img src="https://img.shields.io/badge/Architecture-Frozen%20Baseline-purple?style=for-the-badge" alt="Architecture Frozen" />
+  
 </p>
 
 ---
