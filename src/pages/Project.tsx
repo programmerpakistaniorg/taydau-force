@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FolderKanban,
   Building2,
@@ -12,246 +13,346 @@ import {
   FileCheck,
   Scale,
   Compass,
-  ArrowRight
+  ArrowRight,
+  Plus,
+  Play,
+  FolderCheck,
+  RefreshCw,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  HelpCircle
 } from 'lucide-react';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { DEMO_PROJECT_INFO } from '../data/mockData';
+import { useLiveProject } from '../context/LiveProjectContext';
+import { InteractionCard } from '../components/workflow/InteractionCard';
+import { ApprovalCard } from '../components/workflow/ApprovalCard';
+import { DeliveryPlanCard } from '../components/workflow/DeliveryPlanCard';
+
+const PROJECT_STARTER_TEMPLATES = [
+  {
+    label: 'Car Detailing App',
+    name: 'AutoShine Detailing Platform',
+    brief: 'I run a small car detailing business and need a clean web application for customers to book detailing packages, choose date/time slots, view service pricing, and for staff to manage appointments.',
+    type: 'Small Business',
+    audience: 'My Team & Customers',
+    goal: 'Automate Bookings & Appointments',
+  },
+  {
+    label: 'Inventory System',
+    name: 'Smart Wholesale Inventory System',
+    brief: 'I run a wholesale distribution business and need an inventory system where my team can add products, update stock quantities, filter low-stock items, and prevent duplicate SKUs.',
+    type: 'Small Business',
+    audience: 'My Team & Customers',
+    goal: 'Track & Organize Data',
+  },
+  {
+    label: 'Customer Portal',
+    name: 'Client Services Portal',
+    brief: 'A secure customer portal where clients can log in, view account status, submit support requests, download invoices, and review project delivery progress.',
+    type: 'Service Agency / Consulting',
+    audience: 'My Team & Customers',
+    goal: 'Improve Customer Experience',
+  },
+  {
+    label: 'Internal Notes API',
+    name: 'Internal Notes & Task API',
+    brief: 'Build an internal microservice API to create, read, update, and categorize employee notes with title, body, and tag fields. Pure backend service, no UI is required.',
+    type: 'Internal Service',
+    audience: 'Internal Team Only',
+    goal: 'Backend Microservice API',
+  },
+];
 
 export const Project: React.FC = () => {
-  const { baOutput } = DEMO_PROJECT_INFO;
+  const navigate = useNavigate();
+  const {
+    mode,
+    project,
+    projectsList,
+    isLoading,
+    isActionInProgress,
+    createProject,
+    loadProject,
+    answerInteraction,
+    approveRequest,
+    requestChanges,
+  } = useLiveProject();
+
+  React.useEffect(() => {
+    (window as any).__approveRequest = approveRequest;
+    (window as any).__requestChanges = requestChanges;
+  }, [approveRequest, requestChanges]);
+
+  const [isCreating, setIsCreating] = useState<boolean>(!project);
+  const [newProjectName, setNewProjectName] = useState<string>('');
+  const [newProjectBrief, setNewProjectBrief] = useState<string>('');
+  const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number | null>(null);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectBrief.trim()) return;
+    try {
+      await createProject(newProjectName.trim() || 'Untitled Project', newProjectBrief.trim());
+      setIsCreating(false);
+    } catch (err) {
+      console.error('Project creation failed:', err);
+    }
+  };
+
+  const handleApplyTemplate = (tpl: typeof PROJECT_STARTER_TEMPLATES[0], idx: number) => {
+    setSelectedTemplateIndex(idx);
+    setNewProjectName(tpl.name);
+    setNewProjectBrief(tpl.brief);
+  };
+
+  const pendingInteraction = project?.pendingInteractions?.[0];
+  const pendingApproval = project?.pendingApproval;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-brand-blue" />
-              Project & Business Analysis
-            </h2>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Analysis Complete
-            </span>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FolderKanban className="w-5 h-5 text-brand-blue" />
+            Project Onboarding & Client Decisions
+          </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Client requirement elicitation, identified actors, business rules, and domain risk analysis for <strong className="text-slate-800">{DEMO_PROJECT_INFO.name}</strong>.
+            Work collaboratively with your AI software team. Answer role-specific decisions and review deliverables.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="teal" size="md">
-            Client: {DEMO_PROJECT_INFO.company}
-          </Badge>
-          <Badge variant="primary" size="md">
-            Target SLA: {DEMO_PROJECT_INFO.targetSLA}
-          </Badge>
-        </div>
+
+        {mode === 'live' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCreating(!isCreating)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue hover:bg-blue-700 text-white shadow-xs transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{isCreating ? 'View Active Project' : 'New Project'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Original Client Brief Card */}
-      <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-subtle space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-brand-blue" />
-            Original Client Brief
-          </span>
-          <span className="text-[11px] font-mono text-slate-400">Captured at Stage 1 (Client Idea)</span>
+      {/* Top Banner: Active Human Decision / Question Card */}
+      {mode === 'live' && project && pendingInteraction && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <InteractionCard
+            interaction={pendingInteraction}
+            onSubmit={(ans) => answerInteraction(pendingInteraction.id, ans)}
+            isLoading={isActionInProgress}
+          />
         </div>
-        <blockquote className="p-4 bg-slate-50/80 border-l-4 border-brand-blue text-sm text-slate-900 italic rounded-r-lg font-serif leading-relaxed">
-          &ldquo;{DEMO_PROJECT_INFO.clientRequirement}&rdquo;
-        </blockquote>
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-500">
-          <span>Deconstructed into <strong>10 core specifications</strong></span>
-          <span>•</span>
-          <span>Lead Agent: <strong>Aria Analyst (Business Analyst)</strong></span>
-          <span>•</span>
-          <span>Target Architecture: <strong>Autonomous Verified Build</strong></span>
-        </div>
-      </div>
+      )}
 
-      {/* Business Analyst Output Banner */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <FileCheck className="w-4 h-4 text-emerald-600" />
-            Business Analyst Output & Discovery Specification
-          </h3>
-          <span className="text-xs text-slate-400 font-mono">Stage 2 Output (Analysis)</span>
+      {/* Top Banner: Active Human Approval Gate Card */}
+      {mode === 'live' && project && pendingApproval && !pendingInteraction && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <ApprovalCard
+            approval={pendingApproval}
+            project={project}
+            onApprove={() => approveRequest(pendingApproval.id)}
+            onRequestChanges={(fb) => requestChanges(pendingApproval.id, fb)}
+            isLoading={isActionInProgress}
+          />
         </div>
+      )}
 
-        {/* 1. Business Objective */}
-        <Card
-          title={
-            <span className="flex items-center gap-2 text-slate-900">
-              <Compass className="w-4 h-4 text-brand-blue" />
-              1. Business Objective
-            </span>
-          }
-        >
-          <p className="text-xs text-slate-700 leading-relaxed">
-            {baOutput.businessObjective}
-          </p>
+      {/* Create Project Form */}
+      {isCreating && mode === 'live' && (
+        <Card className="p-6 md:p-8 border-2 border-brand-blue/30 bg-gradient-to-b from-blue-50/20 to-white">
+          <div className="max-w-3xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-brand-blue" />
+              Describe What You Want Built
+            </h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Our Business Analyst will analyze your requirements, recommend sensible defaults, and orchestrate the software team.
+            </p>
+
+            {/* Inspiration Starter Chips */}
+            <div className="mb-6">
+              <span className="text-xs font-bold text-slate-700 block mb-2">Starter Templates:</span>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_STARTER_TEMPLATES.map((tpl, idx) => (
+                  <button
+                    key={tpl.label}
+                    type="button"
+                    onClick={() => handleApplyTemplate(tpl, idx)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      selectedTemplateIndex === idx
+                        ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Project Name (Optional)</label>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="e.g. AutoShine Detailing Platform"
+                  className="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none bg-white text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Your Natural Language Brief</label>
+                <textarea
+                  value={newProjectBrief}
+                  onChange={(e) => setNewProjectBrief(e.target.value)}
+                  placeholder="Describe your business idea, users, and what features you need..."
+                  rows={4}
+                  className="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none bg-white text-slate-900"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={isActionInProgress || !newProjectBrief.trim()}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-blue hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isActionInProgress ? 'Starting Team...' : 'Assemble AI Team & Deliver'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </Card>
+      )}
 
-        {/* 2. Identified Actors */}
-        <Card
-          title={
-            <span className="flex items-center gap-2 text-slate-900">
-              <Users className="w-4 h-4 text-brand-teal" />
-              2. Identified Actors & Persona Hierarchy
-            </span>
-          }
-        >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {baOutput.actors.map((actor, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900">{actor.role}</h4>
-                  <Badge variant={actor.badge === 'Administrative' ? 'danger' : actor.badge === 'Managerial' ? 'teal' : 'primary'} size="sm">
-                    {actor.badge}
-                  </Badge>
+      {/* Active PM Delivery Plan Card */}
+      {mode === 'live' && project && project.tasks.length > 0 && !pendingInteraction && !pendingApproval && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <DeliveryPlanCard project={project} />
+        </div>
+      )}
+
+      {/* Project Overview Cards */}
+      {project && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left 2 Cols: Details & Facts */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="p-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-brand-blue" />
+                Client Brief
+              </h4>
+              <p className="text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 leading-relaxed">
+                "{project.clientBrief}"
+              </p>
+            </Card>
+
+            {/* Confirmed Project Facts Knowledge Base */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Project Knowledge Base (Confirmed Facts)
+                </h4>
+                <span className="text-xs text-slate-400 font-mono">
+                  {project.projectFacts?.length || 0} facts recorded
+                </span>
+              </div>
+
+              {project.projectFacts && project.projectFacts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {project.projectFacts.map((f) => (
+                    <div key={f.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-mono font-bold text-indigo-700">{f.factKey}</span>
+                        <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                          {f.confirmationStatus}
+                        </span>
+                      </div>
+                      <div className="text-slate-800 font-medium">
+                        {typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                        <span>Source: {f.sourceRole}</span>
+                        <span>•</span>
+                        <span>Confidence: {f.confidence * 100}%</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  {actor.description}
+              ) : (
+                <p className="text-xs text-slate-400">No confirmed facts recorded yet. As you answer decisions, they appear here.</p>
+              )}
+            </Card>
+          </div>
+
+          {/* Right Col: Interruption Telemetry & Project List */}
+          <div className="space-y-6">
+            {/* Interruption Telemetry */}
+            <Card className="p-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-indigo-600" />
+                Client Interruption Governance
+              </h4>
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Total Questions Asked:</span>
+                  <span className="font-bold text-slate-900">{project.interruptionMetrics?.totalQuestions || 0}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Questions Answered:</span>
+                  <span className="font-bold text-emerald-700">{project.interruptionMetrics?.questionsAnswered || 0}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                  <span className="text-slate-600">Approval Gates:</span>
+                  <span className="font-bold text-indigo-700">{project.interruptionMetrics?.approvalsCount || 0}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+                  TayDau strictly limits client interruptions to essential professional decisions (max 3 questions per role).
                 </p>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* 3. Functional Scope & 4. Business Rules */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Functional Scope */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <Layers className="w-4 h-4 text-purple-600" />
-                3. Functional Scope
-              </span>
-            }
-          >
-            <ul className="space-y-2 text-xs text-slate-700">
-              {baOutput.functionalScope.map((scope, idx) => (
-                <li key={idx} className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>{scope}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          {/* Business Rules */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <Scale className="w-4 h-4 text-amber-600" />
-                4. Mandatory Business Rules
-              </span>
-            }
-          >
-            <ul className="space-y-2 text-xs text-slate-700">
-              {baOutput.businessRules.map((rule, idx) => (
-                <li key={idx} className="flex items-start gap-2 p-2 bg-amber-50/50 border border-amber-200/60 rounded-lg">
-                  <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                    {idx + 1}
-                  </span>
-                  <span className="font-medium text-slate-900 text-[11px]">{rule}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-
-        {/* 5. Risks & 6. Assumptions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Risks */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <AlertTriangle className="w-4 h-4 text-rose-600" />
-                5. Technical & Domain Risks
-              </span>
-            }
-          >
-            <ul className="space-y-2 text-xs text-slate-700">
-              {baOutput.risks.map((risk, idx) => (
-                <li key={idx} className="flex items-start gap-2 p-2 bg-rose-50/50 border border-rose-200/60 rounded-lg">
-                  <span className="text-rose-600 font-bold text-xs shrink-0 mt-0.5">⚠</span>
-                  <span className="text-[11px] text-rose-950 font-medium">{risk}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          {/* Assumptions */}
-          <Card
-            title={
-              <span className="flex items-center gap-2 text-slate-900">
-                <Sparkles className="w-4 h-4 text-brand-blue" />
-                6. Architectural Assumptions
-              </span>
-            }
-          >
-            <ul className="space-y-2 text-xs text-slate-700">
-              {baOutput.assumptions.map((assump, idx) => (
-                <li key={idx} className="flex items-start gap-2 p-2 bg-blue-50/40 border border-blue-200/60 rounded-lg">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0 mt-1.5" />
-                  <span className="text-[11px] text-slate-800">{assump}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      </div>
-
-      {/* 3 Physical Warehouses Topology */}
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-brand-teal" />
-          Multi-Warehouse Physical Topology (3 Regional Warehouses)
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {DEMO_PROJECT_INFO.warehouses.map((wh) => (
-            <Card key={wh.id} className="p-4! space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">{wh.name}</h4>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
-                    <MapPin className="w-3 h-3 text-slate-400" />
-                    {wh.location}
-                  </div>
-                </div>
-                <Badge variant="teal" size="sm">
-                  {wh.capacity}
-                </Badge>
-              </div>
-
-              <div className="space-y-1 text-xs">
-                <div className="flex items-center justify-between text-[11px] text-slate-600">
-                  <span>Capacity Utilization</span>
-                  <span className="font-semibold text-slate-900">{wh.utilization}</span>
-                </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-brand-teal h-full rounded-full"
-                    style={{ width: wh.utilization }}
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>Manager: {wh.manager}</span>
-                <span className="text-brand-blue font-semibold">{wh.activeTransfers} Transfers</span>
-              </div>
             </Card>
-          ))}
+
+            {/* Switch Active Project */}
+            {projectsList.length > 0 && (
+              <Card className="p-6">
+                <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <FolderCheck className="w-4 h-4 text-brand-teal" />
+                  Your Projects ({projectsList.length})
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {projectsList.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => loadProject(p.id)}
+                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all flex items-center justify-between ${
+                        p.id === project?.id
+                          ? 'border-brand-blue bg-blue-50/60 font-semibold text-brand-blue'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{p.name}</span>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                        {p.progress || 0}%
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

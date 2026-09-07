@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Coins,
   Cpu,
@@ -14,70 +14,47 @@ import {
   Layers,
   ArrowUpRight,
   Info,
-  Check,
-  Target
+  DollarSign,
+  Eye
 } from 'lucide-react';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { useSimulation } from '../context/SimulationContext';
+import { useLiveProject } from '../context/LiveProjectContext';
+import { NoProjectState } from '../components/common/NoProjectState';
+import { ROLE_REGISTRY, ORDERED_ROLES, type RoleKey } from '../config/roles';
 
 export const CostGovernor: React.FC = () => {
-  const { costSummary, agents } = useSimulation();
+  const { costSummary: simCostSummary } = useSimulation();
+  const { mode, project } = useLiveProject();
+  const [showDetailedTelemetry, setShowDetailedTelemetry] = useState<boolean>(false);
 
-  const agentBreakdown = [
-    { role: 'Business Analyst', name: 'Brenda Analyst', cost: 0.11, calls: 4, model: 'Fast / Low Cost' },
-    { role: 'Project Manager', name: 'Marcus Planner', cost: 0.18, calls: 8, model: 'Fast / Low Cost' },
-    { role: 'Solution Architect', name: 'Arthur Blueprint', cost: 0.27, calls: 6, model: 'Reasoning' },
-    { role: 'UI/UX Designer', name: 'Uma Prototype', cost: 0.13, calls: 5, model: 'Fast / Low Cost' },
-    { role: 'Full-Stack Engineer', name: 'Devon Coder', cost: 0.81, calls: 32, model: 'Coding' },
-    { role: 'QA Engineer', name: 'Quinn Tester', cost: 0.21, calls: 12, model: 'Coding' },
-    { role: 'Security Specialist', name: 'Samantha Sentinel', cost: 0.13, calls: 7, model: 'Reasoning' }
-  ];
+  if (mode === 'live' && !project) {
+    return (
+      <NoProjectState
+        pageTitle="No Project Costs Yet"
+        message="Start a new project to track real-time token economics, budget boundaries, and per-feature AI costs."
+      />
+    );
+  }
 
-  const routingExamples = [
-    {
-      task: 'Requirement formatting & story extraction',
-      complexity: 'Low',
-      modelClass: 'Fast / Low Cost',
-      badgeVariant: 'neutral' as const,
-      modelName: 'gpt-4o-mini / gemini-1.5-flash',
-      rationale: 'High throughput, deterministic formatting, lowest token cost ($0.15/1M tokens).'
-    },
-    {
-      task: 'Architecture design & concurrency modeling',
-      complexity: 'High',
-      modelClass: 'Reasoning',
-      badgeVariant: 'teal' as const,
-      modelName: 'o1 / claude-3-5-sonnet',
-      rationale: 'Complex state machine topology, ACID isolation boundary synthesis, deep reasoning.'
-    },
-    {
-      task: 'Frontend boilerplate & CRUD handlers',
-      complexity: 'Medium',
-      modelClass: 'Coding',
-      badgeVariant: 'primary' as const,
-      modelName: 'claude-3-5-haiku / qwen-2.5-coder',
-      rationale: 'Fast syntactic code completion and standard component scaffolding.'
-    },
-    {
-      task: 'Failed bug resolution after 2 attempts',
-      complexity: 'Escalated',
-      modelClass: 'Escalated to Stronger Model',
-      badgeVariant: 'amber' as const,
-      modelName: 'claude-3-5-sonnet (High-Reasoning Tier)',
-      rationale: 'Triggered upon 2 consecutive test failures (DEF-03). Escalates with full AST context.'
+  // Calculate live sum across all llmCalls
+  const liveCalls = project?.llmCalls || [];
+  const genuineTotalCost = liveCalls.reduce((acc, c) => acc + (c.costUsd || 0), 0);
+  const verifiedCount = project?.requirements?.filter((r) => r.status === 'approved').length || project?.requirements?.length || 1;
+  const genuineCostPerReq = genuineTotalCost > 0 ? genuineTotalCost / verifiedCount : 0;
+
+  // Breakdown by role
+  const callsByRole: Record<string, { calls: number; inTokens: number; outTokens: number; cost: number; model: string }> = {};
+  for (const c of liveCalls) {
+    if (!callsByRole[c.agentRole]) {
+      callsByRole[c.agentRole] = { calls: 0, inTokens: 0, outTokens: 0, cost: 0, model: c.modelId };
     }
-  ];
-
-  const policies = [
-    { title: 'Activate only required specialists', desc: 'Specialists for ML, Mobile, and Network remain unallocated until explicit requirements trigger them.' },
-    { title: 'Send task-specific context', desc: 'Prunes unrelated repo AST and files, keeping prompts under 4k tokens per call.' },
-    { title: 'Prefer deterministic tools when possible', desc: 'Lints, type checks, and static analysis execute locally via CLI instead of expensive LLM prompts.' },
-    { title: 'Maximum standard retries: 2', desc: 'Prevents infinite autonomous loops by bounding automated fix attempts.' },
-    { title: 'Escalate after repeated failure', desc: 'Automatically swaps to a high-reasoning model tier when standard coder models fail twice.' },
-    { title: 'Require approval if project exceeds budget', desc: 'Hard circuit breaker halts non-critical model calls when 100% of the $5.00 limit is reached.' },
-    { title: 'Track cost per verified requirement', desc: 'Evaluates unit economics by dividing total spend by certified delivery items.' }
-  ];
+    callsByRole[c.agentRole].calls += 1;
+    callsByRole[c.agentRole].inTokens += c.inputTokens;
+    callsByRole[c.agentRole].outTokens += c.outputTokens;
+    callsByRole[c.agentRole].cost += c.costUsd;
+  }
 
   return (
     <div className="space-y-6">
@@ -86,221 +63,194 @@ export const CostGovernor: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Coins className="w-5 h-5 text-amber-600" />
-            Autonomous Cost Governor & Model Routing
+            Cost Governor & Delivery Economics
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time token accounting, tiered model arbitration, retry governor, and per-requirement economics.
+            Real-time multi-agent token economics across all 7 specialized roles with deterministic budget protection.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="teal" size="md">
-            Cost Governor: ACTIVE
-          </Badge>
-          <Badge variant="primary" size="md">
-            Hard Limit: $5.00
-          </Badge>
+          <Badge variant="success" size="md">Mode: FREE_ONLY</Badge>
+          <Badge variant="teal" size="md">Cost Governor: Active</Badge>
+          <Badge variant="primary" size="md">Safety Cap: $5.00</Badge>
         </div>
       </div>
 
-      {/* Core Explanation Callout */}
-      <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl flex items-start gap-3 text-xs">
-        <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-        <div>
-          <strong className="text-amber-950 font-bold block">
-            Cost Governor Philosophy & Dynamic Routing
-          </strong>
-          <span className="text-amber-900 mt-0.5 block leading-relaxed">
-            &ldquo;TayDau Force routes work based on task complexity and tracks AI usage so that stronger models are used only where required.&rdquo;
-          </span>
-        </div>
+      {/* 4 Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total AI Cost</span>
+          <div className="text-2xl font-black text-slate-900 font-mono">
+            ${genuineTotalCost.toFixed(4)}
+          </div>
+          <span className="text-[11px] text-slate-500 block">Actual usage across {liveCalls.length} model call(s)</span>
+        </Card>
+
+        <Card className="p-4 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Budget Protection</span>
+          <div className="text-2xl font-black text-brand-blue font-mono">
+            {((genuineTotalCost / 5.00) * 100).toFixed(2)}%
+          </div>
+          <span className="text-[11px] text-emerald-600 block font-semibold">Capped strictly under $5.00</span>
+        </Card>
+
+        <Card className="p-4 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cost / Verified Feature</span>
+          <div className="text-2xl font-black text-emerald-700 font-mono">
+            ${genuineCostPerReq.toFixed(4)}
+          </div>
+          <span className="text-[11px] text-slate-500 block">Per approved requirement</span>
+        </Card>
+
+        <Card className="p-4 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Tokens</span>
+          <div className="text-2xl font-black text-purple-700 font-mono">
+            {liveCalls.reduce((acc, c) => acc + c.inputTokens + c.outputTokens, 0).toLocaleString()}
+          </div>
+          <span className="text-[11px] text-slate-500 block">Prompt + output tokens</span>
+        </Card>
       </div>
 
-      {/* 6 Key Cost Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current AI Cost</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-slate-900 font-mono">${costSummary.totalCostUsed.toFixed(2)}</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">of $5.00 budget</span>
+      {/* Specialist Role Economic Breakdown (7 Roles) */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-indigo-600" />
+            Specialist Role Economic Breakdown (7 Roles)
+          </h4>
+          <span className="text-xs text-slate-400">All costs derived dynamically from Model Gateway</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-500 text-left">
+                <th className="pb-3 font-semibold">Specialist Role</th>
+                <th className="pb-3 font-semibold">Allocated Model</th>
+                <th className="pb-3 font-semibold text-right">Calls</th>
+                <th className="pb-3 font-semibold text-right">Tokens In</th>
+                <th className="pb-3 font-semibold text-right">Tokens Out</th>
+                <th className="pb-3 font-semibold text-right">Cost (USD)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {ORDERED_ROLES.map((roleDef) => {
+                const stats = callsByRole[roleDef.roleKey];
+                const hasRun = !!stats;
+
+                return (
+                  <tr key={roleDef.roleKey} className="hover:bg-slate-50/60">
+                    <td className="py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center ${roleDef.avatarBg}`}>
+                          {roleDef.avatarText}
+                        </span>
+                        <div>
+                          <span className="font-semibold text-slate-900 block">{roleDef.personaName}</span>
+                          <span className="text-[10px] text-slate-400">{roleDef.displayName}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 font-mono text-slate-600">
+                      {stats?.model || (roleDef.roleKey === 'engineer' || roleDef.roleKey === 'business_analyst' ? 'qwen/qwen3.8-27b' : 'openai/gpt-oss-120b')}
+                    </td>
+                    <td className="py-3 text-right font-mono font-semibold text-slate-700">
+                      {stats?.calls || 0}
+                    </td>
+                    <td className="py-3 text-right font-mono text-slate-600">
+                      {stats?.inTokens ? stats.inTokens.toLocaleString() : '—'}
+                    </td>
+                    <td className="py-3 text-right font-mono text-slate-600">
+                      {stats?.outTokens ? stats.outTokens.toLocaleString() : '—'}
+                    </td>
+                    <td className="py-3 text-right font-mono font-bold text-slate-900">
+                      {stats ? `$${stats.cost.toFixed(4)}` : '$0.0000'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Dynamic Model Routing Telemetry */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-brand-blue" />
+              Evidence-Governed Dynamic Model Routing
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Policy v1.0.0 — Quality Floor First, Cost Optimization Second. Selects cheapest eligible model meeting required capability tiers.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="primary" size="sm">Policy: v1.0.0</Badge>
+            <Badge variant="success" size="sm">Quality Floor: Enforced</Badge>
           </div>
         </div>
 
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project Budget</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-slate-900 font-mono">${(costSummary.totalBudget || 5.00).toFixed(2)}</span>
-            <span className="text-[10px] text-emerald-600 block mt-0.5 font-medium">Hard limit cap</span>
+        {((project as any)?.modelRoutingDecisions && (project as any).modelRoutingDecisions.length > 0) ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 text-left">
+                  <th className="pb-2.5 font-semibold">Specialist</th>
+                  <th className="pb-2.5 font-semibold">Task Type</th>
+                  <th className="pb-2.5 font-semibold">Selected Route</th>
+                  <th className="pb-2.5 font-semibold">Routing Reason</th>
+                  <th className="pb-2.5 font-semibold text-right">Est. Cost</th>
+                  <th className="pb-2.5 font-semibold text-right">Actual Cost</th>
+                  <th className="pb-2.5 font-semibold text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {((project as any).modelRoutingDecisions || []).map((dec: any) => (
+                  <tr key={dec.id || Math.random()} className="hover:bg-slate-50/60">
+                    <td className="py-2.5 font-semibold text-slate-800 capitalize">
+                      {dec.agentRole?.replace(/_/g, ' ')}
+                    </td>
+                    <td className="py-2.5 text-slate-600 font-mono text-[11px]">
+                      {dec.taskType}
+                    </td>
+                    <td className="py-2.5 font-mono text-indigo-700">
+                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[11px] font-semibold">
+                        {dec.selectedProvider}/{dec.selectedModel}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-slate-600">
+                      <span className="text-[11px] font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {dec.routingReason}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-slate-500">
+                      ${(dec.estimatedCostUsd || 0).toFixed(4)}
+                    </td>
+                    <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                      {dec.actualCostUsd !== null ? `$${dec.actualCostUsd.toFixed(4)}` : '—'}
+                    </td>
+                    <td className="py-2.5 text-center">
+                      {dec.degradedMode ? (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold">DEGRADED</span>
+                      ) : dec.validationStatus === 'escalated' ? (
+                        <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded text-[10px] font-bold">ESCALATED</span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold">PASSED</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Budget Used</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-brand-blue font-mono">
-              {((costSummary.totalCostUsed / (costSummary.totalBudget || 5.00)) * 100).toFixed(1)}%
-            </span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">36.8% allocated</span>
+        ) : (
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-4 text-center text-xs text-slate-500">
+            Dynamic routing evaluates capability floors and optimizes costs per task when live workflow runs.
           </div>
-        </div>
-
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Model Calls</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-slate-900 font-mono">74</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">Across 7 roles</span>
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retries</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-amber-700 font-mono">6</span>
-            <span className="text-[10px] text-amber-800 block mt-0.5">Autonomous fixes</span>
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Escalations</span>
-          <div className="mt-2">
-            <span className="text-xl font-bold text-purple-700 font-mono">2</span>
-            <span className="text-[10px] text-purple-800 block mt-0.5">To reasoning tier</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid: Agent Cost Breakdown (6 Cols) & Model Routing (6 Cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Agent Cost Breakdown */}
-        <div className="lg:col-span-6 space-y-4">
-          <Card
-            title={
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-brand-blue" />
-                  Agent Cost Breakdown
-                </span>
-                <span className="text-xs font-mono text-slate-400">7 Core Delivery Agents</span>
-              </div>
-            }
-          >
-            <div className="divide-y divide-slate-100">
-              {agentBreakdown.map((agent, idx) => (
-                <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">{agent.role}</span>
-                      <span className="text-[10px] text-slate-400">({agent.name})</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
-                      <span>Tier: <strong className="text-slate-700">{agent.model}</strong></span>
-                      <span>•</span>
-                      <span>{agent.calls} model calls</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono font-bold text-slate-900 text-sm">
-                      ${agent.cost.toFixed(2)}
-                    </span>
-                    <span className="text-[10px] text-slate-400 block">
-                      {((agent.cost / 1.84) * 100).toFixed(0)}% total
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Special Callout: Cost per Verified Requirement */}
-            <div className="mt-4 pt-3.5 border-t border-slate-100 p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-600 shrink-0" />
-                <div>
-                  <span className="text-xs font-bold text-emerald-950 block">
-                    Cost per Verified Requirement
-                  </span>
-                  <span className="text-[10px] text-emerald-800">
-                    $1.84 total spend / 11 verified production requirements
-                  </span>
-                </div>
-              </div>
-              <span className="text-base font-mono font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
-                $0.17
-              </span>
-            </div>
-          </Card>
-        </div>
-
-        {/* Right Column: Model Routing Examples */}
-        <div className="lg:col-span-6 space-y-4">
-          <Card
-            title={
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-600" />
-                  Model Routing Examples & Tier Allocation
-                </span>
-                <span className="text-xs font-mono text-slate-400">Dynamic Tiering</span>
-              </div>
-            }
-          >
-            <div className="space-y-3">
-              {routingExamples.map((ex, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 text-xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="font-bold text-slate-900 text-xs leading-snug">
-                      {ex.task}
-                    </h4>
-                    <Badge variant={ex.badgeVariant} size="sm">
-                      {ex.complexity}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] font-mono">
-                    <span className="text-slate-500">Model Class:</span>
-                    <strong className="text-brand-blue">{ex.modelClass}</strong>
-                  </div>
-
-                  <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                    {ex.rationale}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* Cost Governor Policies Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-teal-600" />
-            Cost Governor Enforcement Policies
-          </h3>
-          <span className="text-xs text-slate-400 font-mono">7 Active Rules</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {policies.map((p, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-subtle space-y-1"
-            >
-              <div className="flex items-start gap-2">
-                <Check className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                <h4 className="text-xs font-bold text-slate-900 leading-tight">
-                  {p.title}
-                </h4>
-              </div>
-              <p className="text-[11px] text-slate-600 pl-5 leading-relaxed">
-                {p.desc}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+        )}
+      </Card>
     </div>
   );
 };

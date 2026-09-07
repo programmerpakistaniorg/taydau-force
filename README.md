@@ -6,349 +6,215 @@
 
 <p align="center">
   <strong>Autonomous Software Delivery Organization</strong><br>
-  <em>Turn a product brief into planned, developed, independently verified and security-aware software through a governed AI workforce.</em>
+  <em>Turn a product brief into planned, developed, independently reviewed, test-verified, and security-governed software through a governed AI specialist workforce.</em>
 </p>
 
 <p align="center">
   <a href="https://taydau-force.vercel.app" target="_blank">
     <img src="https://img.shields.io/badge/Live%20Demo-taydau--force.vercel.app-blue?style=for-the-badge&logo=vercel" alt="Live Demo" />
   </a>
+  <img src="https://img.shields.io/badge/Status-Live%20MVP-emerald?style=for-the-badge" alt="Status: Live MVP" />
+  <img src="https://img.shields.io/badge/Architecture-Frozen%20Baseline-purple?style=for-the-badge" alt="Architecture Frozen" />
 </p>
 
 ---
 
-TayDau Force is an autonomous software delivery organization designed to coordinate specialized AI roles across the software development lifecycle.
+## 🌟 Executive Overview
 
-This repository currently contains the interactive concept prototype created for the **Alibaba Cloud AI Hackathon Pakistan 2026**.
+**TayDau Force** is an autonomous, multi-agent software delivery organization. Unlike single-prompt code generators or basic chat assistants, TayDau Force operates as a complete, governed engineering company.
 
-> **Status:** Interactive Concept Prototype  
-> The current version uses simulated project data and workflow states. Live AI agent orchestration, Docker-based execution, model calls, and DevSecOps automation are planned for the next implementation stage.
-
-## 🌐 Live Demo
-
-🔗 **Official Deployment:** [https://taydau-force.vercel.app](https://taydau-force.vercel.app)
+It takes a natural language **Client Brief** and autonomously guides it through the entire software delivery lifecycle—synthesizing requirements, asking clarifying domain questions, designing interactive wireframes, creating architectural blueprints, writing production full-stack code, conducting strict code reviews, deriving independent QA acceptance tests, executing sandbox verification, and delivering Git-native release commits.
 
 ---
 
-## Architecture Diagram
+## 🏛️ System Architecture
 
 ![TayDau Force System Architecture](docs/architecture/Architecture-TayDau-Force.png)
 
+### The 12-Stage Governed Delivery Lifecycle
+
+```mermaid
+graph TD
+  A[Client Brief] --> B[1. Business Analysis - Aria]
+  B --> C[2. Requirements Baseline Review - Client Gate]
+  C --> D[3. Project Planning - Marcus]
+  D --> E[4. UI/UX Wireframing - Sofia]
+  E --> F[5. Design Approval - Client Gate]
+  F --> G[6. Technical Architecture - Arthur]
+  G --> H[7. Full-Stack Engineering - Devon]
+  H --> I[8. Code Review & Security Audit - Evelyn]
+  I --> J[9. Independent QA Derivation & Execution - Quinn]
+  J --> K[10. Multi-Service Sandbox Verification]
+  K --> L[11. Release Governance & Zero-Trust Audit]
+  L --> M[12. Git-Native Release Delivery]
+```
+
 ---
 
-## Problem
+## 👥 Autonomous Workforce Architecture
 
-Modern AI coding tools can generate applications quickly, but software delivery still requires structured requirements, planning, architecture, development, independent testing, security checks, deployment, and project-level accountability.
+TayDau Force implements a **two-tier workforce model**: a 7-member **Core Delivery Team** for the standard lifecycle, plus **Dynamic On-Demand Specialists** activated autonomously based on architectural triggers, project complexity, and domain requirements.
 
-TayDau Force focuses on that complete delivery process.
+### 1. Core Specialist Workforce (7 Lifecycle Roles)
 
-## Proposed Solution
+TayDau Force enforces strict role boundaries and governance policies (*e.g., "Developers cannot approve their own code"*):
 
-A user provides a product idea or business requirement.
+| Specialist | Role | Key Responsibilities & Outputs |
+| :--- | :--- | :--- |
+| **Aria Johnson** | **Business Analyst** | Analyzes client brief, asks targeted domain clarification questions, defines user roles, business rules, edge cases, and synthesizes immutable **Requirement Baselines**. |
+| **Marcus Lee** | **Project Manager** | Sequences delivery milestones, resolves dependency DAGs, tracks budget burn-down, and assigns specialist workstreams. |
+| **Sofia Chen** | **UI/UX Designer** | Generates screen flows, component hierarchy, interactive wireframe specs, and live preview mockups for client approval. |
+| **Arthur Pendelton** | **Solution Architect** | Designs data models, REST/FastAPI endpoints, SQLite/PostgreSQL schemas, security boundaries, and Architecture Decision Records (ADRs). |
+| **Devon Vance** | **Full-Stack Engineer** | Implements clean, production-ready backend code, models, database migrations, and business logic. |
+| **Dr. Evelyn Reed** | **Code Reviewer** | Conducts automated architectural compliance reviews, static analysis, and scans for OWASP/security vulnerabilities (`SEC` findings). |
+| **Quinn Harper** | **Independent QA Engineer** | Derives black-box test suites from acceptance criteria, runs sandbox test executions, detects regressions, and logs triage defects (`DEF` items). |
 
-TayDau Force then manages a structured workflow:
+### 2. Dynamic On-Demand Specialists (Trigger-Activated Roles)
 
-Client Idea  
-→ Business Analysis  
-→ Planning  
-→ Architecture  
-→ Dynamic AI Team Assembly  
-→ Development  
-→ Code Review  
-→ QA and Security  
-→ Rework if required  
-→ Verified Build  
-→ Deployment  
-→ Monitoring  
-→ Next Iteration
+When a project requires specialized capabilities beyond the core pipeline, the **Project Manager (Marcus)** and **Solution Architect (Arthur)** dynamically summon on-demand specialists:
 
-The system is designed around specialized AI roles, shared project state, independent verification, security controls, and budget-aware model usage.
+| Specialist | Role | Dynamic Activation Triggers | Specialization & Outputs |
+| :--- | :--- | :--- | :--- |
+| **Dylan Ops** | **DevOps & Release Engineer** | Staging / Production release gates, Docker Compose multi-service topology, CI/CD orchestration. | CI/CD pipelines, container orchestration, environment blueprints, release manifests. |
+| **Darius Data** | **Database Specialist** | Complex relational queries, high-throughput transactions, concurrency lock contention (`SELECT FOR UPDATE`). | PostgreSQL index tuning, isolation level optimization, migration scripts, vacuuming strategies. |
+| **Samantha Sentinel** | **Security Specialist** | Authentication endpoints, RBAC matrices, sensitive data handling, `SEC-001` finding remediation. | OWASP threat modeling, SAST rule audits, zero-trust security attestations, secret scanning. |
+| **Nathan Net** | **Network Specialist** | Multi-region VPC peering, edge DNS routing, DDoS mitigation policies. | VPC subnet topology, firewall rules, edge load balancer configs. |
+| **Maya Learner** | **Machine Learning Specialist** | Demand forecasting, predictive analytics, recommendation algorithms, vector embeddings. | Model training pipelines, time-series forecasting weights, embedding pipelines. |
+| **Milo Mobile** | **Mobile Specialist** | Native hardware integrations (barcode/RFID scanners, mobile companion apps). | React Native modules, mobile client scaffolding, hardware driver interfaces. |
+| **Alex OpsAI** | **AIOps & Observability** | Post-deployment telemetry, high-volume log anomaly detection, automated error remediation. | Anomaly clustering, distributed tracing dashboards, SLA drift monitoring. |
 
-## Current Prototype
+---
 
-The current prototype demonstrates the planned TayDau Force workflow using static client-side mock data.
+## ⚡ Core Platform Capabilities
 
-Included modules:
+### 1. Dynamic Model Router (`FREE_ONLY` Multi-Provider Engine)
+- **Zero-Cost Inference**: Built-in dynamic router with zero out-of-pocket inference cost mode (`INFERENCE_BILLING_MODE=FREE_ONLY`).
+- **Supported Providers**: Groq Cloud, Google AI Studio (Gemini), OpenRouter (`glm-5.3-flash:free`, etc.), NVIDIA NIM, and Mistral AI.
+- **Automated Fallback**: Graceful degradation to secondary free providers or deterministic mock fallbacks when upstream rate limits occur.
 
-- **Overview Dashboard**: Executive KPIs, 12-stage lifecycle track, active workforce, demo activity feed.
-- **Project and Business Analysis**: Original client brief, actors, functional scope, 4 business rules, risks, assumptions, 3-warehouse topology.
-- **Requirements and Traceability**: 10 core requirements matrix with interactive right-side traceability detail drawer (ACs, tasks, code files, tests, QA and Security attestations).
-- **System Architecture**: 8-stage visual pipeline cards, selected tech stack strip, side panels (Shared Project Intelligence & Cost Governor), and Architecture Decision Records (ADR-001..004).
-- **Dynamic AI Workforce**: 7 Core Team roles, 6 On-Demand Specialists (Activated vs Not Required vs Planned), dynamic assembly rationale, and explicit Agent Permissions matrix (Can / Cannot rules).
-- **Execution Kanban Board**: 7 workflow lanes (Backlog, Ready, In Development, Code Review, QA, Ready for Release, Done), task inspector drawer, and simulated agent activity stream.
-- **QA and Security Review**: Quality metrics (42 unit / 17 integration / 9 E2E), requirement coverage, policy card (*"Developers cannot approve their own work"*), QA orchestration flow, 6 automated security checks, SEC-001 finding, and release gate.
-- **Defect Management**: Defect register tracking DEF-01 through DEF-04 with auto-triage to Full-Stack Engineer and UI/UX Designer.
-- **Cost Governor**: Real-time spend tracking ($1.84 used / $5.00 limit), agent cost breakdown, model routing examples, 7 enforcement policies, and Cost per Verified Requirement KPI ($0.17).
-- **Delivery and Release Readiness**: 11-item software delivery manifest, release gate rationale, interactive Zero-Trust Verification Evidence Register modal, and complete 12-stage organizational lifecycle.
+### 2. Live Interactive Wireframes & Preview Manager
+- Full visual wireframe synthesis for client validation before code generation.
+- Isolated sandbox iframe preview manager with automatic orphan process cleanup and lifetime tracking.
 
-## Demo Project
+### 3. Independent Quality & Defect Governance
+- **Strict Separation of Concerns**: QA tests are derived directly from requirements without access to implementation internals.
+- **Automated Defect Lifecycle**: Failing test assertions automatically open defects (`DEF-01..DEF-04`) with root-cause routing back to Devon (Engineering) or Sofia (Design).
 
-The prototype uses the following sample project:
+### 4. Real-Time Event-Driven Streaming
+- Real-time Server-Sent Events (SSE) event pipeline (`/api/projects/:id/events`) with durable event logging in PostgreSQL and client reconnect replay.
 
-### Smart Inventory Management System
+### 5. Cost Governor & Budget Enforcement
+- Real-time token usage telemetry tracking input/output tokens per specialist.
+- Hard project budget limit with automated halting if limits are approached.
 
-The system is designed for a company operating three warehouses (Austin Central, Chicago North Hub, Houston Port Terminal).
+### 6. Git-Native Delivery & Audit Traceability
+- Complete end-to-end lineage: `Client Brief → Requirement Code → Task Code → Source File → QA Test Run → Git Commit SHA`.
 
-The sample requirements include:
+---
 
-- `REQ-001` User authentication
-- `REQ-002` Role-based access (RBAC)
-- `REQ-003` Product catalog management
-- `REQ-004` Warehouse management
-- `REQ-005` Stock receiving
-- `REQ-006` Stock transfers (Multi-warehouse atomic concurrency)
-- `REQ-007` Low-stock threshold alerts
-- `REQ-008` Inventory dashboard
-- `REQ-009` FIFO valuation reports
-- `REQ-010` Cryptographic audit history
+## 🛠️ Technology Stack
 
-## Interactive Simulation
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, React Router v6, Lucide Icons
+- **Backend**: Node.js, Express, TypeScript (`tsx`), PostgreSQL (`pg`), Zod validation
+- **Orchestration**: Custom autonomous state machine with durable stage transitions
+- **AI Gateway**: Multi-provider LLM Gateway (Groq, Gemini, OpenRouter, NVIDIA, Mistral) with streaming & structured JSON parsing
+- **Database**: PostgreSQL 16 (Relational state, event logs, artifact manifests)
 
-The prototype includes a controlled workflow simulation.
+---
 
-Example sequence:
+## 🚀 Quick Start Guide
 
-1. Full-Stack Engineer completes a task (`TASK-12 Stock Transfer API`)
-2. Task moves to QA
-3. QA executes concurrency test (`TEST-23`)
-4. Test fails (race condition over-allocation detected)
-5. QA rejects the task
-6. Defect `DEF-03` is created automatically
-7. Project Manager reassigns the work
-8. Engineer applies simulated fix (Pessimistic `SELECT FOR UPDATE` lock)
-9. QA retests concurrency suite (100 parallel threads)
-10. Test passes
-11. Requirement `REQ-006` becomes verified
+### Prerequisites
+1. **Node.js** v18+ installed
+2. **PostgreSQL** (running locally on port `5432` or via cloud provider like [Neon.tech](https://neon.tech))
+3. At least one **Free API Key** (e.g., [Groq Cloud](https://console.groq.com/keys) or [Google AI Studio](https://aistudio.google.com/))
 
-This simulation demonstrates the planned orchestration model. It does not currently invoke live AI agents.
+---
 
-## Core Architecture
-
-TayDau Force is designed as a layered autonomous software delivery system.
-
-### 1. Business and Product Intelligence
-
-Includes:
-- Business Analyst Agent
-- Project Manager Agent
-- Requirements, business rules, user stories, acceptance criteria, security requirements
-
-### 2. Rapid Prototyping and Validation
-
-Includes:
-- Rapid prototype
-- Client validation
-- User feedback
-- Iterative refinement
-
-### 3. Architecture and Workforce Assembly
-
-Includes:
-- Solution Architect Agent
-- Technical architecture, data model, integration design
-- Architecture Decision Records (ADRs)
-- Dynamic workforce allocation, agent permissions, task routing
-
-### 4. Execution Engine
-
-Core roles:
-- UI/UX Designer
-- Full-Stack Engineer
-- Code Review Agent
-- QA Engineer
-- DevOps Engineer
-
-On-demand specialists:
-- Database Specialist (Activated)
-- Security Specialist (Activated)
-- Network Specialist (Not Required)
-- AIOps and Monitoring Specialist (Planned)
-- Mobile or ML Specialist (Not Required)
-
-### 5. Quality, Security and Governance
-
-Includes:
-- Independent QA verification
-- Requirement traceability
-- Threat modelling, SAST, DAST, dependency scanning, secret scanning
-- Defect management and security release checks
-
-A core policy is:
-> **Developers cannot approve their own work.**
-
-### 6. Platform, DevSecOps and Operations
-
-Planned implementation:
-- Docker sandboxes
-- Git-based version control
-- GitHub Actions CI/CD
-- Kubernetes for scale-out orchestration
-- Alibaba Cloud ACK deployment
-- Monitoring, backup, and disaster recovery policies
-
-## Shared Project Intelligence
-
-All agents work from shared project state:
-- Unified requirement & task state graph
-- Cross-agent semantic memory
-- Context resolver with AST prompt pruning
-- Commit and test execution lineage
-- Architecture decision records
-- Cryptographic audit trail
-
-This prevents agents from maintaining separate and conflicting interpretations of the project.
-
-## Cost Governor
-
-TayDau Force treats AI cost as a first-class engineering constraint:
-- Tiered task-to-model routing (Fast / Low Cost vs Coding vs Reasoning)
-- Hard project token budgets ($5.00 limit)
-- Dynamic context optimization (AST pruning under 4k tokens)
-- Standard retry limits (max 2 attempts before escalation)
-- Budget-aware escalation to higher reasoning tiers
-- Unit economics: **Cost per Verified Requirement ($0.17)**
-
-## Security Approach
-
-TayDau Force does not assume AI-generated software is secure:
-- Security requirements and threat modelling
-- Least-privilege permissions and sandbox isolation
-- Dependency, secret, and SAST scanning
-- Role-Based Access Control (RBAC) authorization validation
-- Security findings tracked as release-blocking defects (`SEC-001`)
-- Post-deployment telemetry and audit logging
-
-## How TayDau Force Differs
-
-TayDau Force is not just an AI coding interface — it is a complete governed software delivery organization:
-- **Project-Level Orchestration**: Coordinates specialized roles from brief to release.
-- **Dynamic AI Workforce Assembly**: Activates specialists only when triggered by specifications.
-- **Shared Project State**: Single source of truth across all autonomous roles.
-- **Traceability**: Direct lineage from client brief &rarr; acceptance criteria &rarr; code commits &rarr; test assertions &rarr; release gate.
-- **Separation of Implementation and Verification**: Independent QA agents validate code against acceptance criteria.
-- **Integrated DevSecOps**: Zero-trust security gates before release sign-off.
-- **Cost-Aware Routing**: Tiered models prevent budget blowouts.
-- **Evidence-Based Delivery**: Release decisions backed by verifiable test and security artifacts.
-
-## Technology Stack
-
-**Current Prototype:**
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- React Router v6
-- Lucide React
-- Local mock state engine
-
-**Planned Implementation:**
-- Alibaba Cloud AI / Qwen 2.5 models
-- Model Gateway & Context Resolver
-- Autonomous Agent Orchestration Service
-- PostgreSQL & Redis (Shared Project Graph)
-- Docker & Kubernetes (ACK)
-- GitHub Actions CI/CD
-- Semgrep & Trivy (DevSecOps scanners)
-- Alibaba Cloud OSS & ECS/ACK hosting
-
-## Run Locally
-
-Clone the repository:
+### Step 1: Clone & Install
 
 ```bash
 git clone https://github.com/programmerpakistaniorg/taydau-force.git
-cd taydau-force
-```
+cd "taydau-force"
 
-Install dependencies:
-
-```bash
+# Install frontend dependencies
 npm install
+
+# Install backend dependencies
+cd server
+npm install
+cd ..
 ```
-
-Run the development server:
-
-```bash
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:5173
-```
-
-Build the production version:
-
-```bash
-npm run build
-```
-
-Preview the production build:
-
-```bash
-npm run preview
-```
-
-## Project Structure
-
-```text
-src/
-├── components/
-│   ├── common/             # Badges, Cards, Modals, Drawers, StatusPills
-│   └── layout/             # Header, Sidebar, AppLayout, Footer
-├── context/
-│   └── SimulationContext.tsx # 11-step interactive simulation state machine
-├── data/
-│   └── mockData.ts         # BA brief, 10 reqs, tasks, ADRs, agents, defects
-├── pages/
-│   ├── Overview.tsx        # Hero landing, 4 capability cards, KPIs, lifecycle
-│   ├── Project.tsx         # Business Analyst output, actors, rules, risks
-│   ├── Requirements.tsx    # 10 reqs matrix + Traceability Detail Drawer
-│   ├── Architecture.tsx    # Pipeline flow, tech stack, ADR-001..004
-│   ├── Workforce.tsx       # 7 Core + 6 Specialists + Agent Permissions
-│   ├── Execution.tsx       # 7-Lane Kanban, task inspector, simulated activity
-│   ├── QASecurity.tsx      # Quality tests, SEC-001 finding, release readiness
-│   ├── CostGovernor.tsx    # Budget metrics, model routing, $0.17/req KPI
-│   └── Delivery.tsx        # 11-item manifest, blocked gate, evidence modal
-├── types/
-│   └── index.ts            # Complete TypeScript domain interfaces
-├── App.tsx                 # Route mapping (BrowserRouter)
-├── index.css               # Design system tokens and styling
-└── main.tsx                # React entry point
-```
-
-## Current Status
-
-**Completed:**
-* System Requirements Specification (SRS) & Architecture Design
-* Agent role definition & permissions model
-* 12-stage autonomous software delivery lifecycle
-* Security & DevSecOps governance model
-* Cost governor & tiered model routing design
-* Interactive concept prototype
-* 11-step interactive simulation engine
-* Requirement-to-test traceability interface
-* Independent QA & security gate interface
-* Verified software delivery package manifest
-
-**Next Implementation Stage:**
-* Connect live Alibaba Cloud Qwen / AI Foundry models
-* Persistent shared project graph (PostgreSQL/Vector DB)
-* Docker container execution sandboxes
-* Git repository integration with automated pull requests
-* Real-time PyTest & Playwright test execution
-* Automated SAST & dependency vulnerability scanning
-* Live token expenditure telemetry
-* Deployed end-to-end generated application on Alibaba Cloud ACK
 
 ---
 
-## Hackathon
+### Step 2: Configure Environment Variables
 
-TayDau Force is being developed for:
+Create `server/.env` (or configure existing `server/.env`):
 
-**Alibaba Cloud AI Hackathon Pakistan 2026**
+```env
+PORT=3001
+DATABASE_URL=postgresql://taydau:taydau@localhost:5432/taydau
 
-Team: TayDau Force
-Team Members : Tayyab & Daud
+# Free Inference Mode
+INFERENCE_BILLING_MODE=FREE_ONLY
+MODEL_PROVIDER=groq
+
+# Free API Keys (Add at least one)
+GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=
+OPENROUTER_API_KEY=
+NVIDIA_API_KEY=
+MISTRAL_API_KEY=
+```
+
+---
+
+### Step 3: Run Database Migrations
+
+Apply all database schemas and tables:
+
+```bash
+npm run migrate
+```
+
+---
+
+### Step 4: Run TayDau Force
+
+Start the backend server and frontend development server:
+
+```bash
+# Terminal 1: Start Backend (Port 3001)
+npm run server
+
+# Terminal 2: Start Frontend (Port 5173)
+npm run dev
+```
+
+Open your browser at:
+👉 **`http://localhost:5173`**
+
+---
+
+## 🧪 Project Verification & Testing
+
+To run the full suite of automated verification gates across all 7 stages and multi-provider routing:
+
+```bash
+# Verify backend TypeScript compilation
+cd server && npm run build && cd ..
+
+# Verify frontend TypeScript compilation & build
+npm run build
+```
+
+---
+
+## 🏆 Hackathon Details
+
+**Project**: TayDau Force  
+**Hackathon**: Alibaba Cloud AI Hackathon Pakistan 2026  
+**Team**: TayDau Force  
+**Founding Engineers**: Muhammad Tayyab & Daud  
+**Mission**: Building the world's most disciplined autonomous software engineering workforce.

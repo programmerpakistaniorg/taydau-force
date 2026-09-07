@@ -1377,8 +1377,8 @@ export const INITIAL_DELIVERY_ITEMS: DeliveryItem[] = [
 ];
 
 export const DEMO_PROJECT_INFO = {
-  name: 'Smart Inventory Management System',
-  clientRequirement: 'Build a web-based inventory system for a company with three warehouses. Staff should manage stock, record transfers, receive low-stock alerts, and managers should view inventory reports.',
+  name: 'Smart Wholesale Inventory System',
+  clientRequirement: 'Build a simple web-based inventory system where our team can add products, update stock quantities, and receive automatic alerts when items drop below safety thresholds.',
   company: 'Apex Logistics Global',
   targetSLA: '99.9% Uptime',
   analysisStatus: 'Analysis Complete',
