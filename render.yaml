@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: taydau-force-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm run migrate && npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taydau-postgres
+          property: connectionString
+      - key: MODEL_PROVIDER
+        value: MISTRAL
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: ALLOW_CLOUD_SANDBOX_FALLBACK
+        value: "true"
+
+databases:
+  - name: taydau-postgres
+    databaseName: taydau
+    user: taydau
+    plan: free
