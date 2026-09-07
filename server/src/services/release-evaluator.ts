@@ -89,7 +89,7 @@ export async function evaluateReleaseReadiness(projectId: string): Promise<Relea
     passed: openDefects === 0,
     details: openDefects === 0
       ? '0 open product defects'
-      : `${openDefects} unresolved open defect(s): ${defectRes.rows.map((d) => d.code).join(', ')}`,
+      : `${openDefects} unresolved open defect(s): ${defectRes.rows.map((d: any) => d.code).join(', ')}`,
   });
 
   // Check 5: Code Review Clearance (Explicit Blocking Gate)

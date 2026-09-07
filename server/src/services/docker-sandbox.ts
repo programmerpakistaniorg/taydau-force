@@ -106,8 +106,8 @@ export async function materializeWorkspace(
         }
         if (!initExists) {
           const files = await fs.readdir(dirPath);
-          const pyFiles = files.filter((f) => f.endsWith('.py') && f !== '__init__.py');
-          const exports = pyFiles.map((f) => `from .${f.replace('.py', '')} import *`).join('\n');
+          const pyFiles = files.filter((f: string) => f.endsWith('.py') && f !== '__init__.py');
+          const exports = pyFiles.map((f: string) => `from .${f.replace('.py', '')} import *`).join('\n');
           await fs.writeFile(initPath, exports + '\n', 'utf8');
         }
       }
@@ -248,7 +248,7 @@ export async function executeSandboxTests(
       }
     });
 
-    child.on('error', (err) => {
+    child.on('error', (err: any) => {
       if (finished) return;
       finished = true;
       clearTimeout(timeoutHandle);
@@ -283,7 +283,7 @@ export async function executeSandboxTests(
       });
     });
 
-    child.on('close', (exitCode) => {
+    child.on('close', (exitCode: number | null) => {
       if (finished) return;
       finished = true;
       clearTimeout(timeoutHandle);
@@ -426,7 +426,7 @@ async function verifyTestIsolation(
         res({ exitCode: -1 });
       }, timeoutMs);
 
-      child.on('close', (code) => {
+      child.on('close', (code: number | null) => {
         clearTimeout(timer);
         res({ exitCode: code });
       });

@@ -64,7 +64,7 @@ export class QuestionPolicy {
       'SELECT fact_key, status, question FROM client_interactions WHERE project_id = $1 AND status IN (\'pending\', \'answered\')',
       [projectId]
     );
-    const existingFactKeys = new Set(existingInteractions.rows.map((r) => r.fact_key));
+    const existingFactKeys = new Set(existingInteractions.rows.map((r: any) => r.fact_key));
 
     // 3. Evaluate each proposed question
     for (const q of proposed) {
