@@ -1,6 +1,13 @@
 import type { FullProjectResponse, ProjectSummary } from '../types/api';
 
-export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+function getApiBase(): string {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (!envUrl) return '/api';
+  const clean = envUrl.replace(/\/$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+}
+
+export const API_BASE = getApiBase();
 
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   const res = await fetch(`${API_BASE}/projects`);

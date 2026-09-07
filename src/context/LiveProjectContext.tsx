@@ -135,7 +135,11 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       setActiveProjectId(id);
       localStorage.setItem('taydau_active_project_id', id);
     } catch (err: any) {
-      setError(err.message || 'Failed to load project');
+      console.warn(`[LiveProjectContext] Project ${id} failed to load. Clearing stale ID:`, err);
+      localStorage.removeItem('taydau_active_project_id');
+      setActiveProjectId(null);
+      setProject(null);
+      setError(null);
     } finally {
       setIsLoading(false);
     }
@@ -155,13 +159,18 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       const list = await api.fetchProjects();
       setProjectsList(list);
-      if (!activeProjectId && list.length > 0) {
-        loadProject(list[0].id);
+      // If no active project or active project is not in server list, pick the latest
+      if (list.length > 0) {
+        const storedId = localStorage.getItem('taydau_active_project_id');
+        const isValidStored = storedId && list.some((p) => p.id === storedId);
+        if (!isValidStored) {
+          await loadProject(list[0].id);
+        }
       }
     } catch (err: any) {
       console.error('Failed to fetch projects list:', err);
     }
-  }, [activeProjectId, loadProject]);
+  }, [loadProject]);
 
   // Real-Time SSE Stream with Fallback Polling
   useEffect(() => {

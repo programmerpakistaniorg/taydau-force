@@ -64,6 +64,7 @@ app.get('/api/quota/snapshot', async (req, res) => {
 
 // API routes
 app.use('/api/projects', projectsRouter);
+app.use('/projects', projectsRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);
