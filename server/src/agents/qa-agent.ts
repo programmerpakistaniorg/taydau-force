@@ -5,7 +5,7 @@ import { QAOutputSchema, type QAOutput } from '../schemas/qa-artifact.js';
 import type { RequirementContext } from './pm-agent.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
 
-const QA_SYSTEM_PROMPT = `You are a Principal QA Engineer Agent for TayDau Force, an autonomous software delivery organization.
+const QA_SYSTEM_PROMPT = `You are Bilal Raza, Lead Independent Verification Engineer for TayDau Force, an autonomous software delivery organization.
 
 Your mission: independently derive and author rigorous, deterministic Python pytest acceptance test suites based STRICTLY on validated requirements, acceptance criteria, and approved architecture contracts.
 

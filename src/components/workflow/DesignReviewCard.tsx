@@ -43,7 +43,7 @@ export const DesignReviewCard: React.FC<DesignReviewCardProps> = ({
   const currentScreen = screens[selectedScreenIndex] || screens[0];
   const designSystem = designSpec.design?.designSystem;
   const userFlows = designSpec.design?.userFlows || [];
-  const sofiaRole = ROLE_REGISTRY.ui_ux_designer;
+  const fatimaRole = ROLE_REGISTRY.ui_ux_designer;
 
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +58,8 @@ export const DesignReviewCard: React.FC<DesignReviewCardProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-xl ${sofiaRole.avatarBg} font-bold flex items-center justify-center text-lg shadow-sm border border-pink-100`}>
-            {sofiaRole.avatarText}
+          <div className={`w-12 h-12 rounded-xl ${fatimaRole.avatarBg} font-bold flex items-center justify-center text-lg shadow-sm border border-pink-100`}>
+            {fatimaRole.avatarText}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export const DesignReviewCard: React.FC<DesignReviewCardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sofia Designer has generated visual product screens matching your approved requirements.
+              Fatima Zahra has generated visual product screens matching your approved requirements.
             </p>
           </div>
         </div>
@@ -284,7 +284,7 @@ export const DesignReviewCard: React.FC<DesignReviewCardProps> = ({
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <h3 className="text-base font-bold text-slate-900">Request Design Adjustments</h3>
             <p className="text-xs text-slate-600">
-              Sofia Designer will revise the visual presentation. If your request introduces new functional scope, it will automatically route to Aria Analyst for requirements change control.
+              Fatima Zahra will revise the visual presentation. If your request introduces new functional scope, it will automatically route to Sana Tariq for requirements change control.
             </p>
             <form onSubmit={handleFeedbackSubmit} className="space-y-4">
               <textarea
@@ -309,7 +309,7 @@ export const DesignReviewCard: React.FC<DesignReviewCardProps> = ({
                   disabled={!feedback.trim() || isLoading}
                   className="px-4 py-2 text-xs font-semibold text-white bg-pink-600 hover:bg-pink-700 rounded-xl disabled:opacity-50"
                 >
-                  Submit Revision to Sofia
+                  Submit Revision to Fatima
                 </button>
               </div>
             </form>

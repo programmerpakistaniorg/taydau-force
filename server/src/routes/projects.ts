@@ -50,17 +50,18 @@ function classifyFeedbackScope(feedback: string): 'design_only' | 'possible_scop
 // POST /api/projects — create project and start autonomous human-team delivery
 router.post('/', async (req, res, next) => {
   try {
-    const { name, clientBrief } = req.body;
+    const { name, clientBrief, autonomyMode } = req.body;
     if (!clientBrief || typeof clientBrief !== 'string' || clientBrief.trim().length < 10) {
       res.status(400).json({ error: 'clientBrief is required and must be at least 10 characters' });
       return;
     }
 
     const projectName = name || 'Untitled Project';
+    const mode = autonomyMode === 'supervised' ? 'supervised' : 'auto_pilot';
 
     const result = await query(
-      'INSERT INTO projects (name, client_brief, status) VALUES ($1, $2, $3) RETURNING *',
-      [projectName, clientBrief.trim(), 'submitted']
+      'INSERT INTO projects (name, client_brief, status, autonomy_mode) VALUES ($1, $2, $3, $4) RETURNING *',
+      [projectName, clientBrief.trim(), 'submitted', mode]
     );
     const project = result.rows[0];
 
@@ -95,6 +96,7 @@ router.post('/', async (req, res, next) => {
       id: project.id,
       name: project.name,
       status: project.status,
+      autonomyMode: project.autonomy_mode || mode,
       createdAt: project.created_at,
       message: 'Project created. Autonomous delivery organization started.',
     });
@@ -357,7 +359,7 @@ router.post('/:id/approvals/:approvalId/request-changes', async (req, res, next)
       `${approval.artifact_type} v${approval.artifact_version} (Scope: ${classification})`,
       'approval',
       'Revision Requested',
-      `Feedback: "${feedback.trim()}". Routing to ${classification === 'possible_scope_change' ? 'Aria Analyst (Change Control)' : 'Sofia Designer (Design Revision)'}.`
+      `Feedback: "${feedback.trim()}". Routing to ${classification === 'possible_scope_change' ? 'Sana Tariq (Change Control)' : 'Fatima Zahra (Design Revision)'}.`
     );
 
     await EventEmitterService.emit({
@@ -446,11 +448,50 @@ router.post('/:id/advance', async (req, res, next) => {
   }
 });
 
+// PATCH /api/projects/:id/autonomy-mode — toggle between auto_pilot and supervised
+router.patch('/:id/autonomy-mode', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { autonomyMode } = req.body;
+    if (autonomyMode !== 'auto_pilot' && autonomyMode !== 'supervised') {
+      res.status(400).json({ error: 'autonomyMode must be either "auto_pilot" or "supervised"' });
+      return;
+    }
+
+    await query(`UPDATE projects SET autonomy_mode = $1, updated_at = now() WHERE id = $2`, [autonomyMode, id]);
+
+    await WorkflowService.logActivity(
+      id,
+      'System',
+      'system',
+      'switched autonomy mode to',
+      autonomyMode === 'auto_pilot' ? 'Auto-Pilot (Hands-Free)' : 'Supervised (Manual Gates)',
+      'system',
+      'Autonomy Mode Changed',
+      `Project execution mode updated to ${autonomyMode}.`
+    );
+
+    // If switching to auto_pilot and currently waiting for client, trigger runUntilBlocked
+    if (autonomyMode === 'auto_pilot') {
+      const wf = await WorkflowService.getWorkflow(id);
+      if (wf && wf.stageStatus === 'waiting_for_client') {
+        runUntilBlocked(id, gateway).catch((err) => {
+          console.error(`[orchestrator] Error resuming in auto_pilot mode for project ${id}:`, err);
+        });
+      }
+    }
+
+    res.json({ success: true, autonomyMode });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/projects — list projects
 router.get('/', async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT p.id, p.name, p.client_brief, p.status, p.created_at, p.updated_at,
+      `SELECT p.id, p.name, p.client_brief, p.status, p.autonomy_mode, p.created_at, p.updated_at,
               pw.stage, pw.stage_status, pw.progress, pw.next_action_type
        FROM projects p
        LEFT JOIN project_workflows pw ON p.id = pw.project_id
@@ -462,6 +503,7 @@ router.get('/', async (req, res, next) => {
         name: r.name,
         clientBrief: r.client_brief,
         status: r.status,
+        autonomyMode: r.autonomy_mode || 'auto_pilot',
         stage: r.stage || 'created',
         stageStatus: r.stage_status || 'pending',
         progress: r.progress || 0,
@@ -582,6 +624,7 @@ router.get('/:id', async (req, res, next) => {
       name: project.name,
       clientBrief: project.client_brief,
       status: project.status,
+      autonomyMode: project.autonomy_mode || 'auto_pilot',
       createdAt: project.created_at,
       updatedAt: project.updated_at,
       workflow,

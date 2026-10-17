@@ -6,6 +6,7 @@ export interface ProjectSummary {
   stage?: string;
   stageStatus?: string;
   progress?: number;
+  autonomyMode?: 'auto_pilot' | 'supervised';
   createdAt: string;
   updatedAt: string;
 }
@@ -388,6 +389,7 @@ export interface FullProjectResponse {
   name: string;
   clientBrief: string;
   status: string;
+  autonomyMode?: 'auto_pilot' | 'supervised';
   createdAt: string;
   updatedAt: string;
   workflow: ProjectWorkflow;

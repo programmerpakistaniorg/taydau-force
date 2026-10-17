@@ -397,7 +397,7 @@ export class MultiServiceSandbox {
         eventType: 'verification.completed',
         stage: 'independent_qa',
         actorRole: 'qa_engineer',
-        actorName: 'Quinn Tester',
+        actorName: 'Bilal Raza',
         summary: `Multi-service verification ${result.status} (run: ${result.runId}).`,
         payload: {
           runId: result.runId,

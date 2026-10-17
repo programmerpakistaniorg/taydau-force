@@ -19,8 +19,10 @@ interface LiveProjectContextType {
   connectionStatus: 'connected' | 'reconnecting' | 'fallback_polling' | 'disconnected';
   error: string | null;
   currentProgressMessage: string;
+  autonomyMode: 'auto_pilot' | 'supervised';
+  setAutonomyMode: (mode: 'auto_pilot' | 'supervised') => Promise<void>;
   loadProject: (id: string) => Promise<void>;
-  createProject: (name: string, clientBrief: string) => Promise<string>;
+  createProject: (name: string, clientBrief: string, autonomyMode?: 'auto_pilot' | 'supervised') => Promise<string>;
   answerInteraction: (interactionId: string, answer: any) => Promise<void>;
   approveRequest: (approvalId: string) => Promise<void>;
   requestChanges: (approvalId: string, feedback: string) => Promise<void>;
@@ -75,19 +77,19 @@ function getProgressMessage(project: FullProjectResponse | null): string {
     switch (wf.stage) {
       case 'created':
       case 'business_analysis':
-        return `${roleDef?.personaName || 'Aria Analyst'} is analyzing your business idea and extracting testable requirements...`;
+        return `${roleDef?.personaName || 'Sana Tariq'} is analyzing your business idea and extracting testable requirements...`;
       case 'project_planning':
-        return `${roleDef?.personaName || 'Marcus Planner'} is sequencing milestones, risk mitigation, and specialist allocation...`;
+        return `${roleDef?.personaName || 'Tayyab Ahmed'} is sequencing milestones, risk mitigation, and specialist allocation...`;
       case 'ui_ux_design':
-        return `${roleDef?.personaName || 'Sofia Designer'} is generating wireframe layouts and interactive product preview...`;
+        return `${roleDef?.personaName || 'Fatima Zahra'} is generating wireframe layouts and interactive product preview...`;
       case 'technical_architecture':
-        return `${roleDef?.personaName || 'Arthur Blueprint'} is designing the FastAPI service architecture and SQLite schema...`;
+        return `${roleDef?.personaName || 'Daud Farooq'} is designing the FastAPI service architecture and SQLite schema...`;
       case 'implementation':
-        return `${roleDef?.personaName || 'Devon Coder'} is generating production Python 3.11 source code...`;
+        return `${roleDef?.personaName || 'Ali Hassan'} is generating production Python 3.11 source code...`;
       case 'code_review':
-        return `${roleDef?.personaName || 'Dr. Evelyn Auditor'} is auditing architectural compliance and scanning for security findings...`;
+        return `${roleDef?.personaName || 'Dr. Usman Siddiqui'} is auditing architectural compliance and scanning for security findings...`;
       case 'independent_qa':
-        return `${roleDef?.personaName || 'Quinn Tester'} is deriving acceptance tests & executing in isolated sandbox...`;
+        return `${roleDef?.personaName || 'Bilal Raza'} is deriving acceptance tests & executing in isolated sandbox...`;
       case 'security_review':
       case 'release_evaluation':
         return 'Verifying release readiness across all 7 quality gates...';
@@ -116,6 +118,13 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'fallback_polling' | 'disconnected'>('disconnected');
   const [error, setError] = useState<string | null>(null);
+  const [autonomyMode, setAutonomyModeState] = useState<'auto_pilot' | 'supervised'>('auto_pilot');
+
+  useEffect(() => {
+    if (project?.autonomyMode) {
+      setAutonomyModeState(project.autonomyMode);
+    }
+  }, [project?.autonomyMode]);
 
   const pollTimerRef = useRef<any>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -285,11 +294,24 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []);
 
-  const createProject = async (name: string, clientBrief: string): Promise<string> => {
+  const setAutonomyMode = async (newMode: 'auto_pilot' | 'supervised') => {
+    setAutonomyModeState(newMode);
+    if (activeProjectId) {
+      try {
+        await api.updateAutonomyMode(activeProjectId, newMode);
+        await refreshProject();
+      } catch (err: any) {
+        console.error('Failed to update autonomy mode:', err);
+        setError(err.message || 'Failed to update autonomy mode');
+      }
+    }
+  };
+
+  const createProject = async (name: string, clientBrief: string, selectedAutonomy: 'auto_pilot' | 'supervised' = 'auto_pilot'): Promise<string> => {
     setIsActionInProgress(true);
     setError(null);
     try {
-      const newProj = await api.createProject(name, clientBrief);
+      const newProj = await api.createProject(name, clientBrief, selectedAutonomy);
       setActiveProjectId(newProj.id);
       localStorage.setItem('taydau_active_project_id', newProj.id);
       await loadProject(newProj.id);
@@ -443,6 +465,8 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         connectionStatus,
         error,
         currentProgressMessage: getProgressMessage(project),
+        autonomyMode,
+        setAutonomyMode,
         loadProject,
         createProject,
         answerInteraction,

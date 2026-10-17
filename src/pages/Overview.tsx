@@ -50,7 +50,9 @@ export const Overview: React.FC = () => {
     pauseProject,
     resumeProject,
     endProject,
-    clearActiveProject
+    clearActiveProject,
+    autonomyMode,
+    setAutonomyMode
   } = useLiveProject();
 
   // Form states
@@ -210,9 +212,9 @@ export const Overview: React.FC = () => {
       index: 1,
       roleKey: 'business_analyst' as RoleKey,
       roleName: 'Business Analyst',
-      personName: 'Aria Johnson',
+      personName: 'Sana Tariq',
       avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-      initials: 'AJ',
+      initials: 'ST',
       yPos: 25,
       isCompleted: Boolean(workflow?.approvedRequirementBaselineId || (project?.requirementBaselines && project.requirementBaselines.length > 0)),
       isWorking: stage === 'business_analysis' || (stage === 'requirements_review' && stageStatus === 'running'),
@@ -230,9 +232,9 @@ export const Overview: React.FC = () => {
       index: 2,
       roleKey: 'project_manager' as RoleKey,
       roleName: 'Project Manager',
-      personName: 'Marcus Lee',
+      personName: 'Tayyab Ahmed',
       avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      initials: 'ML',
+      initials: 'TA',
       yPos: 75,
       isCompleted: Boolean(project?.tasks && project.tasks.length > 0 && progress >= 35),
       isWorking: stage === 'project_planning' && stageStatus === 'running',
@@ -250,9 +252,9 @@ export const Overview: React.FC = () => {
       index: 3,
       roleKey: 'ui_ux_designer' as RoleKey,
       roleName: 'UI/UX Designer',
-      personName: 'Sofia Martinez',
+      personName: 'Fatima Zahra',
       avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-      initials: 'SM',
+      initials: 'FZ',
       yPos: 125,
       isCompleted: Boolean(workflow?.approvedDesignSpecId || (project?.designSpecs && project.designSpecs.length > 0 && progress >= 50)),
       isWorking: stage === 'ui_ux_design' || (stage === 'design_review' && stageStatus === 'running'),
@@ -270,9 +272,9 @@ export const Overview: React.FC = () => {
       index: 4,
       roleKey: 'architect' as RoleKey,
       roleName: 'Solution Architect',
-      personName: 'Arthur Pendelton',
+      personName: 'Daud Farooq',
       avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      initials: 'AP',
+      initials: 'DF',
       yPos: 175,
       isCompleted: Boolean(project?.architecture && progress >= 60),
       isWorking: stage === 'architecture' && stageStatus === 'running',
@@ -290,9 +292,9 @@ export const Overview: React.FC = () => {
       index: 5,
       roleKey: 'engineer' as RoleKey,
       roleName: 'Full-Stack Developer',
-      personName: 'Devon Brown',
+      personName: 'Ali Hassan',
       avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      initials: 'DB',
+      initials: 'AH',
       yPos: 225,
       isCompleted: Boolean(project?.codeArtifacts && project.codeArtifacts.length > 0 && progress >= 75),
       isWorking: stage === 'engineering' && stageStatus === 'running',
@@ -310,9 +312,9 @@ export const Overview: React.FC = () => {
       index: 6,
       roleKey: 'reviewer' as RoleKey,
       roleName: 'Code Reviewer',
-      personName: 'Dr. Evelyn Vance',
+      personName: 'Dr. Usman Siddiqui',
       avatarUrl: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
-      initials: 'EV',
+      initials: 'US',
       yPos: 275,
       isCompleted: Boolean(progress >= 85),
       isWorking: stage === 'code_review' && stageStatus === 'running',
@@ -330,9 +332,9 @@ export const Overview: React.FC = () => {
       index: 7,
       roleKey: 'qa_engineer' as RoleKey,
       roleName: 'Independent QA',
-      personName: 'Quinn Quality',
+      personName: 'Bilal Raza',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      initials: 'QQ',
+      initials: 'BR',
       yPos: 325,
       isCompleted: stage === 'completed' || Boolean(project?.qaTestArtifacts && project.qaTestArtifacts.length > 0 && progress >= 100),
       isWorking: stage === 'testing' && stageStatus === 'running',
@@ -357,31 +359,31 @@ export const Overview: React.FC = () => {
       return { stageText: 'Awaiting project prompt', nextText: 'Enter your business idea to begin delivery loop' };
     }
     if (stage === 'business_analysis') {
-      return { stageText: 'Aria is analyzing business requirements', nextText: 'Requirements Baseline Approval' };
+      return { stageText: 'Sana Tariq is analyzing business requirements', nextText: 'Requirements Baseline Approval' };
     }
     if (stage === 'requirements_review') {
       return { stageText: 'Requirements Baseline ready for client review', nextText: 'Review and approve requirements' };
     }
     if (stage === 'project_planning') {
-      return { stageText: 'Marcus is planning delivery roadmap & tasks', nextText: 'UI/UX Visual Design' };
+      return { stageText: 'Tayyab Ahmed is planning delivery roadmap & tasks', nextText: 'UI/UX Visual Design' };
     }
     if (stage === 'ui_ux_design') {
-      return { stageText: 'Sofia is synthesizing interactive UI/UX design', nextText: 'Design Screen Approval' };
+      return { stageText: 'Fatima Zahra is synthesizing interactive UI/UX design', nextText: 'Design Screen Approval' };
     }
     if (stage === 'design_review') {
-      return { stageText: 'Sofia is waiting for design screen approval', nextText: 'Review and approve design wireframes' };
+      return { stageText: 'Fatima Zahra is waiting for design screen approval', nextText: 'Review and approve design wireframes' };
     }
     if (stage === 'architecture') {
-      return { stageText: 'Arthur is generating system architecture & schema', nextText: 'Full Stack Engineering' };
+      return { stageText: 'Daud Farooq is generating system architecture & schema', nextText: 'Full Stack Engineering' };
     }
     if (stage === 'engineering') {
-      return { stageText: 'Devon is coding backend services and APIs', nextText: 'Code Review & Security Audit' };
+      return { stageText: 'Ali Hassan is coding backend services and APIs', nextText: 'Code Review & Security Audit' };
     }
     if (stage === 'code_review') {
-      return { stageText: 'Dr. Evelyn is conducting independent code review', nextText: 'Automated QA Verification' };
+      return { stageText: 'Dr. Usman Siddiqui is conducting independent code review', nextText: 'Automated QA Verification' };
     }
     if (stage === 'testing') {
-      return { stageText: 'Quinn is executing automated QA in isolated sandbox', nextText: 'Final Release Delivery' };
+      return { stageText: 'Bilal Raza is executing automated QA in isolated sandbox', nextText: 'Final Release Delivery' };
     }
     return { stageText: '100% Release Ready & Verified', nextText: 'Deployment & Client Handover' };
   };
@@ -411,11 +413,41 @@ export const Overview: React.FC = () => {
           <span className="font-bold text-slate-800">Current Stage:</span>
           <span className="text-slate-600">{stageSummary.stageText}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">Next:</span>
-          <span className="font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60">
-            {stageSummary.nextText}
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400">Next:</span>
+            <span className="font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60">
+              {stageSummary.nextText}
+            </span>
+          </div>
+
+          {/* Autonomy Mode Switcher */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setAutonomyMode('auto_pilot')}
+              className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                autonomyMode === 'auto_pilot'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Full autonomy: agents auto-answer questions with recommended choices & auto-approve baselines"
+            >
+              <span>⚡</span> Auto-Pilot
+            </button>
+            <button
+              type="button"
+              onClick={() => setAutonomyMode('supervised')}
+              className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                autonomyMode === 'supervised'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Supervised: requires your manual decision on questions and baseline approvals"
+            >
+              <span>👤</span> Supervised
+            </button>
+          </div>
         </div>
       </div>
 
@@ -428,7 +460,7 @@ export const Overview: React.FC = () => {
             </div>
             <div>
               <h4 className="text-sm font-bold text-amber-950">
-                Aria Analyst needs your input ({pendingInteractions.length} question
+                Sana Tariq needs your input ({pendingInteractions.length} question
                 {pendingInteractions.length > 1 ? 's' : ''})
               </h4>
               <p className="text-xs text-amber-800">
@@ -462,8 +494,8 @@ export const Overview: React.FC = () => {
               </h4>
               <p className="text-xs text-blue-700">
                 {pendingApproval.artifactType === 'requirements'
-                  ? 'Aria Analyst has synthesized testable requirements. Review and approve to proceed.'
-                  : 'Sofia Designer has synthesized visual screen designs. Review and approve to proceed.'}
+                  ? 'Sana Tariq has synthesized testable requirements. Review and approve to proceed.'
+                  : 'Fatima Zahra has synthesized visual screen designs. Review and approve to proceed.'}
               </p>
             </div>
           </div>
@@ -1080,7 +1112,7 @@ export const Overview: React.FC = () => {
                 <Code2 className="w-8 h-8 text-slate-300 mx-auto" />
                 <p className="text-xs font-bold text-slate-700">Source files have not been generated yet</p>
                 <p className="text-xs text-slate-400">
-                  Devon Coder will generate modular application files during the Full-Stack Developer stage.
+                  Ali Hassan will generate modular application files during the Full-Stack Developer stage.
                 </p>
               </div>
             )}
@@ -1168,13 +1200,13 @@ export const Overview: React.FC = () => {
         {activeBottomTab === 'phases' && (
           <div className="space-y-3 text-xs">
             {[
-              { num: '01', name: 'Business Analysis', agent: 'Aria Analyst', isDone: Boolean(workflow?.approvedRequirementBaselineId), isCurr: stage === 'business_analysis' },
-              { num: '02', name: 'Delivery Planning', agent: 'Marcus Planner', isDone: Boolean(project?.tasks?.length && progress >= 35), isCurr: stage === 'project_planning' },
-              { num: '03', name: 'Experience Design', agent: 'Sofia Designer', isDone: Boolean(workflow?.approvedDesignSpecId), isCurr: stage === 'ui_ux_design' || stage === 'design_review' },
-              { num: '04', name: 'Solution Architecture', agent: 'Arthur Architect', isDone: Boolean(project?.architecture), isCurr: stage === 'architecture' },
-              { num: '05', name: 'Full-Stack Development', agent: 'Devon Coder', isDone: Boolean(project?.codeArtifacts?.length && progress >= 75), isCurr: stage === 'engineering' },
-              { num: '06', name: 'Independent Review', agent: 'Dr. Evelyn Vance', isDone: progress >= 85, isCurr: stage === 'code_review' },
-              { num: '07', name: 'Automated QA & Security', agent: 'Quinn QA', isDone: stage === 'completed' || Boolean(project?.qaTestArtifacts?.length), isCurr: stage === 'testing' },
+              { num: '01', name: 'Business Analysis', agent: 'Sana Tariq', isDone: Boolean(workflow?.approvedRequirementBaselineId), isCurr: stage === 'business_analysis' },
+              { num: '02', name: 'Delivery Planning', agent: 'Tayyab Ahmed', isDone: Boolean(project?.tasks?.length && progress >= 35), isCurr: stage === 'project_planning' },
+              { num: '03', name: 'Experience Design', agent: 'Fatima Zahra', isDone: Boolean(workflow?.approvedDesignSpecId), isCurr: stage === 'ui_ux_design' || stage === 'design_review' },
+              { num: '04', name: 'Solution Architecture', agent: 'Daud Farooq', isDone: Boolean(project?.architecture), isCurr: stage === 'architecture' },
+              { num: '05', name: 'Full-Stack Development', agent: 'Ali Hassan', isDone: Boolean(project?.codeArtifacts?.length && progress >= 75), isCurr: stage === 'engineering' },
+              { num: '06', name: 'Independent Review', agent: 'Dr. Usman Siddiqui', isDone: progress >= 85, isCurr: stage === 'code_review' },
+              { num: '07', name: 'Automated QA & Security', agent: 'Bilal Raza', isDone: stage === 'completed' || Boolean(project?.qaTestArtifacts?.length), isCurr: stage === 'testing' },
               { num: '08', name: 'Deployment & Delivery', agent: 'System DevOps', isDone: stage === 'completed', isCurr: stage === 'completed' },
             ].map((p) => (
               <div

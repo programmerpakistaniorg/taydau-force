@@ -22,11 +22,11 @@ export async function fetchProject(id: string): Promise<FullProjectResponse> {
   return res.json();
 }
 
-export async function createProject(name: string, clientBrief: string): Promise<{ id: string; name: string; status: string }> {
+export async function createProject(name: string, clientBrief: string, autonomyMode: 'auto_pilot' | 'supervised' = 'auto_pilot'): Promise<{ id: string; name: string; status: string; autonomyMode: string }> {
   const res = await fetch(`${API_BASE}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, clientBrief }),
+    body: JSON.stringify({ name, clientBrief, autonomyMode }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -129,6 +129,19 @@ export async function endProject(id: string): Promise<{ success: boolean; messag
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to end project');
+  }
+  return res.json();
+}
+
+export async function updateAutonomyMode(id: string, autonomyMode: 'auto_pilot' | 'supervised'): Promise<{ success: boolean; autonomyMode: string; message: string }> {
+  const res = await fetch(`${API_BASE}/projects/${id}/autonomy-mode`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ autonomyMode }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to update autonomy mode');
   }
   return res.json();
 }

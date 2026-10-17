@@ -467,7 +467,7 @@ export class WorkflowService {
           return {
             type: 'approve_requirements',
             label: 'Review & Approve Requirements',
-            description: 'Aria has prepared the requirements baseline for your approval.',
+            description: 'Sana Tariq has prepared the requirements baseline for your approval.',
             requiresUser: true,
             targetRoute: '/requirements',
             entityId: app.id,
@@ -476,7 +476,7 @@ export class WorkflowService {
           return {
             type: 'approve_design',
             label: 'Review & Approve Wireframes',
-            description: 'Sofia has prepared the interactive product preview for your review.',
+            description: 'Fatima Zahra has prepared the interactive product preview for your review.',
             requiresUser: true,
             targetRoute: '/architecture',
             entityId: app.id,

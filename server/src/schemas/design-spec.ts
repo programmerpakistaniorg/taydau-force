@@ -66,7 +66,7 @@ export const DesignSystemSchema = z.object({
 });
 
 /**
- * Structured 16-field DesignRead capturing Sofia's holistic domain, audience, and constraint analysis.
+ * Structured 16-field DesignRead capturing Fatima Zahra's holistic domain, audience, and constraint analysis.
  * Differentiates client-explicit confirmed facts from inferred design choices.
  */
 export const DesignReadSchema = z.object({

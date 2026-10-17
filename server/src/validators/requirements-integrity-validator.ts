@@ -20,8 +20,8 @@ const VAGUE_PLACEHOLDERS = [
 
 export class RequirementsIntegrityValidator {
   /**
-   * Deterministically validates Aria's output against the Workforce Constitution V2
-   * and Aria Analyst Specification V2.
+   * Deterministically validates Sana Tariq's output against the Workforce Constitution V2
+   * and Business Analyst Specification V2.
    */
   public static validate(
     projectId: string,

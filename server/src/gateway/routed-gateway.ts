@@ -609,7 +609,19 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
   }
 
   private stripMarkdownFences(content: string): string {
-    let clean = content.trim();
+    let clean = (content || '').trim();
+
+    // 1. Strip reasoning blocks: <think>...</think> or <thought>...</thought>
+    clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    clean = clean.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+
+    // 2. Extract content from markdown fenced code blocks if present
+    const fencedJsonMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fencedJsonMatch && fencedJsonMatch[1]) {
+      return fencedJsonMatch[1].trim();
+    }
+
+    // 3. Fallback: strip leading and trailing backticks if any remain
     if (clean.startsWith('```json')) {
       clean = clean.slice(7);
     } else if (clean.startsWith('```')) {
@@ -618,6 +630,7 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     if (clean.endsWith('```')) {
       clean = clean.slice(0, -3);
     }
+
     return clean.trim();
   }
 
@@ -625,32 +638,63 @@ ${JSON.stringify(jsonSchema, null, 2)}`;
     jsonStr: string,
     schema: z.ZodSchema<T>
   ): { success: true; data: T } | { success: false; error: string } {
-    try {
-      const parsed = JSON.parse(jsonStr);
-      const valResult = schema.safeParse(parsed);
-      if (valResult.success) {
-        return { success: true, data: valResult.data };
-      }
-      return { success: false, error: JSON.stringify(valResult.error.issues) };
-    } catch (e: any) {
-      // Try extracting embedded JSON object from anywhere in the output (e.g. after thinking text)
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (lastBrace !== -1) {
-        for (let i = 0; i < lastBrace; i++) {
-          if (jsonStr[i] === '{') {
-            const candidate = jsonStr.substring(i, lastBrace + 1);
-            try {
-              const candidateParsed = JSON.parse(candidate);
-              const valResult = schema.safeParse(candidateParsed);
-              if (valResult.success) {
-                return { success: true, data: valResult.data };
-              }
-            } catch {}
+    const sanitizeJson = (str: string): string => {
+      // Remove trailing commas before closing braces or brackets: [1, 2,] -> [1, 2]
+      return str.replace(/,\s*([\]}])/g, '$1');
+    };
+
+    const tryParseCandidate = (candidate: string) => {
+      try {
+        const parsed = JSON.parse(candidate);
+        const valResult = schema.safeParse(parsed);
+        if (valResult.success) {
+          return { success: true as const, data: valResult.data };
+        }
+      } catch {
+        try {
+          const sanitized = sanitizeJson(candidate);
+          const parsed = JSON.parse(sanitized);
+          const valResult = schema.safeParse(parsed);
+          if (valResult.success) {
+            return { success: true as const, data: valResult.data };
           }
+        } catch {}
+      }
+      return null;
+    };
+
+    // Attempt direct parse first
+    const direct = tryParseCandidate(jsonStr);
+    if (direct) return direct;
+
+    // Try extracting embedded JSON object from anywhere in the output
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = jsonStr.substring(firstBrace, lastBrace + 1);
+      const res = tryParseCandidate(candidate);
+      if (res) return res;
+
+      // Iterative scan if nested text exists
+      for (let i = 0; i < lastBrace; i++) {
+        if (jsonStr[i] === '{') {
+          const subCandidate = jsonStr.substring(i, lastBrace + 1);
+          const subRes = tryParseCandidate(subCandidate);
+          if (subRes) return subRes;
         }
       }
-      return { success: false, error: `Invalid JSON syntax: ${e.message}` };
     }
+
+    // Also check for JSON arrays
+    const firstBracket = jsonStr.indexOf('[');
+    const lastBracket = jsonStr.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      const candidate = jsonStr.substring(firstBracket, lastBracket + 1);
+      const res = tryParseCandidate(candidate);
+      if (res) return res;
+    }
+
+    return { success: false, error: `Invalid JSON syntax or schema mismatch in model response` };
   }
 
   private generateFallbackContent(request: ModelGatewayRequest): any {

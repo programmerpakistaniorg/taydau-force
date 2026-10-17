@@ -13,6 +13,7 @@ export interface DesignIntegrityValidationResult {
 // in arbitrary project designs unless explicitly requested in client brief.
 const FORBIDDEN_PORTFOLIO_CANARIES = [
   'sofia studio',
+  'fatima studio',
   'selected work',
   'featured client case studies',
   'crafting high-converting digital experiences',
@@ -28,7 +29,7 @@ const FORBIDDEN_PORTFOLIO_CANARIES = [
 
 export class DesignIntegrityValidator {
   /**
-   * Deterministically validates Sofia Designer's output against project scope,
+   * Deterministically validates Fatima Zahra's output against project scope,
    * hard tenancy, requirement lineage, and anti-contamination rules.
    */
   public static validate(

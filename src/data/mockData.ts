@@ -64,7 +64,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-ba',
     role: 'Business Analyst Agent',
-    name: 'Aria Analyst',
+    name: 'Sana Tariq',
     status: 'Completed',
     specialization: 'Requirements Elicitation, User Stories, Acceptance Criteria (Given-When-Then), Business Rules',
     isCoreTeam: true,
@@ -90,7 +90,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-pm',
     role: 'Project Manager Agent',
-    name: 'Marcus Planner',
+    name: 'Tayyab Ahmed',
     status: 'Active',
     specialization: 'Task Graph Scheduling, Dependency Mapping, Autonomous Workforce Routing, Defect Triage',
     isCoreTeam: true,
@@ -167,7 +167,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-dev',
     role: 'Full-Stack Engineer',
-    name: 'Devon Coder',
+    name: 'Ali Hassan',
     status: 'Working',
     specialization: 'React, TypeScript, FastAPI, PostgreSQL Transactions, Row-Level Locking, Docker Services',
     isCoreTeam: true,
@@ -194,7 +194,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-qa',
     role: 'QA Engineer',
-    name: 'Quinn Tester',
+    name: 'Bilal Raza',
     status: 'Testing',
     specialization: 'End-to-End Playwright, Concurrency Race Condition Testing, Unit/Integration Test Generation',
     isCoreTeam: true,
@@ -1264,13 +1264,13 @@ export const INITIAL_COST_SUMMARY: CostSummary = {
   verifiedRequirements: 8,
   costPerVerifiedReq: 0.23,
   breakdown: [
-    { agentRole: 'Full-Stack Engineer', agentName: 'Devon Coder', model: 'Claude 3.7 Sonnet', calls: 32, tokens: '142.5k', costUsd: 0.81 },
-    { agentRole: 'Solution Architect', agentName: 'Sophia Architect', model: 'o3-mini (Reasoning)', calls: 8, tokens: '54.2k', costUsd: 0.27 },
-    { agentRole: 'QA Engineer', agentName: 'Quinn Tester', model: 'GPT-4o-mini', calls: 14, tokens: '68.1k', costUsd: 0.21 },
-    { agentRole: 'Project Manager', agentName: 'Marcus Planner', model: 'GPT-4o', calls: 9, tokens: '38.4k', costUsd: 0.18 },
-    { agentRole: 'Security Specialist', agentName: 'Samantha Sentinel', model: 'Claude 3.5 Sonnet', calls: 5, tokens: '26.8k', costUsd: 0.13 },
-    { agentRole: 'UI/UX Designer', agentName: 'Elena Design', model: 'Claude 3.5 Sonnet', calls: 4, tokens: '22.0k', costUsd: 0.13 },
-    { agentRole: 'Business Analyst', agentName: 'Aria Analyst', model: 'Claude 3.5 Sonnet', calls: 2, tokens: '18.4k', costUsd: 0.11 }
+    { agentRole: 'Full-Stack Engineer', agentName: 'Ali Hassan', model: 'Claude 3.7 Sonnet', calls: 32, tokens: '142.5k', costUsd: 0.81 },
+    { agentRole: 'Solution Architect', agentName: 'Daud Farooq', model: 'o3-mini (Reasoning)', calls: 8, tokens: '54.2k', costUsd: 0.27 },
+    { agentRole: 'QA Engineer', agentName: 'Bilal Raza', model: 'GPT-4o-mini', calls: 14, tokens: '68.1k', costUsd: 0.21 },
+    { agentRole: 'Project Manager', agentName: 'Tayyab Ahmed', model: 'GPT-4o', calls: 9, tokens: '38.4k', costUsd: 0.18 },
+    { agentRole: 'Code Reviewer', agentName: 'Dr. Usman Siddiqui', model: 'Claude 3.5 Sonnet', calls: 5, tokens: '26.8k', costUsd: 0.13 },
+    { agentRole: 'UI/UX Designer', agentName: 'Fatima Zahra', model: 'Claude 3.5 Sonnet', calls: 4, tokens: '22.0k', costUsd: 0.13 },
+    { agentRole: 'Business Analyst', agentName: 'Sana Tariq', model: 'Claude 3.5 Sonnet', calls: 2, tokens: '18.4k', costUsd: 0.11 }
   ]
 };
 

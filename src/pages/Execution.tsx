@@ -78,7 +78,7 @@ export const Execution: React.FC = () => {
         title: t.title,
         requirementCode: 'REQ-001 / REQ-002 / REQ-003',
         assignedAgent: 'Software Engineer',
-        ownerDisplay: 'Devon Coder',
+        ownerDisplay: 'Ali Hassan',
         status: (isDone ? 'done' : 'in_development') as KanbanLane,
         priority: (t.priority || 'High') as any,
         branch: 'live-mvp',

@@ -39,7 +39,7 @@ export const DeliveryPlanCard: React.FC<DeliveryPlanCardProps> = ({ project }) =
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Marcus Planner has organized delivery into sequenced workstreams and allocated dynamic specialists.
+              Tayyab Ahmed has organized delivery into sequenced workstreams and allocated dynamic specialists.
             </p>
           </div>
         </div>

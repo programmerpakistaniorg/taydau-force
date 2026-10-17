@@ -421,7 +421,7 @@ export const QASecurity: React.FC = () => {
               3. Independent Code Review & Architectural Audit
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Conducted by <strong>Dr. Evelyn Auditor (openai/gpt-oss-120b)</strong>. Distinguishes advisory maintainability from release blockers.
+              Conducted by <strong>Dr. Usman Siddiqui (openai/gpt-oss-120b)</strong>. Distinguishes advisory maintainability from release blockers.
             </p>
           </div>
           <div className="flex items-center gap-2">

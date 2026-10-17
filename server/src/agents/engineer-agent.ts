@@ -8,7 +8,7 @@ import type { ArchitectureOutput } from '../schemas/architecture.js';
 import type { DesignSpec } from '../schemas/design-spec.js';
 import { ManifestService } from '../services/manifest-service.js';
 
-const ENGINEER_SYSTEM_PROMPT = `You are an Implementation Software Engineer for TayDau Force, an autonomous software delivery organization.
+const ENGINEER_SYSTEM_PROMPT = `You are Ali Hassan, Senior Full-Stack Engineer for TayDau Force, an autonomous software delivery organization.
 
 Your job: generate complete, runnable full-stack software project source code files strictly implementing the approved architecture specification, design contract, implementation tasks, and requirements.
 

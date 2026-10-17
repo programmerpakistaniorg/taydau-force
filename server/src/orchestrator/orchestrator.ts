@@ -31,6 +31,7 @@ import { getRemainingBudget } from '../services/cost-telemetry.js';
 import { QuestionPolicy } from '../services/question-policy.js';
 import { WorkflowService, type WorkflowStage } from '../services/workflow-service.js';
 import { ManifestService } from '../services/manifest-service.js';
+import { ROLE_REGISTRY } from '../config/roles.js';
 import type { TaskOutput } from '../schemas/task.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
 import type { QAOutput } from '../schemas/qa-artifact.js';
@@ -147,6 +148,14 @@ export async function runUntilBlocked(projectId: string, gateway: ModelGateway):
     }
   } catch (err: any) {
     console.error(`[orchestrator] Error in runUntilBlocked for project ${projectId}:`, err);
+    try {
+      const wf = await WorkflowService.getWorkflow(projectId);
+      if (wf && wf.stageStatus === 'running') {
+        await WorkflowService.failStage(projectId, wf.stage, 'EXECUTION_ERROR', err?.message || 'Workflow execution error', wf.activeRole || 'system');
+      }
+    } catch (failErr) {
+      console.error(`[orchestrator] Failed to record stage failure for ${projectId}:`, failErr);
+    }
   } finally {
     activeRunners.delete(projectId);
   }
@@ -165,9 +174,12 @@ async function executeBAStep(
   const claimed = await WorkflowService.claimRun(projectId, runnerId, 'business_analysis', 'business_analyst');
   if (!claimed) return;
 
+  const projModeRes = await query(`SELECT autonomy_mode FROM projects WHERE id = $1`, [projectId]);
+  const isAutoPilot = (projModeRes.rows[0]?.autonomy_mode || 'auto_pilot') === 'auto_pilot';
+
   await WorkflowService.logActivity(
     projectId,
-    'Aria Analyst',
+    ROLE_REGISTRY.business_analyst.personaName,
     'business_analyst',
     'started business analysis on',
     'client brief',
@@ -204,31 +216,72 @@ async function executeBAStep(
           evalResult.allowedQuestions
         );
 
-        await WorkflowService.logActivity(
-          projectId,
-          'Aria Analyst',
-          'business_analyst',
-          'requested business clarification on',
-          `${evalResult.allowedQuestions.length} decision point(s)`,
-          'interaction',
-          'Clarification Requested',
-          `Proposed ${evalResult.allowedQuestions.map((q) => q.factKey).join(', ')}`
-        );
+        if (isAutoPilot) {
+          // Auto-Pilot: automatically answer using recommendedOption or first option
+          for (const q of evalResult.allowedQuestions) {
+            const answer = q.recommendedOption || (Array.isArray(q.options) && q.options.length > 0 ? q.options[0] : 'Standard default');
+            await withTransaction(async (client) => {
+              await client.query(
+                `UPDATE client_interactions SET status = 'answered', answer_jsonb = $1, answered_at = now() WHERE project_id = $2 AND fact_key = $3`,
+                [JSON.stringify(answer), projectId, q.factKey]
+              );
+              await QuestionPolicy.saveFact(client, {
+                projectId,
+                factKey: q.factKey,
+                category: 'client_decision',
+                value: answer,
+                sourceRole: 'business_analyst',
+                sourceType: 'agent_inference',
+                sourceReference: `auto_pilot:${q.factKey}`,
+                confirmationStatus: 'assumed',
+                confidence: 0.95,
+              });
+            });
+            confirmedFacts[q.factKey] = answer;
+          }
 
-        const nextAction = await WorkflowService.synthesizeNextAction(projectId);
-        await WorkflowService.waitForClient(projectId, 'business_analysis', 'business_analyst', nextAction);
+          await WorkflowService.logActivity(
+            projectId,
+            ROLE_REGISTRY.business_analyst.personaName,
+            'business_analyst',
+            'auto-selected recommended option for',
+            `${evalResult.allowedQuestions.length} decision point(s) in Auto-Pilot mode`,
+            'interaction',
+            'Auto-Pilot Decisions',
+            `Auto-Pilot selected recommended choices: ${evalResult.allowedQuestions.map((q) => `${q.factKey} = ${q.recommendedOption || q.options?.[0]}`).join(', ')}`
+          );
 
-        await EventEmitterService.emit({
-          projectId,
-          eventType: 'interaction.required',
-          stage: 'business_analysis',
-          actorRole: 'business_analyst',
-          actorName: 'Aria Analyst',
-          summary: `Aria Analyst requested clarification on ${evalResult.allowedQuestions.length} decision point(s).`,
-          payload: { questionCount: evalResult.allowedQuestions.length },
-        }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+          // Now synthesize requirements directly with updated facts
+          baResult = await runBAAgent(gateway, clientBrief, projectId, confirmedFacts, {
+            clientFeedback: 'Synthesize concrete, testable requirements incorporating confirmed auto-pilot decisions.',
+          });
+        } else {
+          await WorkflowService.logActivity(
+            projectId,
+            ROLE_REGISTRY.business_analyst.personaName,
+            'business_analyst',
+            'requested business clarification on',
+            `${evalResult.allowedQuestions.length} decision point(s)`,
+            'interaction',
+            'Clarification Requested',
+            `Proposed ${evalResult.allowedQuestions.map((q) => q.factKey).join(', ')}`
+          );
 
-        return;
+          const nextAction = await WorkflowService.synthesizeNextAction(projectId);
+          await WorkflowService.waitForClient(projectId, 'business_analysis', 'business_analyst', nextAction);
+
+          await EventEmitterService.emit({
+            projectId,
+            eventType: 'interaction.required',
+            stage: 'business_analysis',
+            actorRole: 'business_analyst',
+            actorName: ROLE_REGISTRY.business_analyst.personaName,
+            summary: `${ROLE_REGISTRY.business_analyst.personaName} requested clarification on ${evalResult.allowedQuestions.length} decision point(s).`,
+            payload: { questionCount: evalResult.allowedQuestions.length },
+          }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
+
+          return;
+        }
       }
     }
 
@@ -246,7 +299,7 @@ async function executeBAStep(
         projectId,
         'business_analysis',
         'REQUIREMENTS_INTEGRITY_VIOLATION',
-        `Aria Analyst output failed integrity validation: ${valResult.errors.join('; ')}`,
+        `${ROLE_REGISTRY.business_analyst.personaName} output failed integrity validation: ${valResult.errors.join('; ')}`,
         'business_analyst'
       );
       return;
@@ -310,7 +363,7 @@ async function executeBAStep(
           JSON.stringify({
             type: 'approve_requirements',
             label: 'Review & Approve Requirements',
-            description: 'Aria has synthesized the requirements baseline for your review and approval.',
+            description: `${ROLE_REGISTRY.business_analyst.personaName} has synthesized the requirements baseline for your review and approval.`,
             requiresUser: true,
             targetRoute: '/requirements',
             entityId: approvalId,
@@ -327,7 +380,7 @@ async function executeBAStep(
       eventType: 'approval.required',
       stage: 'requirements_review',
       actorRole: 'business_analyst',
-      actorName: 'Aria Analyst',
+      actorName: ROLE_REGISTRY.business_analyst.personaName,
       summary: 'Requirements Baseline ready for client review and approval.',
       payload: {
         approvalId: createdApprovalId,
@@ -339,7 +392,7 @@ async function executeBAStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Aria Analyst',
+      ROLE_REGISTRY.business_analyst.personaName,
       'business_analyst',
       'completed requirements baseline with',
       `${baResult.requirements.length} verified requirement(s)`,
@@ -347,6 +400,29 @@ async function executeBAStep(
       'Requirements Baseline Created',
       `Objective: ${baResult.businessObjective}. Requirements: ${baResult.requirements.map((r) => r.code).join(', ')}`
     );
+
+    if (isAutoPilot) {
+      await query(
+        `UPDATE approval_requests SET status = 'approved', decided_at = now() WHERE id = $1`,
+        [createdApprovalId]
+      );
+      await query(
+        `UPDATE requirements SET status = 'approved' WHERE project_id = $1`,
+        [projectId]
+      );
+      await WorkflowService.logActivity(
+        projectId,
+        ROLE_REGISTRY.business_analyst.personaName,
+        'business_analyst',
+        'auto-approved requirements baseline under',
+        'Auto-Pilot mode',
+        'approval',
+        'Requirements Auto-Approved',
+        `Autonomous delivery pipeline accepted ${baResult.requirements.length} verified requirement(s).`
+      );
+      await WorkflowService.completeStage(projectId, 'requirements_review', 'project_planning');
+      return;
+    }
   } catch (err: any) {
     console.error(`[orchestrator] Error in executeBAStep for project ${projectId}:`, err);
     await WorkflowService.failStage(
@@ -369,7 +445,7 @@ async function executePMStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Marcus Planner',
+    ROLE_REGISTRY.project_manager.personaName,
     'project_manager',
     'started delivery planning on',
     'approved requirements baseline',
@@ -379,8 +455,9 @@ async function executePMStep(
   );
 
   try {
-    const projRes = await query(`SELECT client_brief FROM projects WHERE id = $1`, [projectId]);
+    const projRes = await query(`SELECT client_brief, autonomy_mode FROM projects WHERE id = $1`, [projectId]);
     const clientBrief = projRes.rows[0]?.client_brief || '';
+    const isAutoPilot = (projRes.rows[0]?.autonomy_mode || 'auto_pilot') === 'auto_pilot';
 
     const reqRes = await query(
       `SELECT id, code, title, type, priority, acceptance_criteria FROM requirements WHERE project_id = $1 ORDER BY code`,
@@ -410,7 +487,7 @@ async function executePMStep(
       confirmedFacts[r.fact_key] = r.value_jsonb;
     }
 
-    const deliveryPlan = await runPMDeliveryPlanAgent(gateway, requirements, confirmedFacts, projectId, clientBrief);
+    let deliveryPlan = await runPMDeliveryPlanAgent(gateway, requirements, confirmedFacts, projectId, clientBrief);
 
     if (deliveryPlan.status === 'needs_clarification' && deliveryPlan.clarifications.length > 0) {
       const evalResult = await QuestionPolicy.evaluateProposedQuestions(
@@ -428,20 +505,57 @@ async function executePMStep(
           evalResult.allowedQuestions
         );
 
-        await WorkflowService.logActivity(
-          projectId,
-          'Marcus Planner',
-          'project_manager',
-          'requested delivery decision on',
-          `${evalResult.allowedQuestions.length} item(s)`,
-          'interaction',
-          'Delivery Clarification',
-          `Proposed: ${evalResult.allowedQuestions.map((q) => q.factKey).join(', ')}`
-        );
+        if (isAutoPilot) {
+          for (const q of evalResult.allowedQuestions) {
+            const answer = q.recommendedOption || (Array.isArray(q.options) && q.options.length > 0 ? q.options[0] : 'Standard delivery');
+            await withTransaction(async (client) => {
+              await client.query(
+                `UPDATE client_interactions SET status = 'answered', answer_jsonb = $1, answered_at = now() WHERE project_id = $2 AND fact_key = $3`,
+                [JSON.stringify(answer), projectId, q.factKey]
+              );
+              await QuestionPolicy.saveFact(client, {
+                projectId,
+                factKey: q.factKey,
+                category: 'client_decision',
+                value: answer,
+                sourceRole: 'project_manager',
+                sourceType: 'agent_inference',
+                sourceReference: `auto_pilot:${q.factKey}`,
+                confirmationStatus: 'assumed',
+                confidence: 0.95,
+              });
+            });
+            confirmedFacts[q.factKey] = answer;
+          }
 
-        const nextAction = await WorkflowService.synthesizeNextAction(projectId);
-        await WorkflowService.waitForClient(projectId, 'project_planning', 'project_manager', nextAction);
-        return;
+          await WorkflowService.logActivity(
+            projectId,
+            ROLE_REGISTRY.project_manager.personaName,
+            'project_manager',
+            'auto-selected delivery preference in',
+            'Auto-Pilot mode',
+            'interaction',
+            'Delivery Decisions',
+            `Selected delivery options for: ${evalResult.allowedQuestions.map((q) => q.factKey).join(', ')}`
+          );
+
+          deliveryPlan = await runPMDeliveryPlanAgent(gateway, requirements, confirmedFacts, projectId, clientBrief);
+        } else {
+          await WorkflowService.logActivity(
+            projectId,
+            ROLE_REGISTRY.project_manager.personaName,
+            'project_manager',
+            'requested delivery decision on',
+            `${evalResult.allowedQuestions.length} item(s)`,
+            'interaction',
+            'Delivery Clarification',
+            `Proposed: ${evalResult.allowedQuestions.map((q) => q.factKey).join(', ')}`
+          );
+
+          const nextAction = await WorkflowService.synthesizeNextAction(projectId);
+          await WorkflowService.waitForClient(projectId, 'project_planning', 'project_manager', nextAction);
+          return;
+        }
       }
     }
 
@@ -455,7 +569,7 @@ async function executePMStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Marcus Planner',
+      ROLE_REGISTRY.project_manager.personaName,
       'project_manager',
       'completed delivery plan with',
       `${deliveryPlan.milestones.length} milestone(s) (UI/UX ${requiresUIUX ? 'Required' : 'Skipped - API Only'})`,
@@ -486,7 +600,7 @@ async function executeUIUXDesignerStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Sofia Designer',
+    ROLE_REGISTRY.ui_ux_designer.personaName,
     'ui_ux_designer',
     'started product experience design on',
     'approved requirements',
@@ -721,7 +835,7 @@ async function executeUIUXDesignerStep(
           JSON.stringify({
             type: 'approve_design',
             label: 'Review & Approve Wireframes',
-            description: `Sofia has prepared the interactive product preview (v${nextVersion}) for your review.`,
+            description: `${ROLE_REGISTRY.ui_ux_designer.personaName} has prepared the interactive product preview (v${nextVersion}) for your review.`,
             requiresUser: true,
             targetRoute: '/architecture',
             entityId: approvalId,
@@ -736,8 +850,8 @@ async function executeUIUXDesignerStep(
       eventType: 'design.generated',
       stage: 'ui_ux_design',
       actorRole: 'ui_ux_designer',
-      actorName: 'Sofia Designer',
-      summary: `Sofia Designer generated wireframes with ${designSpec.screens.length} screens.`,
+      actorName: ROLE_REGISTRY.ui_ux_designer.personaName,
+      summary: `${ROLE_REGISTRY.ui_ux_designer.personaName} generated wireframes with ${designSpec.screens.length} screens.`,
       payload: {
         designSpecId: specId,
         version: nextVersion,
@@ -750,7 +864,7 @@ async function executeUIUXDesignerStep(
       eventType: 'approval.required',
       stage: 'design_review',
       actorRole: 'ui_ux_designer',
-      actorName: 'Sofia Designer',
+      actorName: ROLE_REGISTRY.ui_ux_designer.personaName,
       summary: `Interactive Wireframe Preview (v${nextVersion}) ready for client review.`,
       payload: {
         approvalId,
@@ -761,7 +875,7 @@ async function executeUIUXDesignerStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Sofia Designer',
+      ROLE_REGISTRY.ui_ux_designer.personaName,
       'ui_ux_designer',
       'generated interactive product preview with',
       `${designSpec.screens.length} screen(s) & ${designSpec.userFlows.length} user journey(s)`,
@@ -769,6 +883,28 @@ async function executeUIUXDesignerStep(
       'Wireframes Ready',
       `Summary: ${designSpec.productExperienceSummary}. Screens: ${designSpec.screens.map((s) => s.name).join(', ')}`
     );
+
+    const projModeRes = await query(`SELECT autonomy_mode FROM projects WHERE id = $1`, [projectId]);
+    const isAutoPilot = (projModeRes.rows[0]?.autonomy_mode || 'auto_pilot') === 'auto_pilot';
+
+    if (isAutoPilot) {
+      await query(
+        `UPDATE approval_requests SET status = 'approved', decided_at = now() WHERE id = $1`,
+        [approvalId]
+      );
+      await WorkflowService.logActivity(
+        projectId,
+        ROLE_REGISTRY.ui_ux_designer.personaName,
+        'ui_ux_designer',
+        'auto-approved wireframe preview under',
+        'Auto-Pilot mode',
+        'approval',
+        'Wireframes Auto-Approved',
+        `Autonomous delivery pipeline approved wireframes with ${designSpec.screens.length} screens.`
+      );
+      await WorkflowService.completeStage(projectId, 'design_review', 'technical_architecture');
+      return;
+    }
   } catch (err: any) {
     console.error(`[orchestrator] Error in executeUIUXDesignerStep for project ${projectId}:`, err);
     await WorkflowService.failStage(
@@ -792,7 +928,7 @@ async function executeArchitectStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Arthur Blueprint',
+    ROLE_REGISTRY.solution_architect.personaName,
     'solution_architect',
     'started technical solution architecture on',
     'approved requirements & design',
@@ -885,7 +1021,7 @@ async function executeArchitectStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Arthur Blueprint',
+      ROLE_REGISTRY.solution_architect.personaName,
       'solution_architect',
       'completed technical blueprint with',
       `${architecture.decisions.length} architectural decision(s) & ${taskPlan.tasks.length} reconciled tasks`,
@@ -916,7 +1052,7 @@ async function executeEngineerStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Devon Coder',
+    ROLE_REGISTRY.engineer.personaName,
     'engineer',
     'started implementation of',
     'planned application modules',
@@ -1083,7 +1219,7 @@ async function executeEngineerStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Devon Coder',
+      ROLE_REGISTRY.engineer.personaName,
       'engineer',
       'completed implementation of',
       `${engineerOutput.files.length} production source file(s)`,
@@ -1153,7 +1289,7 @@ async function handleDevonRework(
 
   await WorkflowService.logActivity(
     projectId,
-    'Devon Coder',
+    ROLE_REGISTRY.engineer.personaName,
     'engineer',
     `started autonomous defect remediation on ${defect.code} (Attempt ${nextAttempt} of ${REWORK_CONFIG.MAX_AUTONOMOUS_REWORK_ATTEMPTS})`,
     'faulty source files',
@@ -1228,7 +1364,7 @@ async function handleDevonRework(
 
   await WorkflowService.logActivity(
     projectId,
-    'Devon Coder',
+    ROLE_REGISTRY.engineer.personaName,
     'engineer',
     `completed Implementation v${newVersion} for`,
     `${defect.code} remediation`,
@@ -1266,7 +1402,7 @@ async function executeCodeReviewStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Dr. Evelyn Auditor',
+    ROLE_REGISTRY.code_reviewer.personaName,
     'code_reviewer',
     'started independent code & security audit on',
     'source artifacts',
@@ -1341,8 +1477,8 @@ async function executeCodeReviewStep(
       eventType: 'review.started',
       stage: 'code_review',
       actorRole: 'code_reviewer',
-      actorName: 'Dr. Evelyn Auditor',
-      summary: 'Dr. Evelyn started architectural and code review audit.',
+      actorName: ROLE_REGISTRY.code_reviewer.personaName,
+      summary: `${ROLE_REGISTRY.code_reviewer.personaName} started architectural and code review audit.`,
       payload: { fileCount: files.length },
     }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
@@ -1402,7 +1538,7 @@ async function executeCodeReviewStep(
         eventType: 'review.blocked',
         stage: 'code_review',
         actorRole: 'code_reviewer',
-        actorName: 'Dr. Evelyn Auditor',
+        actorName: ROLE_REGISTRY.code_reviewer.personaName,
         summary: `Code review blocked: ${firstBlocker.description}`,
         payload: {
           blockersCount: blockingFindings.length,
@@ -1412,7 +1548,7 @@ async function executeCodeReviewStep(
 
       await WorkflowService.logActivity(
         projectId,
-        'Dr. Evelyn Auditor',
+        ROLE_REGISTRY.code_reviewer.personaName,
         'code_reviewer',
         `identified ${blockingFindings.length} blocking review finding(s), logging ${defect.code}`,
         defect.title,
@@ -1448,7 +1584,7 @@ async function executeCodeReviewStep(
       eventType: 'review.completed',
       stage: 'code_review',
       actorRole: 'code_reviewer',
-      actorName: 'Dr. Evelyn Auditor',
+      actorName: ROLE_REGISTRY.code_reviewer.personaName,
       summary: `Code review completed with 0 blocking findings (${reviewResult.findings.length} total findings).`,
       payload: {
         findingsCount: reviewResult.findings.length,
@@ -1465,7 +1601,7 @@ async function executeCodeReviewStep(
       await DefectService.resolveDefect(d.id, { reviewApproved: true, summary: reviewResult.summary });
       await WorkflowService.logActivity(
         projectId,
-        'Dr. Evelyn Auditor',
+        ROLE_REGISTRY.code_reviewer.personaName,
         'code_reviewer',
         `verified resolution of ${d.code}`,
         'reworked source code',
@@ -1479,7 +1615,7 @@ async function executeCodeReviewStep(
 
     await WorkflowService.logActivity(
       projectId,
-      'Dr. Evelyn Auditor',
+      ROLE_REGISTRY.code_reviewer.personaName,
       'code_reviewer',
       'completed code audit with',
       `${reviewResult.findings.length} finding(s) (0 blocking)`,
@@ -1510,7 +1646,7 @@ async function executeQAStep(
 
   await WorkflowService.logActivity(
     projectId,
-    'Quinn Tester',
+    ROLE_REGISTRY.qa_engineer.personaName,
     'qa_engineer',
     'started independent acceptance verification in',
     'isolated Docker sandbox',
@@ -1524,8 +1660,8 @@ async function executeQAStep(
     eventType: 'qa.started',
     stage: 'independent_qa',
     actorRole: 'qa_engineer',
-    actorName: 'Quinn Tester',
-    summary: 'Quinn Tester started independent acceptance test verification.',
+    actorName: ROLE_REGISTRY.qa_engineer.personaName,
+    summary: `${ROLE_REGISTRY.qa_engineer.personaName} started independent acceptance test verification.`,
   }).catch((e) => console.warn('[orchestrator] Event emit error:', e));
 
   try {
@@ -1672,7 +1808,7 @@ async function executeQAStep(
       eventType: 'qa.test_progress',
       stage: 'independent_qa',
       actorRole: 'qa_engineer',
-      actorName: 'Quinn Tester',
+      actorName: ROLE_REGISTRY.qa_engineer.personaName,
       summary: `Executed ${sandboxResult.testsPassed + sandboxResult.testsFailed} tests (${sandboxResult.testsPassed} passed, ${sandboxResult.testsFailed} failed).`,
       payload: {
         testsPassed: sandboxResult.testsPassed,
@@ -1698,7 +1834,7 @@ async function executeQAStep(
         });
         await WorkflowService.logActivity(
           projectId,
-          'Quinn Tester',
+          ROLE_REGISTRY.qa_engineer.personaName,
           'qa_engineer',
           `verified resolution of ${d.code}`,
           `Frozen Acceptance Suite (SHA: ${activeSuiteSha256.slice(0, 10)}...)`,
@@ -1713,7 +1849,7 @@ async function executeQAStep(
         eventType: 'qa.completed',
         stage: 'independent_qa',
         actorRole: 'qa_engineer',
-        actorName: 'Quinn Tester',
+        actorName: ROLE_REGISTRY.qa_engineer.personaName,
         summary: `Independent QA verified: ${sandboxResult.testsPassed} tests passed (Exit: 0).`,
         payload: {
           testsPassed: sandboxResult.testsPassed,
@@ -1725,7 +1861,7 @@ async function executeQAStep(
 
       await WorkflowService.logActivity(
         projectId,
-        'Quinn Tester',
+        ROLE_REGISTRY.qa_engineer.personaName,
         'qa_engineer',
         'completed independent sandbox verification with',
         `${sandboxResult.testsPassed} test(s) passed (Exit: 0)`,
@@ -1737,10 +1873,10 @@ async function executeQAStep(
     }
 
     if (classification.taxonomy === 'qa_artifact_error') {
-      // QA Artifact Error -> Quinn self-repairs test suite without dispatching Devon
+      // QA Artifact Error -> Bilal Raza self-repairs test suite without dispatching Ali Hassan
       await WorkflowService.logActivity(
         projectId,
-        'Quinn Tester',
+        ROLE_REGISTRY.qa_engineer.personaName,
         'qa_engineer',
         'detected QA artifact syntax/import defect, initiating',
         'QA suite versioned repair',
@@ -1778,7 +1914,6 @@ async function executeQAStep(
           const parentCheck = await client.query(`SELECT id FROM qa_suites WHERE id = $1`, [activeSuiteId]);
           if (parentCheck.rows.length > 0) {
             validParentId = activeSuiteId;
-            await client.query(`UPDATE qa_suites SET superseded_by_suite_id = $1 WHERE id = $2`, [activeSuiteId, activeSuiteId]);
           }
         }
 
@@ -1787,6 +1922,10 @@ async function executeQAStep(
            VALUES ($1, $2, $3, true, $4, $5, $6) RETURNING id`,
           [projectId, newSuiteSha256, newQaFiles.length, nextQaVersion, validParentId, classification.summary]
         );
+
+        if (validParentId) {
+          await client.query(`UPDATE qa_suites SET superseded_by_suite_id = $1 WHERE id = $2`, [insNewSuite.rows[0].id, validParentId]);
+        }
 
         await client.query(`DELETE FROM qa_test_artifacts WHERE project_id = $1`, [projectId]);
         for (const tf of newQaFiles) {
@@ -1801,7 +1940,7 @@ async function executeQAStep(
 
       await WorkflowService.logActivity(
         projectId,
-        'Quinn Tester',
+        ROLE_REGISTRY.qa_engineer.personaName,
         'qa_engineer',
         `froze repaired QA Suite v${nextQaVersion} with`,
         `New SHA-256: ${newSuiteSha256.slice(0, 10)}...`,
@@ -1816,20 +1955,20 @@ async function executeQAStep(
     }
 
     if (classification.taxonomy === 'product_defect') {
-      // Real Product Defect -> Keep QA suite FROZEN and immutable. Dispatch Devon for rework.
+      // Real Product Defect -> Keep QA suite FROZEN and immutable. Dispatch Ali Hassan for rework.
       const matchedReq = requirements.find((r) => r.code === classification.relatedRequirementCode);
       const reqIds = matchedReq ? [matchedReq.id] : [];
       const { defect } = await DefectService.recordOrUpdateDefect(projectId, classification, activeSuiteId, reqIds);
 
       await WorkflowService.logActivity(
         projectId,
-        'Quinn Tester',
+        ROLE_REGISTRY.qa_engineer.personaName,
         'qa_engineer',
         `detected acceptance test failure, logged ${defect.code}`,
         defect.title,
         'rework',
         'Product Defect Detected',
-        `Frozen QA test failed against Implementation v${activeVersion}. Failure: ${classification.summary}. Triggering Devon rework.`
+        `Frozen QA test failed against Implementation v${activeVersion}. Failure: ${classification.summary}. Triggering ${ROLE_REGISTRY.engineer.personaName} rework.`
       );
 
       const reworkResult = await handleDevonRework(
@@ -1928,7 +2067,7 @@ async function executeReleaseEvaluationStep(
         defect.code,
         'rework',
         'Security Blocker',
-        `Deterministic gate blocked release: ${firstFinding.rule}. Triggering Devon remediation.`
+        `Deterministic gate blocked release: ${firstFinding.rule}. Triggering Ali Hassan remediation.`
       );
 
       const [reqRes, archRes, tasksRes, briefRes] = await Promise.all([

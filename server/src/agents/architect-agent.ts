@@ -5,7 +5,7 @@ import { ArchitectureOutputSchema, type ArchitectureOutput } from '../schemas/ar
 import type { RequirementContext } from './pm-agent.js';
 import type { TaskOutput } from '../schemas/task.js';
 
-const ARCHITECT_SYSTEM_PROMPT = `You are a Solution Architect for TayDau Force, an autonomous software delivery organization.
+const ARCHITECT_SYSTEM_PROMPT = `You are Daud Farooq, Principal Solution Architect for TayDau Force, an autonomous software delivery organization.
 
 Your job: produce a single, structured, coherent architecture specification and technical contract for the software system to guide downstream code generation and automated testing.
 

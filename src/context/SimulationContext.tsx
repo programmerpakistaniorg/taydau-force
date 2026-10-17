@@ -32,28 +32,28 @@ export const SIMULATION_STEPS: SimulationStepInfo[] = [
   {
     step: 0,
     title: 'Initial State',
-    description: 'Sprint 2 in progress. Devon Coder (Full-Stack Engineer) is working on TASK-11 (Stock Transfer Lock).',
+    description: 'Sprint 2 in progress. Ali Hassan (Full-Stack Engineer) is working on TASK-11 (Stock Transfer Lock).',
     actor: 'System Ready',
     badge: 'Baseline'
   },
   {
     step: 1,
     title: 'TASK-11 Code Completed',
-    description: 'Devon Coder (Full-Stack Engineer) commits initial implementation of atomic transfer endpoint (commit #c8f3b2a).',
+    description: 'Ali Hassan (Full-Stack Engineer) commits initial implementation of atomic transfer endpoint (commit #c8f3b2a).',
     actor: 'Full-Stack Engineer',
     badge: 'Code Commit'
   },
   {
     step: 2,
     title: 'TASK-11 Dispatched to QA',
-    description: 'Marcus Planner (Project Manager) autonomously transitions TASK-11 to Review/QA lane and triggers test pipeline.',
+    description: 'Tayyab Ahmed (Project Manager) autonomously transitions TASK-11 to Review/QA lane and triggers test pipeline.',
     actor: 'Project Manager',
     badge: 'Pipeline Route'
   },
   {
     step: 3,
     title: 'QA Executes TEST-23',
-    description: 'Quinn Tester (QA Engineer) runs automated concurrency test suite with 50 simultaneous transfer requests.',
+    description: 'Bilal Raza (QA Engineer) runs automated concurrency test suite with 50 simultaneous transfer requests.',
     actor: 'QA Engineer',
     badge: 'Test Execution'
   },
@@ -67,7 +67,7 @@ export const SIMULATION_STEPS: SimulationStepInfo[] = [
   {
     step: 5,
     title: 'QA Rejects TASK-11',
-    description: 'Quinn Tester rejects TASK-11 verification gate and attaches stack trace & reproduction payload.',
+    description: 'Bilal Raza rejects TASK-11 verification gate and attaches stack trace & reproduction payload.',
     actor: 'QA Engineer',
     badge: 'Gate Rejected'
   },
@@ -81,21 +81,21 @@ export const SIMULATION_STEPS: SimulationStepInfo[] = [
   {
     step: 7,
     title: 'PM Reassigns Defect to Engineer',
-    description: 'Marcus Planner prioritizes DEF-03, generates escalation context, and reassigns TASK-11 to Devon Coder with prompt guidance.',
+    description: 'Tayyab Ahmed prioritizes DEF-03, generates escalation context, and reassigns TASK-11 to Ali Hassan with prompt guidance.',
     actor: 'Project Manager',
     badge: 'Auto-Triage'
   },
   {
     step: 8,
     title: 'Engineer Applies Pessimistic Lock Fix',
-    description: 'Devon Coder updates SQL queries with "SELECT FOR UPDATE" row locking and commits patch (commit #f92d410).',
+    description: 'Ali Hassan updates SQL queries with "SELECT FOR UPDATE" row locking and commits patch (commit #f92d410).',
     actor: 'Full-Stack Engineer',
     badge: 'Patch Applied'
   },
   {
     step: 9,
     title: 'QA Reruns Concurrency Test TEST-23',
-    description: 'Quinn Tester re-executes 100 concurrent multi-warehouse transfer scenarios against the patched staging build.',
+    description: 'Bilal Raza re-executes 100 concurrent multi-warehouse transfer scenarios against the patched staging build.',
     actor: 'QA Engineer',
     badge: 'Retest'
   },
@@ -165,7 +165,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-1`,
         time: '12:30',
         actor: 'Full-Stack Engineer',
-        actorRole: 'Devon Coder',
+        actorRole: 'Ali Hassan',
         action: 'completed implementation of',
         target: 'TASK-11 (commit c8f3b2a)',
         type: 'task',
@@ -190,12 +190,12 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-2`,
         time: '12:31',
         actor: 'Project Manager',
-        actorRole: 'Marcus Planner',
+        actorRole: 'Tayyab Ahmed',
         action: 'moved TASK-12 to',
         target: 'Review / QA Lane',
         type: 'task',
         tag: 'Routing',
-        details: 'Autonomous pipeline trigger dispatched to Quinn Tester.'
+        details: 'Autonomous pipeline trigger dispatched to Bilal Raza.'
       });
     }
 
@@ -204,7 +204,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-3`,
         time: '12:32',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'executed test suite',
         target: 'TEST-23 (Multi-Warehouse Concurrency)',
         type: 'qa',
@@ -225,7 +225,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-4`,
         time: '12:33',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'detected failure in',
         target: 'TEST-23 (Race Condition Over-Allocation)',
         type: 'qa',
@@ -244,12 +244,12 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-5`,
         time: '12:34',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'rejected verification gate for',
         target: 'TASK-12 (Stock Transfer API)',
         type: 'qa',
         tag: 'Gate Rejected',
-        details: 'Quality Policy Enforced: Automatic rollback to Devon Coder.'
+        details: 'Quality Policy Enforced: Automatic rollback to Ali Hassan.'
       });
     }
 
@@ -271,12 +271,12 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-6`,
         time: '12:35',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'logged defect record',
         target: 'DEF-03 (High Severity)',
         type: 'defect',
         tag: 'Defect Logged',
-        details: 'Auto-triaged to Devon Coder (Full-Stack) with reproduced telemetry logs.'
+        details: 'Auto-triaged to Ali Hassan (Full-Stack) with reproduced telemetry logs.'
       });
     }
 
@@ -293,7 +293,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-7`,
         time: '12:36',
         actor: 'Full-Stack Engineer',
-        actorRole: 'Devon Coder',
+        actorRole: 'Ali Hassan',
         action: 'started remediation for',
         target: 'DEF-03 / TASK-12',
         type: 'task',
@@ -313,7 +313,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-8`,
         time: '12:37',
         actor: 'Full-Stack Engineer',
-        actorRole: 'Devon Coder',
+        actorRole: 'Ali Hassan',
         action: 'committed atomic fix',
         target: 'commit f92d410 (SELECT FOR UPDATE lock)',
         type: 'task',
@@ -334,7 +334,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-9`,
         time: '12:38',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'reran stress test suite',
         target: 'TEST-23 on commit f92d410',
         type: 'qa',
@@ -357,7 +357,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-10`,
         time: '12:39',
         actor: 'QA Engineer',
-        actorRole: 'Quinn Tester',
+        actorRole: 'Bilal Raza',
         action: 'verified passing result for',
         target: 'TEST-23 (100% Passed)',
         type: 'qa',

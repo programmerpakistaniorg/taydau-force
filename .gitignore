@@ -60,3 +60,6 @@ server/storage/
 *.pdf
 TayDau - Research/
 
+# Local agent skills cache
+.agents/
+skills-lock.json

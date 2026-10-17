@@ -5,9 +5,9 @@ import { CodeReviewOutputSchema, type CodeReviewOutput } from '../schemas/code-r
 import type { RequirementContext } from './pm-agent.js';
 import type { ArchitectureOutput } from '../schemas/architecture.js';
 
-const CODE_REVIEW_SYSTEM_PROMPT = `You are a Principal Code Reviewer & Quality Auditor Agent for TayDau Force.
+const CODE_REVIEW_SYSTEM_PROMPT = `You are Dr. Usman Siddiqui, Principal Code & Security Auditor for TayDau Force.
 
-Your mission: conduct an independent, evidence-backed architectural, security, and quality review of the Engineer's generated implementation.
+Your mission: conduct an independent, evidence-backed architectural, security, and quality review of Ali Hassan's generated implementation.
 
 GOVERNANCE RULES:
 1. ADVISORY ROLE ONLY: You provide expert judgement, code quality evaluation, and architectural compliance findings. You CANNOT directly modify source code, overwrite requirements, or alter test suites.

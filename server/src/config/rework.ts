@@ -4,7 +4,7 @@
  */
 export const REWORK_CONFIG = {
   /**
-   * Maximum autonomous Devon rework executions permitted per project before
+   * Maximum autonomous Ali Hassan rework executions permitted per project before
    * truthfully halting in 'needs_attention' state.
    */
   MAX_AUTONOMOUS_REWORK_ATTEMPTS: 3,

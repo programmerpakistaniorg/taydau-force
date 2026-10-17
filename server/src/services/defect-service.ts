@@ -233,7 +233,7 @@ export class DefectService {
         eventType: 'implementation.revision.created',
         stage: 'implementation',
         actorRole: 'engineer',
-        actorName: 'Devon Coder',
+        actorName: 'Ali Hassan',
         summary: `Implementation Revision v${version} created (${files.length} files, ${totalBytes} bytes).`,
         payload: {
           revisionId: revision.id,
@@ -392,7 +392,7 @@ export class DefectService {
    */
   static assertQAMutationAuthorized(role: string): void {
     const normalized = (role || '').trim().toLowerCase();
-    if (normalized === 'engineer' || normalized === 'developer' || normalized === 'devon') {
+    if (normalized === 'engineer' || normalized === 'developer' || normalized === 'devon' || normalized === 'ali') {
       throw new Error(`AUTHORIZATION_DENIED: Role '${role}' has no mutation authority over QA test suites or artifacts.`);
     }
   }

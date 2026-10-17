@@ -68,7 +68,7 @@ export const RequirementsReviewCard: React.FC<RequirementsReviewCardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5 truncate">
-              Aria Analyst extracted {reqList.length} testable business requirements. Review below and approve.
+              Sana Tariq extracted {reqList.length} testable business requirements. Review below and approve.
             </p>
           </div>
         </div>
@@ -282,7 +282,7 @@ export const RequirementsReviewCard: React.FC<RequirementsReviewCardProps> = ({
               {modalMode === 'change' ? 'Request Requirements Adjustment' : 'Provide Additional Business Context'}
             </h3>
             <p className="text-xs text-slate-600">
-              Aria Analyst will receive your feedback and generate updated Requirements v{baseline.version + 1} without overwriting previous history.
+              Sana Tariq will receive your feedback and generate updated Requirements v{baseline.version + 1} without overwriting previous history.
             </p>
             <form onSubmit={handleFeedbackSubmit} className="space-y-4">
               <textarea
@@ -306,7 +306,7 @@ export const RequirementsReviewCard: React.FC<RequirementsReviewCardProps> = ({
                   disabled={!feedback.trim() || isLoading}
                   className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 cursor-pointer shadow-sm"
                 >
-                  Submit to Aria Analyst
+                  Submit to Sana Tariq
                 </button>
               </div>
             </form>
