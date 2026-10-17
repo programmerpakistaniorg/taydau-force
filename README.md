@@ -61,9 +61,9 @@ TayDau Force enforces strict role boundaries and governance policies (*e.g., "De
 | Specialist | Role | Key Responsibilities & Outputs |
 | :--- | :--- | :--- |
 | **Sana Tariq** | **Business Analyst** | Analyzes client brief, asks targeted domain clarification questions, defines user roles, business rules, edge cases, and synthesizes immutable **Requirement Baselines**. |
-| **Tayyab Ahmed** | **Project Manager** | Sequences delivery milestones, resolves dependency DAGs, tracks budget burn-down, and assigns specialist workstreams. |
+| **Muhammad Tayyab** | **Project Manager** | Sequences delivery milestones, resolves dependency DAGs, tracks budget burn-down, and assigns specialist workstreams. |
 | **Fatima Zahra** | **UI/UX Designer** | Generates screen flows, component hierarchy, interactive wireframe specs, and live preview mockups for client approval. |
-| **Daud Farooq** | **Solution Architect** | Designs data models, REST/FastAPI endpoints, SQLite/PostgreSQL schemas, security boundaries, and Architecture Decision Records (ADRs). |
+| **Daud Sheraz** | **Solution Architect** | Designs data models, REST/FastAPI endpoints, SQLite/PostgreSQL schemas, security boundaries, and Architecture Decision Records (ADRs). |
 | **Ali Hassan** | **Full-Stack Engineer** | Implements clean, production-ready backend code, models, database migrations, and business logic. |
 | **Dr. Usman Siddiqui** | **Code Reviewer** | Conducts automated architectural compliance reviews, static analysis, and scans for OWASP/security vulnerabilities (`SEC` findings). |
 | **Bilal Raza** | **Independent QA Engineer** | Derives black-box test suites from acceptance criteria, runs sandbox test executions, detects regressions, and logs triage defects (`DEF` items). |

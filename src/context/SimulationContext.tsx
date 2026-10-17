@@ -46,7 +46,7 @@ export const SIMULATION_STEPS: SimulationStepInfo[] = [
   {
     step: 2,
     title: 'TASK-11 Dispatched to QA',
-    description: 'Tayyab Ahmed (Project Manager) autonomously transitions TASK-11 to Review/QA lane and triggers test pipeline.',
+    description: 'Muhammad Tayyab (Project Manager) autonomously transitions TASK-11 to Review/QA lane and triggers test pipeline.',
     actor: 'Project Manager',
     badge: 'Pipeline Route'
   },
@@ -81,7 +81,7 @@ export const SIMULATION_STEPS: SimulationStepInfo[] = [
   {
     step: 7,
     title: 'PM Reassigns Defect to Engineer',
-    description: 'Tayyab Ahmed prioritizes DEF-03, generates escalation context, and reassigns TASK-11 to Ali Hassan with prompt guidance.',
+    description: 'Muhammad Tayyab prioritizes DEF-03, generates escalation context, and reassigns TASK-11 to Ali Hassan with prompt guidance.',
     actor: 'Project Manager',
     badge: 'Auto-Triage'
   },
@@ -190,7 +190,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         id: `sim-act-2`,
         time: '12:31',
         actor: 'Project Manager',
-        actorRole: 'Tayyab Ahmed',
+        actorRole: 'Muhammad Tayyab',
         action: 'moved TASK-12 to',
         target: 'Review / QA Lane',
         type: 'task',

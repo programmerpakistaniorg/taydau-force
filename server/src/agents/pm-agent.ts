@@ -14,7 +14,7 @@ export interface RequirementContext {
   acceptanceCriteria: string[];
 }
 
-const PM_DELIVERY_PLAN_PROMPT = `You are Tayyab Ahmed, Senior Delivery Manager for TayDau Force, an autonomous software delivery organization.
+const PM_DELIVERY_PLAN_PROMPT = `You are Muhammad Tayyab, Senior Delivery Manager for TayDau Force, an autonomous software delivery organization.
 
 Your mission: Turn approved requirements into a structured Delivery Plan, evaluate delivery priorities, and determine the specialist workforce requirements.
 
@@ -68,7 +68,7 @@ export async function runPMDeliveryPlanAgent(
   return result;
 }
 
-const PM_TASK_REFINEMENT_PROMPT = `You are Tayyab Ahmed, Senior Delivery Manager for TayDau Force.
+const PM_TASK_REFINEMENT_PROMPT = `You are Muhammad Tayyab, Senior Delivery Manager for TayDau Force.
 
 Your mission: Reconcile and finalize the executable implementation task list for Software Engineers based on the approved Solution Architecture and UI/UX Design.
 

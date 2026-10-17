@@ -62,7 +62,7 @@ export const Architecture: React.FC = () => {
             Product Design & Solution Architecture
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Fatima Zahra's interactive wireframes and Daud Farooq's technical service contracts.
+            Fatima Zahra's interactive wireframes and Daud Sheraz's technical service contracts.
           </p>
         </div>
 
@@ -190,7 +190,7 @@ export const Architecture: React.FC = () => {
           ) : (
             <Card className="p-10 text-center text-slate-500">
               <Server className="w-10 h-10 text-indigo-400 mx-auto mb-3 animate-pulse" />
-              <h4 className="font-bold text-slate-900 text-base mb-1">Daud Farooq Is Designing The Architecture</h4>
+              <h4 className="font-bold text-slate-900 text-base mb-1">Daud Sheraz Is Designing The Architecture</h4>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
                 After wireframes are approved, our Solution Architect will establish the database models, REST contracts, and Docker limits.
               </p>

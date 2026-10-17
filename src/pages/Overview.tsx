@@ -232,9 +232,9 @@ export const Overview: React.FC = () => {
       index: 2,
       roleKey: 'project_manager' as RoleKey,
       roleName: 'Project Manager',
-      personName: 'Tayyab Ahmed',
+      personName: 'Muhammad Tayyab',
       avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      initials: 'TA',
+      initials: 'MT',
       yPos: 75,
       isCompleted: Boolean(project?.tasks && project.tasks.length > 0 && progress >= 35),
       isWorking: stage === 'project_planning' && stageStatus === 'running',
@@ -272,9 +272,9 @@ export const Overview: React.FC = () => {
       index: 4,
       roleKey: 'architect' as RoleKey,
       roleName: 'Solution Architect',
-      personName: 'Daud Farooq',
+      personName: 'Daud Sheraz',
       avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      initials: 'DF',
+      initials: 'DS',
       yPos: 175,
       isCompleted: Boolean(project?.architecture && progress >= 60),
       isWorking: stage === 'architecture' && stageStatus === 'running',
@@ -365,7 +365,7 @@ export const Overview: React.FC = () => {
       return { stageText: 'Requirements Baseline ready for client review', nextText: 'Review and approve requirements' };
     }
     if (stage === 'project_planning') {
-      return { stageText: 'Tayyab Ahmed is planning delivery roadmap & tasks', nextText: 'UI/UX Visual Design' };
+      return { stageText: 'Muhammad Tayyab is planning delivery roadmap & tasks', nextText: 'UI/UX Visual Design' };
     }
     if (stage === 'ui_ux_design') {
       return { stageText: 'Fatima Zahra is synthesizing interactive UI/UX design', nextText: 'Design Screen Approval' };
@@ -374,7 +374,7 @@ export const Overview: React.FC = () => {
       return { stageText: 'Fatima Zahra is waiting for design screen approval', nextText: 'Review and approve design wireframes' };
     }
     if (stage === 'architecture') {
-      return { stageText: 'Daud Farooq is generating system architecture & schema', nextText: 'Full Stack Engineering' };
+      return { stageText: 'Daud Sheraz is generating system architecture & schema', nextText: 'Full Stack Engineering' };
     }
     if (stage === 'engineering') {
       return { stageText: 'Ali Hassan is coding backend services and APIs', nextText: 'Code Review & Security Audit' };
@@ -1201,9 +1201,9 @@ export const Overview: React.FC = () => {
           <div className="space-y-3 text-xs">
             {[
               { num: '01', name: 'Business Analysis', agent: 'Sana Tariq', isDone: Boolean(workflow?.approvedRequirementBaselineId), isCurr: stage === 'business_analysis' },
-              { num: '02', name: 'Delivery Planning', agent: 'Tayyab Ahmed', isDone: Boolean(project?.tasks?.length && progress >= 35), isCurr: stage === 'project_planning' },
+              { num: '02', name: 'Delivery Planning', agent: 'Muhammad Tayyab', isDone: Boolean(project?.tasks?.length && progress >= 35), isCurr: stage === 'project_planning' },
               { num: '03', name: 'Experience Design', agent: 'Fatima Zahra', isDone: Boolean(workflow?.approvedDesignSpecId), isCurr: stage === 'ui_ux_design' || stage === 'design_review' },
-              { num: '04', name: 'Solution Architecture', agent: 'Daud Farooq', isDone: Boolean(project?.architecture), isCurr: stage === 'architecture' },
+              { num: '04', name: 'Solution Architecture', agent: 'Daud Sheraz', isDone: Boolean(project?.architecture), isCurr: stage === 'architecture' },
               { num: '05', name: 'Full-Stack Development', agent: 'Ali Hassan', isDone: Boolean(project?.codeArtifacts?.length && progress >= 75), isCurr: stage === 'engineering' },
               { num: '06', name: 'Independent Review', agent: 'Dr. Usman Siddiqui', isDone: progress >= 85, isCurr: stage === 'code_review' },
               { num: '07', name: 'Automated QA & Security', agent: 'Bilal Raza', isDone: stage === 'completed' || Boolean(project?.qaTestArtifacts?.length), isCurr: stage === 'testing' },

@@ -79,11 +79,11 @@ function getProgressMessage(project: FullProjectResponse | null): string {
       case 'business_analysis':
         return `${roleDef?.personaName || 'Sana Tariq'} is analyzing your business idea and extracting testable requirements...`;
       case 'project_planning':
-        return `${roleDef?.personaName || 'Tayyab Ahmed'} is sequencing milestones, risk mitigation, and specialist allocation...`;
+        return `${roleDef?.personaName || 'Muhammad Tayyab'} is sequencing milestones, risk mitigation, and specialist allocation...`;
       case 'ui_ux_design':
         return `${roleDef?.personaName || 'Fatima Zahra'} is generating wireframe layouts and interactive product preview...`;
       case 'technical_architecture':
-        return `${roleDef?.personaName || 'Daud Farooq'} is designing the FastAPI service architecture and SQLite schema...`;
+        return `${roleDef?.personaName || 'Daud Sheraz'} is designing the FastAPI service architecture and SQLite schema...`;
       case 'implementation':
         return `${roleDef?.personaName || 'Ali Hassan'} is generating production Python 3.11 source code...`;
       case 'code_review':

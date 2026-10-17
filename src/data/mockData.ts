@@ -90,7 +90,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-pm',
     role: 'Project Manager Agent',
-    name: 'Tayyab Ahmed',
+    name: 'Muhammad Tayyab',
     status: 'Active',
     specialization: 'Task Graph Scheduling, Dependency Mapping, Autonomous Workforce Routing, Defect Triage',
     isCoreTeam: true,
@@ -117,7 +117,7 @@ export const INITIAL_AGENTS: Agent[] = [
   {
     id: 'agent-arch',
     role: 'Solution Architect Agent',
-    name: 'Daud Farooq',
+    name: 'Daud Sheraz',
     status: 'Completed',
     specialization: 'Clean Architecture, Hexagonal Boundaries, Multi-Warehouse Concurrency Model, ADR Synthesis',
     isCoreTeam: true,
@@ -1265,9 +1265,9 @@ export const INITIAL_COST_SUMMARY: CostSummary = {
   costPerVerifiedReq: 0.23,
   breakdown: [
     { agentRole: 'Full-Stack Engineer', agentName: 'Ali Hassan', model: 'Claude 3.7 Sonnet', calls: 32, tokens: '142.5k', costUsd: 0.81 },
-    { agentRole: 'Solution Architect', agentName: 'Daud Farooq', model: 'o3-mini (Reasoning)', calls: 8, tokens: '54.2k', costUsd: 0.27 },
+    { agentRole: 'Solution Architect', agentName: 'Daud Sheraz', model: 'o3-mini (Reasoning)', calls: 8, tokens: '54.2k', costUsd: 0.27 },
     { agentRole: 'QA Engineer', agentName: 'Bilal Raza', model: 'GPT-4o-mini', calls: 14, tokens: '68.1k', costUsd: 0.21 },
-    { agentRole: 'Project Manager', agentName: 'Tayyab Ahmed', model: 'GPT-4o', calls: 9, tokens: '38.4k', costUsd: 0.18 },
+    { agentRole: 'Project Manager', agentName: 'Muhammad Tayyab', model: 'GPT-4o', calls: 9, tokens: '38.4k', costUsd: 0.18 },
     { agentRole: 'Code Reviewer', agentName: 'Dr. Usman Siddiqui', model: 'Claude 3.5 Sonnet', calls: 5, tokens: '26.8k', costUsd: 0.13 },
     { agentRole: 'UI/UX Designer', agentName: 'Fatima Zahra', model: 'Claude 3.5 Sonnet', calls: 4, tokens: '22.0k', costUsd: 0.13 },
     { agentRole: 'Business Analyst', agentName: 'Sana Tariq', model: 'Claude 3.5 Sonnet', calls: 2, tokens: '18.4k', costUsd: 0.11 }

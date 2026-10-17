@@ -47,9 +47,9 @@ export const ROLE_REGISTRY: Record<RoleKey, RoleMetadata> = {
   project_manager: {
     roleKey: 'project_manager',
     displayName: 'Project Manager',
-    personaName: 'Tayyab Ahmed',
+    personaName: 'Muhammad Tayyab',
     roleTitle: 'Senior Delivery Manager',
-    avatarText: 'TA',
+    avatarText: 'MT',
     avatarBg: 'bg-teal-100 text-teal-800',
     badgeVariant: 'teal',
     questionDomain: 'delivery',
@@ -75,9 +75,9 @@ export const ROLE_REGISTRY: Record<RoleKey, RoleMetadata> = {
   solution_architect: {
     roleKey: 'solution_architect',
     displayName: 'Solution Architect',
-    personaName: 'Daud Farooq',
+    personaName: 'Daud Sheraz',
     roleTitle: 'Principal Solution Architect',
-    avatarText: 'DF',
+    avatarText: 'DS',
     avatarBg: 'bg-indigo-100 text-indigo-800',
     badgeVariant: 'indigo',
     questionDomain: 'technical_business_constraint',
