@@ -165,7 +165,7 @@ export class DesignIntegrityValidator {
 
     const provenance: DesignProvenance = {
       projectId,
-      generatedBy: options?.generatedBy || 'sofia_ui_ux_designer',
+      generatedBy: options?.generatedBy || 'fatima_ui_ux_designer',
       isDegraded: options?.isDegraded ?? false,
       fallbackReason: options?.fallbackReason,
       validatedAt: new Date().toISOString(),

@@ -1240,7 +1240,7 @@ async function executeEngineerStep(
 }
 
 
-async function handleDevonRework(
+async function handleAliRework(
   projectId: string,
   clientBrief: string,
   gateway: ModelGateway,
@@ -1390,6 +1390,9 @@ async function handleDevonRework(
 
   return { success: true, newVersion };
 }
+
+// Backwards-compatible alias
+const handleDevonRework = handleAliRework;
 
 async function executeCodeReviewStep(
   projectId: string,
@@ -1557,7 +1560,7 @@ async function executeCodeReviewStep(
         `Reviewer blocked release: ${firstBlocker.description}. Initiating autonomous remediation.`
       );
 
-      const reworkResult = await handleDevonRework(
+      const reworkResult = await handleAliRework(
         projectId,
         clientBrief,
         gateway,
@@ -1971,7 +1974,7 @@ async function executeQAStep(
         `Frozen QA test failed against Implementation v${activeVersion}. Failure: ${classification.summary}. Triggering ${ROLE_REGISTRY.engineer.personaName} rework.`
       );
 
-      const reworkResult = await handleDevonRework(
+      const reworkResult = await handleAliRework(
         projectId,
         clientBrief,
         gateway,
@@ -2105,7 +2108,7 @@ async function executeReleaseEvaluationStep(
         acceptanceIntent: r.title || 'Implement requirement',
       }));
 
-      const reworkResult = await handleDevonRework(
+      const reworkResult = await handleAliRework(
         projectId,
         briefRes.rows[0]?.client_brief || '',
         gateway,

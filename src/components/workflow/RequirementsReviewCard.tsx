@@ -134,7 +134,7 @@ export const RequirementsReviewCard: React.FC<RequirementsReviewCardProps> = ({
               <Layers className="w-4 h-4 text-indigo-600" aria-hidden="true" />
               <span>Derived Scope & Acceptance Checks ({reqList.length})</span>
             </h4>
-            <span className="text-[11px] text-slate-500 font-medium">Verified by Aria Analyst</span>
+            <span className="text-[11px] text-slate-500 font-medium">Verified by Sana Tariq (Lead Business Analyst)</span>
           </div>
 
           <div className="space-y-2.5">

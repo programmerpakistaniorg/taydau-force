@@ -34,15 +34,15 @@ It takes a natural language **Client Brief** and autonomously guides it through 
 
 ```mermaid
 graph TD
-  A[Client Brief] --> B[1. Business Analysis - Aria]
+  A[Client Brief] --> B[1. Business Analysis - Sana]
   B --> C[2. Requirements Baseline Review - Client Gate]
-  C --> D[3. Project Planning - Marcus]
-  D --> E[4. UI/UX Wireframing - Sofia]
+  C --> D[3. Project Planning - Tayyab]
+  D --> E[4. UI/UX Wireframing - Fatima]
   E --> F[5. Design Approval - Client Gate]
-  F --> G[6. Technical Architecture - Arthur]
-  G --> H[7. Full-Stack Engineering - Devon]
-  H --> I[8. Code Review & Security Audit - Evelyn]
-  I --> J[9. Independent QA Derivation & Execution - Quinn]
+  F --> G[6. Technical Architecture - Daud]
+  G --> H[7. Full-Stack Engineering - Ali]
+  H --> I[8. Code Review & Security Audit - Dr. Usman]
+  I --> J[9. Independent QA Derivation & Execution - Bilal]
   J --> K[10. Multi-Service Sandbox Verification]
   K --> L[11. Release Governance & Zero-Trust Audit]
   L --> M[12. Git-Native Release Delivery]
@@ -60,27 +60,27 @@ TayDau Force enforces strict role boundaries and governance policies (*e.g., "De
 
 | Specialist | Role | Key Responsibilities & Outputs |
 | :--- | :--- | :--- |
-| **Aria Johnson** | **Business Analyst** | Analyzes client brief, asks targeted domain clarification questions, defines user roles, business rules, edge cases, and synthesizes immutable **Requirement Baselines**. |
-| **Marcus Lee** | **Project Manager** | Sequences delivery milestones, resolves dependency DAGs, tracks budget burn-down, and assigns specialist workstreams. |
-| **Sofia Chen** | **UI/UX Designer** | Generates screen flows, component hierarchy, interactive wireframe specs, and live preview mockups for client approval. |
-| **Arthur Pendelton** | **Solution Architect** | Designs data models, REST/FastAPI endpoints, SQLite/PostgreSQL schemas, security boundaries, and Architecture Decision Records (ADRs). |
-| **Devon Vance** | **Full-Stack Engineer** | Implements clean, production-ready backend code, models, database migrations, and business logic. |
-| **Dr. Evelyn Reed** | **Code Reviewer** | Conducts automated architectural compliance reviews, static analysis, and scans for OWASP/security vulnerabilities (`SEC` findings). |
-| **Quinn Harper** | **Independent QA Engineer** | Derives black-box test suites from acceptance criteria, runs sandbox test executions, detects regressions, and logs triage defects (`DEF` items). |
+| **Sana Tariq** | **Business Analyst** | Analyzes client brief, asks targeted domain clarification questions, defines user roles, business rules, edge cases, and synthesizes immutable **Requirement Baselines**. |
+| **Tayyab Ahmed** | **Project Manager** | Sequences delivery milestones, resolves dependency DAGs, tracks budget burn-down, and assigns specialist workstreams. |
+| **Fatima Zahra** | **UI/UX Designer** | Generates screen flows, component hierarchy, interactive wireframe specs, and live preview mockups for client approval. |
+| **Daud Farooq** | **Solution Architect** | Designs data models, REST/FastAPI endpoints, SQLite/PostgreSQL schemas, security boundaries, and Architecture Decision Records (ADRs). |
+| **Ali Hassan** | **Full-Stack Engineer** | Implements clean, production-ready backend code, models, database migrations, and business logic. |
+| **Dr. Usman Siddiqui** | **Code Reviewer** | Conducts automated architectural compliance reviews, static analysis, and scans for OWASP/security vulnerabilities (`SEC` findings). |
+| **Bilal Raza** | **Independent QA Engineer** | Derives black-box test suites from acceptance criteria, runs sandbox test executions, detects regressions, and logs triage defects (`DEF` items). |
 
 ### 2. Dynamic On-Demand Specialists (Trigger-Activated Roles)
 
-When a project requires specialized capabilities beyond the core pipeline, the **Project Manager (Marcus)** and **Solution Architect (Arthur)** dynamically summon on-demand specialists:
+When a project requires specialized capabilities beyond the core pipeline, the **Project Manager (Tayyab)** and **Solution Architect (Daud)** dynamically summon on-demand specialists:
 
 | Specialist | Role | Dynamic Activation Triggers | Specialization & Outputs |
 | :--- | :--- | :--- | :--- |
-| **Dylan Ops** | **DevOps & Release Engineer** | Staging / Production release gates, Docker Compose multi-service topology, CI/CD orchestration. | CI/CD pipelines, container orchestration, environment blueprints, release manifests. |
-| **Darius Data** | **Database Specialist** | Complex relational queries, high-throughput transactions, concurrency lock contention (`SELECT FOR UPDATE`). | PostgreSQL index tuning, isolation level optimization, migration scripts, vacuuming strategies. |
-| **Samantha Sentinel** | **Security Specialist** | Authentication endpoints, RBAC matrices, sensitive data handling, `SEC-001` finding remediation. | OWASP threat modeling, SAST rule audits, zero-trust security attestations, secret scanning. |
-| **Nathan Net** | **Network Specialist** | Multi-region VPC peering, edge DNS routing, DDoS mitigation policies. | VPC subnet topology, firewall rules, edge load balancer configs. |
-| **Maya Learner** | **Machine Learning Specialist** | Demand forecasting, predictive analytics, recommendation algorithms, vector embeddings. | Model training pipelines, time-series forecasting weights, embedding pipelines. |
-| **Milo Mobile** | **Mobile Specialist** | Native hardware integrations (barcode/RFID scanners, mobile companion apps). | React Native modules, mobile client scaffolding, hardware driver interfaces. |
-| **Alex OpsAI** | **AIOps & Observability** | Post-deployment telemetry, high-volume log anomaly detection, automated error remediation. | Anomaly clustering, distributed tracing dashboards, SLA drift monitoring. |
+| **Hamza Tariq** | **DevOps & Release Engineer** | Staging / Production release gates, Docker Compose multi-service topology, CI/CD orchestration. | CI/CD pipelines, container orchestration, environment blueprints, release manifests. |
+| **Tariq Mehmood** | **Database Specialist** | Complex relational queries, high-throughput transactions, concurrency lock contention (`SELECT FOR UPDATE`). | PostgreSQL index tuning, isolation level optimization, migration scripts, vacuuming strategies. |
+| **Ayesha Khan** | **Security Specialist** | Authentication endpoints, RBAC matrices, sensitive data handling, `SEC-001` finding remediation. | OWASP threat modeling, SAST rule audits, zero-trust security attestations, secret scanning. |
+| **Nasir Ali** | **Network Specialist** | Multi-region VPC peering, edge DNS routing, DDoS mitigation policies. | VPC subnet topology, firewall rules, edge load balancer configs. |
+| **Maryam Noor** | **Machine Learning Specialist** | Demand forecasting, predictive analytics, recommendation algorithms, vector embeddings. | Model training pipelines, time-series forecasting weights, embedding pipelines. |
+| **Mohammad Rizwan** | **Mobile Specialist** | Native hardware integrations (barcode/RFID scanners, mobile companion apps). | React Native modules, mobile client scaffolding, hardware driver interfaces. |
+| **Asad Ullah** | **AIOps & Observability** | Post-deployment telemetry, high-volume log anomaly detection, automated error remediation. | Anomaly clustering, distributed tracing dashboards, SLA drift monitoring. |
 
 ---
 
@@ -97,7 +97,7 @@ When a project requires specialized capabilities beyond the core pipeline, the *
 
 ### 3. Independent Quality & Defect Governance
 - **Strict Separation of Concerns**: QA tests are derived directly from requirements without access to implementation internals.
-- **Automated Defect Lifecycle**: Failing test assertions automatically open defects (`DEF-01..DEF-04`) with root-cause routing back to Devon (Engineering) or Sofia (Design).
+- **Automated Defect Lifecycle**: Failing test assertions automatically open defects (`DEF-01..DEF-04`) with root-cause routing back to Ali (Engineering) or Fatima (Design).
 
 ### 4. Real-Time Event-Driven Streaming
 - Real-time Server-Sent Events (SSE) event pipeline (`/api/projects/:id/events`) with durable event logging in PostgreSQL and client reconnect replay.
