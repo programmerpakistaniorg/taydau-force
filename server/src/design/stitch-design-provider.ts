@@ -39,7 +39,7 @@ export class StitchDesignProvider implements DesignProvider {
           arguments: args,
         },
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!res.ok) {
@@ -153,7 +153,7 @@ export class StitchDesignProvider implements DesignProvider {
         headers: {
           'X-Goog-Api-Key': this.apiKey,
         },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(30000),
       });
 
       let htmlContent = '';

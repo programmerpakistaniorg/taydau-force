@@ -104,7 +104,8 @@ export class DefectClassifier {
     const combinedLogs = `${sandboxResult.stdout}\n${sandboxResult.stderr}`;
     const isAppCodeError =
       /File ["'].*?(app|backend)\/.*?[.]py/i.test(combinedLogs) ||
-      /(?:app|backend)\/(?:routes|models|schemas|main|database|crud)[^:]*:[0-9]+: in/i.test(combinedLogs);
+      /(?:app|backend)\/(?:routes|models|schemas|main|database|crud)[^:]*:[0-9]+: in/i.test(combinedLogs) ||
+      /ModuleNotFoundError:\s+No module named ['"](app(\.main)?|backend(\.app)?|sqlalchemy|fastapi|pydantic)['"]/i.test(combinedLogs);
 
     if (isAppCodeError) {
       const firstFailing = sandboxResult.failingTests?.[0];

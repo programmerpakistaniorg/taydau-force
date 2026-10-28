@@ -9,25 +9,42 @@ function getApiBase(): string {
 
 export const API_BASE = getApiBase();
 
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 3000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      throw new Error('API returned HTML (offline/SPA fallback)');
+    }
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 export async function fetchProjects(): Promise<ProjectSummary[]> {
-  const res = await fetch(`${API_BASE}/projects`);
+  const res = await fetchWithTimeout(`${API_BASE}/projects`);
   if (!res.ok) throw new Error('Failed to fetch projects');
   const data = await res.json();
-  return data.projects;
+  return data.projects || [];
 }
 
 export async function fetchProject(id: string): Promise<FullProjectResponse> {
-  const res = await fetch(`${API_BASE}/projects/${id}`);
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}`);
   if (!res.ok) throw new Error(`Failed to fetch project ${id}`);
   return res.json();
 }
 
 export async function createProject(name: string, clientBrief: string, autonomyMode: 'auto_pilot' | 'supervised' = 'auto_pilot'): Promise<{ id: string; name: string; status: string; autonomyMode: string }> {
-  const res = await fetch(`${API_BASE}/projects`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, clientBrief, autonomyMode }),
-  });
+  }, 4000);
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to create project');
@@ -36,7 +53,7 @@ export async function createProject(name: string, clientBrief: string, autonomyM
 }
 
 export async function answerInteraction(projectId: string, interactionId: string, answer: any): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/interactions/${interactionId}/answer`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${projectId}/interactions/${interactionId}/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answer }),
@@ -49,7 +66,7 @@ export async function answerInteraction(projectId: string, interactionId: string
 }
 
 export async function approveRequest(projectId: string, approvalId: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/approve`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -61,7 +78,7 @@ export async function approveRequest(projectId: string, approvalId: string): Pro
 }
 
 export async function requestChanges(projectId: string, approvalId: string, feedback: string): Promise<{ success: boolean; classification: string; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/request-changes`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${projectId}/approvals/${approvalId}/request-changes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ feedback }),
@@ -74,7 +91,7 @@ export async function requestChanges(projectId: string, approvalId: string, feed
 }
 
 export async function retryStage(projectId: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/retry`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${projectId}/retry`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -86,7 +103,7 @@ export async function retryStage(projectId: string): Promise<{ success: boolean;
 }
 
 export async function advanceProject(id: string): Promise<{ id: string; status: string }> {
-  const res = await fetch(`${API_BASE}/projects/${id}/advance`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}/advance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -98,7 +115,7 @@ export async function advanceProject(id: string): Promise<{ id: string; status: 
 }
 
 export async function pauseProject(id: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${id}/pause`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}/pause`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -110,7 +127,7 @@ export async function pauseProject(id: string): Promise<{ success: boolean; mess
 }
 
 export async function resumeProject(id: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${id}/resume`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}/resume`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -122,7 +139,7 @@ export async function resumeProject(id: string): Promise<{ success: boolean; mes
 }
 
 export async function endProject(id: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${id}/end`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}/end`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -134,7 +151,7 @@ export async function endProject(id: string): Promise<{ success: boolean; messag
 }
 
 export async function updateAutonomyMode(id: string, autonomyMode: 'auto_pilot' | 'supervised'): Promise<{ success: boolean; autonomyMode: string; message: string }> {
-  const res = await fetch(`${API_BASE}/projects/${id}/autonomy-mode`, {
+  const res = await fetchWithTimeout(`${API_BASE}/projects/${id}/autonomy-mode`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ autonomyMode }),
@@ -145,4 +162,3 @@ export async function updateAutonomyMode(id: string, autonomyMode: 'auto_pilot' 
   }
   return res.json();
 }
-

@@ -69,7 +69,7 @@ app.use('/projects', projectsRouter);
 // Error handler (must be last)
 app.use(errorHandler);
 
-app.listen(config.port, async () => {
+const server = app.listen(config.port, async () => {
   console.log(`[startup] TayDau Force server running on port ${config.port}`);
   console.log(`[startup] Dynamic Model Routing: ENABLED (Policy Version: v2.0.0-free-resilience)`);
   console.log(`[startup] Inference Billing Mode: ${config.inferenceBillingMode || 'FREE_ONLY'}`);
@@ -84,6 +84,13 @@ app.listen(config.port, async () => {
   } catch (err: any) {
     console.error(`[startup] WARNING: Database connection failed:`, err.message);
   }
+});
+
+process.on('SIGTERM', () => {
+  server.close();
+});
+process.on('SIGINT', () => {
+  server.close();
 });
 
 export default app;

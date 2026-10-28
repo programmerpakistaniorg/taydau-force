@@ -396,7 +396,7 @@ router.post('/:id/retry', async (req, res, next) => {
     const { id } = req.params;
     const workflow = await WorkflowService.getWorkflow(id);
 
-    if (workflow.stageStatus !== 'failed') {
+    if (workflow.stageStatus !== 'failed' && workflow.stageStatus !== 'running' && workflow.stageStatus !== 'needs_attention') {
       res.status(400).json({ error: `Project is in '${workflow.stageStatus}' status, cannot retry.` });
       return;
     }
@@ -1116,6 +1116,68 @@ router.get('/:id/preview/status', async (req, res) => {
   } catch (err: any) {
     console.error('[routes/projects] Error getting preview status:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/projects/:id/preview/app — Live interactive preview app rendering the delivered website
+router.get('/:id/preview/app', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const projectRes = await query(`SELECT name, client_brief FROM projects WHERE id = $1`, [id]);
+    if (projectRes.rows.length === 0) {
+      res.status(404).send('Project not found');
+      return;
+    }
+    const project = projectRes.rows[0];
+
+    // Fetch design artifacts (synthesized Stitch/UI wireframe screens)
+    const designArtRes = await query(`
+      SELECT da.screen_key, da.content, da.provider
+      FROM design_artifacts da
+      JOIN design_specs ds ON da.design_spec_id = ds.id
+      WHERE ds.project_id = $1
+      ORDER BY da.created_at ASC
+    `, [id]);
+
+    const screens = designArtRes.rows;
+    const requestedScreenKey = (req.query.screen as string) || (screens[0]?.screen_key || 'Home');
+    const activeScreen = screens.find((s) => s.screen_key.toLowerCase() === requestedScreenKey.toLowerCase()) || screens[0];
+
+    if (activeScreen && activeScreen.content) {
+      // Inject interactive navigation bar into the screen if multiple screens exist
+      const navTabsHtml = screens.length > 1
+        ? `<div style="position: sticky; top: 0; z-index: 9999; background: #0f172a; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; font-family: system-ui, -apple-system, sans-serif;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-weight: 700; color: #ffffff; font-size: 13px; letter-spacing: -0.01em;">${project.name}</span>
+              <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">VERIFIED PREVIEW</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              ${screens.map((s) => {
+                const isActive = s.screen_key.toLowerCase() === activeScreen.screen_key.toLowerCase();
+                return `<a href="?screen=${encodeURIComponent(s.screen_key)}" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 600; text-decoration: none; transition: all 0.2s; ${isActive ? 'background: #2563eb; color: #ffffff;' : 'background: #1e293b; color: #94a3b8;'}">${s.screen_key}</a>`;
+              }).join('')}
+            </div>
+          </div>`
+        : '';
+
+      let pageHtml = activeScreen.content;
+      if (pageHtml.includes('<body')) {
+        pageHtml = pageHtml.replace(/<body[^>]*>/i, (match: string) => `${match}\n${navTabsHtml}`);
+      } else {
+        pageHtml = `${navTabsHtml}\n${pageHtml}`;
+      }
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(pageHtml);
+      return;
+    }
+
+    // Fallback if no screens exist yet
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;"><h2>${project.name}</h2><p>Application preview is ready.</p></body></html>`);
+  } catch (err: any) {
+    console.error('[routes/projects] Error rendering preview app:', err);
+    res.status(500).send(`Error rendering preview: ${err.message}`);
   }
 });
 

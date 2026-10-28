@@ -29,12 +29,14 @@ import {
   Square,
   Play,
   PlayCircle,
-  XCircle
+  XCircle,
+  Globe
 } from 'lucide-react';
 import { useLiveProject } from '../context/LiveProjectContext';
 import { SpecialistQuestionModal } from '../components/workflow/SpecialistQuestionModal';
 import { RequirementsReviewCard } from '../components/workflow/RequirementsReviewCard';
 import { DesignReviewCard } from '../components/workflow/DesignReviewCard';
+import { LivePreviewFrame } from '../components/workspace/LivePreviewFrame';
 import { type RoleKey } from '../config/roles';
 
 export const Overview: React.FC = () => {
@@ -61,8 +63,8 @@ export const Overview: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false);
 
-  // Bottom section active tab: 'code' | 'documents' | 'phases'
-  const [activeBottomTab, setActiveBottomTab] = useState<'code' | 'documents' | 'phases'>('code');
+  // Bottom section active tab: 'preview' | 'code' | 'documents' | 'phases'
+  const [activeBottomTab, setActiveBottomTab] = useState<'preview' | 'code' | 'documents' | 'phases'>('code');
 
   // Question modal state & tracking
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
@@ -83,6 +85,13 @@ export const Overview: React.FC = () => {
   const progress = workflow?.progress ?? 0;
   const pendingInteractions = project?.pendingInteractions || [];
   const pendingApproval = project?.pendingApproval || null;
+
+  // Auto-switch to preview tab when project reaches delivery completion
+  useEffect(() => {
+    if (stage === 'completed' || stageStatus === 'completed') {
+      setActiveBottomTab('preview');
+    }
+  }, [stage, stageStatus]);
 
   // Auto-open question modal ONCE per new batch
   useEffect(() => {
@@ -545,6 +554,41 @@ export const Overview: React.FC = () => {
             className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-all cursor-pointer"
           >
             Retry Development
+          </button>
+        </div>
+      )}
+
+      {/* 100% Delivery Completed & Live Application Banner */}
+      {(stage === 'completed' || stageStatus === 'completed') && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-lg shadow-emerald-900/10 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center font-bold text-white border border-white/20 shadow-inner">
+              <Sparkles className="w-6 h-6 text-emerald-200" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-bold text-white">Full-Stack Delivery 100% Completed</h4>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-white/20 text-white border border-white/30">
+                  Ready for Presentation
+                </span>
+              </div>
+              <p className="text-xs text-emerald-100 mt-0.5">
+                All 8 autonomous specialists verified requirements, Stitch UI designs, code contracts, and security audits. Live website preview is running below!
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveBottomTab('preview');
+              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-emerald-800 hover:bg-emerald-50 shadow-md transition-all cursor-pointer"
+          >
+            <Globe className="w-4 h-4 text-emerald-600" />
+            <span>Open Live Browser Preview</span>
+            <ArrowRight className="w-4 h-4 text-emerald-600" />
           </button>
         </div>
       )}
@@ -1038,6 +1082,24 @@ export const Overview: React.FC = () => {
           <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-2xl">
             <button
               type="button"
+              onClick={() => setActiveBottomTab('preview')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeBottomTab === 'preview'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>Live Website Preview</span>
+              {stage === 'completed' || stageStatus === 'completed' ? (
+                <span className="px-1.5 py-0.2 rounded-md bg-emerald-500 text-[10px] text-white font-bold animate-pulse">
+                  ONLINE
+                </span>
+              ) : null}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveBottomTab('code')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeBottomTab === 'code'
@@ -1086,6 +1148,13 @@ export const Overview: React.FC = () => {
             Evidence-governed delivery artifacts
           </span>
         </div>
+
+        {/* Tab 0 Content: Live Application Sandbox & Interactive Browser Preview */}
+        {activeBottomTab === 'preview' && (
+          <div className="space-y-4">
+            <LivePreviewFrame projectId={project?.id || ''} />
+          </div>
+        )}
 
         {/* Tab 1 Content: Code Files Tree */}
         {activeBottomTab === 'code' && (

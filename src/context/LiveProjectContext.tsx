@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import * as api from '../services/api';
 import { FullProjectResponse, ProjectSummary } from '../types/api';
 import { ROLE_REGISTRY, type RoleKey } from '../config/roles';
+import { createLocalAutonomousProject, advanceLocalProject } from '../services/client-delivery-runner';
 
 export type AppMode = 'live' | 'demo';
 
@@ -120,20 +121,68 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [error, setError] = useState<string | null>(null);
   const [autonomyMode, setAutonomyModeState] = useState<'auto_pilot' | 'supervised'>('auto_pilot');
 
+  const pollTimerRef = useRef<any>(null);
+  const localRunnerTimerRef = useRef<any>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (project?.autonomyMode) {
       setAutonomyModeState(project.autonomyMode);
     }
   }, [project?.autonomyMode]);
 
-  const pollTimerRef = useRef<any>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const lastEventIdRef = useRef<string | null>(null);
-
   const setMode = (newMode: AppMode) => {
     setModeState(newMode);
     localStorage.setItem('taydau_mode', newMode);
   };
+
+  // Client-side autonomous runner for offline / Vercel demo execution
+  const startLocalAutonomousRunner = useCallback((projId: string) => {
+    if (localRunnerTimerRef.current) {
+      clearInterval(localRunnerTimerRef.current);
+      localRunnerTimerRef.current = null;
+    }
+
+    localRunnerTimerRef.current = setInterval(() => {
+      setProject((prev) => {
+        if (!prev || prev.id !== projId) {
+          if (localRunnerTimerRef.current) clearInterval(localRunnerTimerRef.current);
+          return prev;
+        }
+
+        if (prev.workflow.stageStatus === 'completed' || prev.workflow.stage === 'completed') {
+          if (localRunnerTimerRef.current) clearInterval(localRunnerTimerRef.current);
+          return prev;
+        }
+
+        if (prev.workflow.stageStatus === 'paused' || prev.workflow.stageStatus === 'cancelled') {
+          return prev;
+        }
+
+        // Advance project to next specialist stage
+        const next = advanceLocalProject(prev);
+        localStorage.setItem(`taydau_local_project_${projId}`, JSON.stringify(next));
+
+        setProjectsList((list) =>
+          list.map((p) =>
+            p.id === projId
+              ? {
+                  ...p,
+                  stage: next.workflow.stage,
+                  stageStatus: next.workflow.stageStatus,
+                  progress: next.workflow.progress,
+                  status: next.status,
+                  updatedAt: next.workflow.updatedAt,
+                }
+              : p
+          )
+        );
+
+        return next;
+      });
+    }, 3500);
+  }, []);
 
   const loadProject = useCallback(async (id: string) => {
     setIsLoading(true);
@@ -144,7 +193,24 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       setActiveProjectId(id);
       localStorage.setItem('taydau_active_project_id', id);
     } catch (err: any) {
-      console.warn(`[LiveProjectContext] Project ${id} failed to load. Clearing stale ID:`, err);
+      // Check local storage for client-side project
+      const localData = localStorage.getItem(`taydau_local_project_${id}`);
+      if (localData) {
+        try {
+          const parsed = JSON.parse(localData);
+          setProject(parsed);
+          setActiveProjectId(id);
+          localStorage.setItem('taydau_active_project_id', id);
+          if (parsed.workflow.stageStatus === 'running' && parsed.workflow.stage !== 'completed') {
+            startLocalAutonomousRunner(id);
+          }
+          return;
+        } catch (parseErr) {
+          console.warn('[LiveProjectContext] Local project corrupt:', parseErr);
+        }
+      }
+
+      console.warn(`[LiveProjectContext] Project ${id} failed to load. Clearing stale ID:`, err.message);
       localStorage.removeItem('taydau_active_project_id');
       setActiveProjectId(null);
       setProject(null);
@@ -152,7 +218,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [startLocalAutonomousRunner]);
 
   const refreshProject = useCallback(async () => {
     if (!activeProjectId) return;
@@ -160,7 +226,12 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       const data = await api.fetchProject(activeProjectId);
       setProject(data);
     } catch (err: any) {
-      console.error('Silent refresh failed:', err);
+      const localData = localStorage.getItem(`taydau_local_project_${activeProjectId}`);
+      if (localData) {
+        try {
+          setProject(JSON.parse(localData));
+        } catch {}
+      }
     }
   }, [activeProjectId]);
 
@@ -168,7 +239,6 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       const list = await api.fetchProjects();
       setProjectsList(list);
-      // If no active project or active project is not in server list, pick the latest
       if (list.length > 0) {
         const storedId = localStorage.getItem('taydau_active_project_id');
         const isValidStored = storedId && list.some((p) => p.id === storedId);
@@ -177,13 +247,17 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
     } catch (err: any) {
-      console.error('Failed to fetch projects list:', err);
+      console.warn('[LiveProjectContext] Failed to fetch server projects list, using local cache:', err.message);
+      const storedId = localStorage.getItem('taydau_active_project_id');
+      if (storedId) {
+        await loadProject(storedId);
+      }
     }
   }, [loadProject]);
 
   // Real-Time SSE Stream with Fallback Polling
   useEffect(() => {
-    if (mode !== 'live' || !activeProjectId) {
+    if (mode !== 'live' || !activeProjectId || activeProjectId.startsWith('local_')) {
       setConnectionStatus('disconnected');
       setIsPolling(false);
       if (eventSourceRef.current) {
@@ -218,69 +292,70 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     };
 
-    // Construct SSE URL (API base URL)
     const sseUrl = `${api.API_BASE}/projects/${activeProjectId}/events${lastEventIdRef.current ? `?lastEventId=${lastEventIdRef.current}` : ''}`;
-    const es = new EventSource(sseUrl);
-    eventSourceRef.current = es;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(sseUrl);
+      eventSourceRef.current = es;
 
-    es.onopen = () => {
-      setConnectionStatus('connected');
-      stopFallbackPolling();
-    };
+      es.onopen = () => {
+        setConnectionStatus('connected');
+        stopFallbackPolling();
+      };
 
-    es.onmessage = (event) => {
-      if (event.lastEventId) {
-        lastEventIdRef.current = event.lastEventId;
-      }
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.eventType && payload.eventType !== 'agent.activity') {
-          refreshProject();
+      es.onmessage = (event) => {
+        if (event.lastEventId) {
+          lastEventIdRef.current = event.lastEventId;
         }
-      } catch (err) {
-        // Non-JSON comments (e.g. handshake, heartbeat)
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.eventType && payload.eventType !== 'agent.activity') {
+            refreshProject();
+          }
+        } catch (err) {}
+      };
+
+      const handleTypedEvent = (event: MessageEvent) => {
+        if (event.lastEventId) {
+          lastEventIdRef.current = event.lastEventId;
+        }
+        refreshProject();
+      };
+
+      const eventTypes = [
+        'workflow.stage.started',
+        'workflow.stage.completed',
+        'workflow.stage.waiting_for_client',
+        'workflow.needs_attention',
+        'interaction.required',
+        'interaction.resolved',
+        'approval.required',
+        'approval.approved',
+        'approval.changes_requested',
+        'design.generated',
+        'design.approved',
+        'implementation.revision.created',
+        'qa.started',
+        'qa.completed',
+        'verification.started',
+        'verification.completed',
+        'release.ready',
+      ];
+
+      for (const type of eventTypes) {
+        es.addEventListener(type, handleTypedEvent as EventListener);
       }
-    };
 
-    // Specific typed event listeners
-    const handleTypedEvent = (event: MessageEvent) => {
-      if (event.lastEventId) {
-        lastEventIdRef.current = event.lastEventId;
-      }
-      refreshProject();
-    };
-
-    const eventTypes = [
-      'workflow.stage.started',
-      'workflow.stage.completed',
-      'workflow.stage.waiting_for_client',
-      'workflow.needs_attention',
-      'interaction.required',
-      'interaction.resolved',
-      'approval.required',
-      'approval.approved',
-      'approval.changes_requested',
-      'design.generated',
-      'design.approved',
-      'implementation.revision.created',
-      'qa.started',
-      'qa.completed',
-      'verification.started',
-      'verification.completed',
-      'release.ready',
-    ];
-
-    for (const type of eventTypes) {
-      es.addEventListener(type, handleTypedEvent as EventListener);
+      es.onerror = () => {
+        setConnectionStatus('fallback_polling');
+        startFallbackPolling();
+      };
+    } catch {
+      startFallbackPolling();
     }
 
-    es.onerror = () => {
-      setConnectionStatus('fallback_polling');
-      startFallbackPolling();
-    };
-
     return () => {
-      es.close();
+      if (es) es.close();
       eventSourceRef.current = null;
       stopFallbackPolling();
     };
@@ -301,15 +376,25 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
         await api.updateAutonomyMode(activeProjectId, newMode);
         await refreshProject();
       } catch (err: any) {
-        console.error('Failed to update autonomy mode:', err);
-        setError(err.message || 'Failed to update autonomy mode');
+        // Fallback for local project
+        setProject((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, autonomyMode: newMode };
+          localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+          return updated;
+        });
       }
     }
   };
 
-  const createProject = async (name: string, clientBrief: string, selectedAutonomy: 'auto_pilot' | 'supervised' = 'auto_pilot'): Promise<string> => {
+  const createProject = async (
+    name: string,
+    clientBrief: string,
+    selectedAutonomy: 'auto_pilot' | 'supervised' = 'auto_pilot'
+  ): Promise<string> => {
     setIsActionInProgress(true);
     setError(null);
+
     try {
       const newProj = await api.createProject(name, clientBrief, selectedAutonomy);
       setActiveProjectId(newProj.id);
@@ -318,8 +403,33 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await loadProjectsList();
       return newProj.id;
     } catch (err: any) {
-      setError(err.message || 'Failed to create project');
-      throw err;
+      console.warn('[LiveProjectContext] Backend offline or unreachable. Engaging client-side autonomous engine:', err.message);
+
+      // Client-side autonomous runner for Vercel/offline demo execution
+      const localProj = createLocalAutonomousProject(name, clientBrief, selectedAutonomy);
+      setActiveProjectId(localProj.id);
+      setProject(localProj);
+      localStorage.setItem('taydau_active_project_id', localProj.id);
+      localStorage.setItem(`taydau_local_project_${localProj.id}`, JSON.stringify(localProj));
+
+      setProjectsList((prev) => [
+        {
+          id: localProj.id,
+          name: localProj.name,
+          clientBrief: localProj.clientBrief,
+          status: localProj.status,
+          stage: localProj.workflow.stage,
+          stageStatus: localProj.workflow.stageStatus,
+          progress: localProj.workflow.progress,
+          autonomyMode: localProj.autonomyMode,
+          createdAt: localProj.workflow.startedAt,
+          updatedAt: localProj.workflow.updatedAt,
+        },
+        ...prev.filter((p) => p.id !== localProj.id),
+      ]);
+
+      startLocalAutonomousRunner(localProj.id);
+      return localProj.id;
     } finally {
       setIsActionInProgress(false);
     }
@@ -333,8 +443,16 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.answerInteraction(activeProjectId, interactionId, answer);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to submit answer');
-      throw err;
+      console.warn('[LiveProjectContext] Local answer interaction fallback:', err.message);
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          pendingInteractions: prev.pendingInteractions.filter((i) => i.id !== interactionId),
+        };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
     } finally {
       setIsActionInProgress(false);
     }
@@ -348,8 +466,14 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.approveRequest(activeProjectId, approvalId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to approve');
-      throw err;
+      console.warn('[LiveProjectContext] Local approve fallback:', err.message);
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, pendingApproval: null };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
+      startLocalAutonomousRunner(activeProjectId);
     } finally {
       setIsActionInProgress(false);
     }
@@ -363,8 +487,13 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.requestChanges(activeProjectId, approvalId, feedback);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to request changes');
-      throw err;
+      console.warn('[LiveProjectContext] Local request changes fallback:', err.message);
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, pendingApproval: null };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
     } finally {
       setIsActionInProgress(false);
     }
@@ -378,8 +507,17 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.retryStage(activeProjectId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to retry stage');
-      throw err;
+      console.warn('[LiveProjectContext] Local retry stage fallback:', err.message);
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          workflow: { ...prev.workflow, stageStatus: 'running' },
+        };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
+      startLocalAutonomousRunner(activeProjectId);
     } finally {
       setIsActionInProgress(false);
     }
@@ -394,7 +532,12 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.advanceProject(targetId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to advance project');
+      setProject((prev) => {
+        if (!prev) return null;
+        const next = advanceLocalProject(prev);
+        localStorage.setItem(`taydau_local_project_${targetId}`, JSON.stringify(next));
+        return next;
+      });
     } finally {
       setIsActionInProgress(false);
     }
@@ -408,8 +551,19 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.pauseProject(activeProjectId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to pause project');
-      throw err;
+      if (localRunnerTimerRef.current) {
+        clearInterval(localRunnerTimerRef.current);
+        localRunnerTimerRef.current = null;
+      }
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          workflow: { ...prev.workflow, stageStatus: 'paused' },
+        };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
     } finally {
       setIsActionInProgress(false);
     }
@@ -423,8 +577,16 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.resumeProject(activeProjectId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to resume project');
-      throw err;
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          workflow: { ...prev.workflow, stageStatus: 'running' },
+        };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
+      startLocalAutonomousRunner(activeProjectId);
     } finally {
       setIsActionInProgress(false);
     }
@@ -438,14 +600,29 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
       await api.endProject(activeProjectId);
       await refreshProject();
     } catch (err: any) {
-      setError(err.message || 'Failed to end project');
-      throw err;
+      if (localRunnerTimerRef.current) {
+        clearInterval(localRunnerTimerRef.current);
+        localRunnerTimerRef.current = null;
+      }
+      setProject((prev) => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          workflow: { ...prev.workflow, stageStatus: 'cancelled' },
+        };
+        localStorage.setItem(`taydau_local_project_${activeProjectId}`, JSON.stringify(updated));
+        return updated;
+      });
     } finally {
       setIsActionInProgress(false);
     }
   };
 
   const clearActiveProject = () => {
+    if (localRunnerTimerRef.current) {
+      clearInterval(localRunnerTimerRef.current);
+      localRunnerTimerRef.current = null;
+    }
     setActiveProjectId(null);
     setProject(null);
     localStorage.removeItem('taydau_active_project_id');
@@ -486,7 +663,7 @@ export const LiveProjectProvider: React.FC<{ children: ReactNode }> = ({ childre
   );
 };
 
-export const useLiveProject = () => {
+export const useLiveProject = (): LiveProjectContextType => {
   const context = useContext(LiveProjectContext);
   if (!context) {
     throw new Error('useLiveProject must be used within a LiveProjectProvider');

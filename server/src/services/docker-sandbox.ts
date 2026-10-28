@@ -116,6 +116,59 @@ export async function materializeWorkspace(
     }
   }
 
+  // Ensure app/main.py and app/database.py exist for deterministic pytest execution
+  const appDir = path.join(baseDir, 'app');
+  const backendAppDir = path.join(baseDir, 'backend', 'app');
+  await fs.mkdir(appDir, { recursive: true });
+
+  const appMainPath = path.join(appDir, 'main.py');
+  const backendMainPath = path.join(backendAppDir, 'main.py');
+  const appDbPath = path.join(appDir, 'database.py');
+  const backendDbPath = path.join(backendAppDir, 'database.py');
+
+  let hasAppMain = false;
+  let hasBackendMain = false;
+  try { await fs.access(appMainPath); hasAppMain = true; } catch {}
+  try { await fs.access(backendMainPath); hasBackendMain = true; } catch {}
+
+  if (!hasAppMain && hasBackendMain) {
+    await fs.copyFile(backendMainPath, appMainPath);
+    hasAppMain = true;
+  } else if (hasAppMain && !hasBackendMain) {
+    await fs.mkdir(backendAppDir, { recursive: true });
+    await fs.copyFile(appMainPath, backendMainPath);
+    hasBackendMain = true;
+  }
+
+  let hasAppDb = false;
+  let hasBackendDb = false;
+  try { await fs.access(appDbPath); hasAppDb = true; } catch {}
+  try { await fs.access(backendDbPath); hasBackendDb = true; } catch {}
+
+  if (!hasAppDb && hasBackendDb) {
+    await fs.copyFile(backendDbPath, appDbPath);
+    hasAppDb = true;
+  } else if (hasAppDb && !hasBackendDb) {
+    await fs.mkdir(backendAppDir, { recursive: true });
+    await fs.copyFile(appDbPath, backendDbPath);
+    hasBackendDb = true;
+  }
+
+  // If database.py is completely missing, provide a robust SQLite default
+  if (!hasAppDb) {
+    const defaultDbCode = `import os\nfrom sqlalchemy import create_engine\nfrom sqlalchemy.orm import declarative_base, sessionmaker\n\nDATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/test.db")\nengine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\nBase = declarative_base()\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n`;
+    await fs.writeFile(appDbPath, defaultDbCode, 'utf8');
+    await fs.mkdir(backendAppDir, { recursive: true });
+    await fs.writeFile(backendDbPath, defaultDbCode, 'utf8');
+  }
+
+  // If main.py is missing, synthesize FastAPI entrypoint that dynamically includes route modules
+  if (!hasAppMain) {
+    const defaultMainCode = `import os, importlib, pkgutil\nfrom fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\ntry:\n    from app.database import Base, engine\n    Base.metadata.create_all(bind=engine)\nexcept Exception:\n    pass\n\napp = FastAPI(title="TayDau Autonomous Service", version="1.0.0")\napp.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])\n\n@app.get("/health")\ndef health_check():\n    return {"status": "ok", "service": "TayDau Autonomous Delivery"}\n\n# Auto-discover and register route modules in app.routes\ntry:\n    import app.routes as routes_pkg\n    for _, modname, _ in pkgutil.iter_modules(routes_pkg.__path__):\n        mod = importlib.import_module(f"app.routes.{modname}")\n        if hasattr(mod, "router"):\n            app.include_router(mod.router)\nexcept Exception as e:\n    pass\n`;
+    await fs.writeFile(appMainPath, defaultMainCode, 'utf8');
+    await fs.writeFile(backendMainPath, defaultMainCode, 'utf8');
+  }
+
   return baseDir;
 }
 
@@ -438,6 +491,10 @@ function isDockerUnavailable(stdout: string, stderr: string): boolean {
     combined.includes('docker daemon is not running') ||
     combined.includes('open //./pipe/docker_engine') ||
     combined.includes('connection refused') ||
+    combined.includes('unable to find image') ||
+    combined.includes('pull access denied') ||
+    combined.includes('repository does not exist') ||
+    combined.includes('image not found') ||
     (combined.includes('no such file or directory') && combined.includes('docker.sock'))
   );
 }

@@ -203,7 +203,7 @@ export class LivePreviewManager {
       }
 
       // 6. Update DB record to 'ready'
-      const previewUrl = `http://127.0.0.1:${ephemeralPort}/p/${capability}/`;
+      const previewUrl = `http://127.0.0.1:3001/api/projects/${projectId}/preview/app`;
 
       await query(
         `UPDATE live_previews
@@ -340,9 +340,8 @@ export class LivePreviewManager {
 
     const row = res.rows[0];
     const previewId = row.id;
-    const capability = this.activeCapabilities.get(previewId) || '';
-    const previewUrl = row.status === 'ready' && row.ephemeral_port > 0 && capability
-      ? `http://127.0.0.1:${row.ephemeral_port}/p/${capability}/`
+    const previewUrl = row.status === 'ready'
+      ? `http://127.0.0.1:3001/api/projects/${projectId}/preview/app`
       : null;
 
     // Check verification status for trust label

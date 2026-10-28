@@ -14,6 +14,8 @@ dist
 server/dist/
 dist-ssr
 *.local
+server/data/
+*.db
 
 # Environment variables
 .env
@@ -63,3 +65,5 @@ TayDau - Research/
 # Local agent skills cache
 .agents/
 skills-lock.json
+
+*.pptx
